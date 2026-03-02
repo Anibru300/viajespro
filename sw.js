@@ -3,14 +3,16 @@
  * Provides offline functionality
  */
 
-const CACHE_NAME = 'viajespro-v1';
+const CACHE_NAME = 'viajespro-v2';
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    '/db.js',
-    '/manifest.json'
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './db.js',
+    './ux-improvements.js',
+    './ux-improvements.css',
+    './manifest.json'
 ];
 
 // Install event - Cache static assets
@@ -61,12 +63,10 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
     
-    // Skip non-GET requests
     if (request.method !== 'GET') {
         return;
     }
     
-    // Skip external requests
     if (url.origin !== self.location.origin) {
         return;
     }
@@ -74,9 +74,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(request)
             .then((cachedResponse) => {
-                // Return cached version or fetch from network
                 if (cachedResponse) {
-                    // Update cache in background
                     fetch(request)
                         .then((networkResponse) => {
                             if (networkResponse.ok) {
@@ -95,7 +93,6 @@ self.addEventListener('fetch', (event) => {
                             throw new Error('Network response was not ok');
                         }
                         
-                        // Cache new requests
                         const responseToCache = networkResponse.clone();
                         caches.open(CACHE_NAME)
                             .then((cache) => cache.put(request, responseToCache));
@@ -104,7 +101,6 @@ self.addEventListener('fetch', (event) => {
                     })
                     .catch((error) => {
                         console.error('[SW] Fetch failed:', error);
-                        // Return offline fallback if available
                         if (request.mode === 'navigate') {
                             return caches.match('/index.html');
                         }
@@ -113,27 +109,5 @@ self.addEventListener('fetch', (event) => {
             })
     );
 });
-
-// Background Sync - Queue operations when offline
-self.addEventListener('sync', (event) => {
-    console.log('[SW] Background sync:', event.tag);
-    
-    if (event.tag === 'sync-gastos') {
-        event.waitUntil(syncGastos());
-    }
-});
-
-async function syncGastos() {
-    console.log('[SW] Syncing gastos...');
-    
-    const clients = await self.clients.matchAll();
-    
-    clients.forEach((client) => {
-        client.postMessage({
-            type: 'SYNC_COMPLETED',
-            timestamp: new Date().toISOString()
-        });
-    });
-}
 
 console.log('[SW] Service Worker loaded');
