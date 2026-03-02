@@ -1,11 +1,12 @@
 /**
  * 3P VIAJESPRO - Database Module v3.0
- * IndexedDB con sistema de respaldo robusto
+ * IndexedDB con sistema de respaldo robusto y recuperación de datos
  */
 
 const DB_NAME = 'ViajesProDB_v3';
 const DB_VERSION = 3;
 const BACKUP_PREFIX = 'VP_backup_';
+const BACKUP_TIMESTAMP_KEY = 'VP_backup_timestamp';
 
 const STORES = {
     VENDEDORES: 'vendedores',
@@ -47,6 +48,7 @@ class LocalStorageBackup {
             }
             
             localStorage.setItem(key, JSON.stringify(existing));
+            localStorage.setItem(BACKUP_TIMESTAMP_KEY, new Date().toISOString());
             return true;
         } catch (e) {
             console.warn('Error guardando backup:', e.message);
@@ -71,6 +73,7 @@ class LocalStorageBackup {
         Object.values(STORES).forEach(storeName => {
             backup[storeName] = this.get(storeName) || [];
         });
+        backup._timestamp = localStorage.getItem(BACKUP_TIMESTAMP_KEY);
         return backup;
     }
 }
