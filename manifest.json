@@ -1,19 +1,24 @@
 {
-    "name": "ViajesPro - Control de Gastos",
-    "short_name": "ViajesPro",
-    "description": "App para vendedores: control de gastos, facturas y viajes",
-    "start_url": "./index.html",
-    "display": "standalone",
-    "background_color": "#f1f5f9",
-    "theme_color": "#2563eb",
-    "orientation": "portrait",
-    "scope": ".",
-    "lang": "es",
-    "icons": [
-        {
-            "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%232563eb' width='192' height='192' rx='48'/%3E%3Ctext x='96' y='120' font-size='100' text-anchor='middle' fill='white'%3E🚗%3C/text%3E%3C/svg%3E",
-            "sizes": "192x192",
-            "type": "image/svg+xml"
-        }
-    ]
+  "name": "3P S.A. DE C.V. - Control de Gastos de Viaje",
+  "short_name": "3P Gastos Viaje",
+  "description": "Sistema de control de gastos de viaje para empleados de 3P S.A. DE C.V.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6B2C91",
+  "orientation": "portrait-primary",
+  "scope": ".",
+  "lang": "es-MX",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
