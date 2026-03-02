@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#E53935">
-    <title>3P ViajesPro - Control de Gastos</title>
+    <meta name="theme-color" content="#1565C0">
+    <title>3P S.A. DE C.V. - Control de Gastos</title>
     
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='70'%3E🐷%3C/text%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='80'%3E🐷%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="./styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -17,9 +17,39 @@
     <div id="login-screen" class="login-screen">
         <div class="login-container">
             <div class="logo-3p">
-                <div class="logo-icon">🐷🐔</div>
+                <!-- Logo 3P SVG -->
+                <svg class="logo-svg" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Cerdito -->
+                    <ellipse cx="50" cy="70" rx="35" ry="30" fill="#1565C0" />
+                    <circle cx="35" cy="60" r="5" fill="white" />
+                    <circle cx="65" cy="60" r="5" fill="white" />
+                    <circle cx="37" cy="60" r="2" fill="#1565C0" />
+                    <circle cx="67" cy="60" r="2" fill="#1565C0" />
+                    <ellipse cx="50" cy="75" rx="8" ry="6" fill="#FF6B6B" />
+                    <circle cx="46" cy="73" r="2" fill="white" opacity="0.5" />
+                    <!-- Orejas cerdito -->
+                    <polygon points="25,50 20,30 35,45" fill="#1565C0" />
+                    <polygon points="75,50 80,30 65,45" fill="#1565C0" />
+                    
+                    <!-- Pollito -->
+                    <ellipse cx="130" cy="65" rx="30" ry="28" fill="#E53935" />
+                    <circle cx="120" cy="55" r="4" fill="white" />
+                    <circle cx="140" cy="55" r="4" fill="white" />
+                    <circle cx="121" cy="55" r="1.5" fill="#333" />
+                    <circle cx="141" cy="55" r="1.5" fill="#333" />
+                    <!-- Pico -->
+                    <polygon points="130,62 125,70 135,70" fill="#FF9800" />
+                    <!-- Cresta -->
+                    <path d="M 115 40 Q 120 25 125 40 Q 130 20 135 40 Q 140 25 145 40" fill="#E53935" stroke="#C62828" stroke-width="2" />
+                    
+                    <!-- Letras 3P -->
+                    <text x="170" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1565C0">3</text>
+                    <text x="185" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#E53935">P</text>
+                </svg>
+                
                 <h1>3P S.A. DE C.V.</h1>
-                <p class="slogan">ViajesPro - Control de Gastos</p>
+                <p class="slogan">Control de Gastos de Viaje</p>
+                <p class="version">Zona Veracruz</p>
             </div>
             
             <div class="login-form">
@@ -44,7 +74,7 @@
             
             <div class="admin-access">
                 <button class="btn-link" onclick="showAdminLogin()">
-                    Acceso Administrador
+                    🔐 Acceso Administrador
                 </button>
             </div>
         </div>
@@ -54,7 +84,25 @@
     <div id="admin-login-screen" class="login-screen" style="display: none;">
         <div class="login-container">
             <div class="logo-3p">
-                <div class="logo-icon">🔐</div>
+                <svg class="logo-svg-small" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="50" cy="70" rx="35" ry="30" fill="#1565C0" />
+                    <circle cx="35" cy="60" r="5" fill="white" />
+                    <circle cx="65" cy="60" r="5" fill="white" />
+                    <circle cx="37" cy="60" r="2" fill="#1565C0" />
+                    <circle cx="67" cy="60" r="2" fill="#1565C0" />
+                    <ellipse cx="50" cy="75" rx="8" ry="6" fill="#FF6B6B" />
+                    <polygon points="25,50 20,30 35,45" fill="#1565C0" />
+                    <polygon points="75,50 80,30 65,45" fill="#1565C0" />
+                    <ellipse cx="130" cy="65" rx="30" ry="28" fill="#E53935" />
+                    <circle cx="120" cy="55" r="4" fill="white" />
+                    <circle cx="140" cy="55" r="4" fill="white" />
+                    <circle cx="121" cy="55" r="1.5" fill="#333" />
+                    <circle cx="141" cy="55" r="1.5" fill="#333" />
+                    <polygon points="130,62 125,70 135,70" fill="#FF9800" />
+                    <path d="M 115 40 Q 120 25 125 40 Q 130 20 135 40 Q 140 25 145 40" fill="#E53935" stroke="#C62828" stroke-width="2" />
+                    <text x="170" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1565C0">3</text>
+                    <text x="185" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#E53935">P</text>
+                </svg>
                 <h2>Panel Administrador</h2>
             </div>
             
@@ -71,7 +119,7 @@
                     Acceder
                 </button>
                 <button class="btn-secondary" onclick="backToLogin()">
-                    Volver
+                    ← Volver
                 </button>
                 <p class="login-error" id="admin-login-error"></p>
             </div>
@@ -81,16 +129,19 @@
     <!-- PANEL ADMINISTRADOR -->
     <div id="admin-panel" class="admin-panel" style="display: none;">
         <header class="app-header admin-header">
-            <h1>🔐 Panel Administrador</h1>
+            <div class="header-logo">
+                <span class="logo-mini">🐷🐔</span>
+                <h1>3P Admin - Zona Veracruz</h1>
+            </div>
             <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
         </header>
         
         <div class="admin-content">
             <div class="admin-section">
-                <h2>👥 Registrar Nuevo Vendedor</h2>
+                <h2>👤 Registrar Nuevo Vendedor</h2>
                 <div class="form-group">
                     <label>Nombre completo:</label>
-                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan Pérez">
+                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan Pérez García">
                 </div>
                 <div class="form-group">
                     <label>Usuario (sin espacios):</label>
@@ -101,21 +152,18 @@
                     <input type="password" id="new-vendor-password" class="form-control">
                 </div>
                 <div class="form-group">
-                    <label>Email:</label>
-                    <input type="email" id="new-vendor-email" class="form-control" placeholder="opcional">
+                    <label>Email (opcional):</label>
+                    <input type="email" id="new-vendor-email" class="form-control" placeholder="ejemplo@correo.com">
                 </div>
                 <div class="form-group">
                     <label>Zona:</label>
                     <select id="new-vendor-zone" class="form-control">
-                        <option value="Norte">Norte</option>
-                        <option value="Sur">Sur</option>
-                        <option value="Este">Este</option>
-                        <option value="Oeste">Oeste</option>
                         <option value="Centro">Centro</option>
+                        <option value="Occidente">Occidente</option>
                     </select>
                 </div>
                 <button class="btn-success btn-large" onclick="registerVendor()">
-                    Registrar Vendedor
+                    ✅ Registrar Vendedor
                 </button>
             </div>
             
@@ -133,7 +181,10 @@
         <header class="app-header">
             <div class="header-logo">
                 <span class="logo-mini">🐷🐔</span>
-                <h1>3P ViajesPro</h1>
+                <div>
+                    <h1>3P S.A. DE C.V.</h1>
+                    <small>Zona Veracruz</small>
+                </div>
             </div>
             <div class="header-user">
                 <span id="current-user-name">Vendedor</span>
@@ -195,9 +246,7 @@
             </div>
             <div class="resumen-gastos" id="resumen-gastos" style="display: none;">
                 <h3>Resumen de Gastos</h3>
-                <div class="totales-grid" id="totales-grid">
-                    <!-- Dinámico -->
-                </div>
+                <div class="totales-grid" id="totales-grid"></div>
             </div>
         </section>
 
@@ -249,7 +298,7 @@
                         <input type="number" id="monto-gasto" class="form-control" placeholder="0.00" step="0.01">
                     </div>
                     <div class="form-group">
-                        <label>Fecha:</label>
+                        <label>Fecha y hora:</label>
                         <input type="datetime-local" id="fecha-gasto" class="form-control">
                     </div>
                 </div>
@@ -268,14 +317,14 @@
                         <div id="gps-info" class="gps-info">
                             <span id="gps-coords">Sin ubicación</span>
                             <button type="button" class="btn-map" onclick="openMap()" style="display: none;" id="btn-ver-mapa">
-                                Ver en Mapa
+                                Ver Mapa
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Fotos (Factura, Nota Remisión, etc.):</label>
+                    <label>Fotos de evidencia:</label>
                     <div class="photo-types">
                         <div class="photo-type">
                             <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
@@ -307,7 +356,7 @@
 
                 <div class="form-group">
                     <label>Notas adicionales:</label>
-                    <textarea id="notas-gasto" class="form-control" rows="2" placeholder="Observaciones..."></textarea>
+                    <textarea id="notas-gasto" class="form-control" rows="2" placeholder="Observaciones importantes..."></textarea>
                 </div>
 
                 <button class="btn-primary btn-large" onclick="guardarGasto()">
@@ -324,8 +373,8 @@
             
             <div class="reportes-container">
                 <div class="report-card">
-                    <h3>📦 Generar Reporte Completo</h3>
-                    <p>Incluye Excel + fotos organizadas en ZIP</p>
+                    <h3>📦 Generar Reporte Profesional</h3>
+                    <p>Excel formateado + fotos organizadas en ZIP</p>
                     
                     <div class="form-group">
                         <label>Seleccionar Viaje:</label>
@@ -348,7 +397,7 @@
                     </button>
                     
                     <div class="report-info">
-                        <small>El ZIP incluirá: Excel + carpeta con fotos numeradas</small>
+                        <small>✅ Incluye: Excel con formato profesional + fotos numeradas por carpeta</small>
                     </div>
                 </div>
 
@@ -359,14 +408,6 @@
                         📤 Compartir Reporte
                     </button>
                     <p class="last-report" id="last-report-info">No hay reportes generados</p>
-                </div>
-
-                <div class="report-card">
-                    <h3>💾 Respaldo de Datos</h3>
-                    <p>Guarda todos tus datos en tu dispositivo</p>
-                    <button class="btn-secondary btn-large" onclick="respaldoDatos()">
-                        💾 Crear Respaldo
-                    </button>
                 </div>
             </div>
         </section>
@@ -382,11 +423,11 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Destino:</label>
-                    <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Monterrey, NL">
+                    <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Xalapa, Veracruz">
                 </div>
                 <div class="form-group">
                     <label>Propósito del viaje:</label>
-                    <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita clientes zona industrial"></textarea>
+                    <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita a clientes, entrega de productos..."></textarea>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -422,7 +463,7 @@
         </div>
     </div>
 
-    <!-- MODAL: Ver Fotos de Gasto -->
+    <!-- MODAL: Ver Fotos -->
     <div id="modal-fotos" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
