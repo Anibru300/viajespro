@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1565C0">
+    <meta name="theme-color" content="#6B2C91">
     <title>3P S.A. DE C.V. - Control de Gastos</title>
     
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='80'%3E🐷%3C/text%3E%3C/svg%3E">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./ux-improvements.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -16,38 +19,14 @@
     <!-- PANTALLA DE LOGIN -->
     <div id="login-screen" class="login-screen">
         <div class="login-container">
-            <div class="logo-3p">
-                <!-- Logo 3P SVG -->
-                <svg class="logo-svg" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Cerdito -->
-                    <ellipse cx="50" cy="70" rx="35" ry="30" fill="#1565C0" />
-                    <circle cx="35" cy="60" r="5" fill="white" />
-                    <circle cx="65" cy="60" r="5" fill="white" />
-                    <circle cx="37" cy="60" r="2" fill="#1565C0" />
-                    <circle cx="67" cy="60" r="2" fill="#1565C0" />
-                    <ellipse cx="50" cy="75" rx="8" ry="6" fill="#FF6B6B" />
-                    <circle cx="46" cy="73" r="2" fill="white" opacity="0.5" />
-                    <!-- Orejas cerdito -->
-                    <polygon points="25,50 20,30 35,45" fill="#1565C0" />
-                    <polygon points="75,50 80,30 65,45" fill="#1565C0" />
-                    
-                    <!-- Pollito -->
-                    <ellipse cx="130" cy="65" rx="30" ry="28" fill="#E53935" />
-                    <circle cx="120" cy="55" r="4" fill="white" />
-                    <circle cx="140" cy="55" r="4" fill="white" />
-                    <circle cx="121" cy="55" r="1.5" fill="#333" />
-                    <circle cx="141" cy="55" r="1.5" fill="#333" />
-                    <!-- Pico -->
-                    <polygon points="130,62 125,70 135,70" fill="#FF9800" />
-                    <!-- Cresta -->
-                    <path d="M 115 40 Q 120 25 125 40 Q 130 20 135 40 Q 140 25 145 40" fill="#E53935" stroke="#C62828" stroke-width="2" />
-                    
-                    <!-- Letras 3P -->
-                    <text x="170" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1565C0">3</text>
-                    <text x="185" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#E53935">P</text>
-                </svg>
-                
-                <h1>3P S.A. DE C.V.</h1>
+            <div class="logo-3p login-logo">
+                <img src="assets/images/logo-3p-login.png" 
+                     alt="3P S.A. DE C.V. - Control de Gastos de Viaje"
+                     class="logo-img logo-login"
+                     width="280"
+                     height="186"
+                     loading="eager">
+                <h1 class="company-name">3P S.A. DE C.V.</h1>
                 <p class="slogan">Control de Gastos de Viaje</p>
                 <p class="version">Zona Veracruz</p>
             </div>
@@ -84,25 +63,6 @@
     <div id="admin-login-screen" class="login-screen" style="display: none;">
         <div class="login-container">
             <div class="logo-3p">
-                <svg class="logo-svg-small" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
-                    <ellipse cx="50" cy="70" rx="35" ry="30" fill="#1565C0" />
-                    <circle cx="35" cy="60" r="5" fill="white" />
-                    <circle cx="65" cy="60" r="5" fill="white" />
-                    <circle cx="37" cy="60" r="2" fill="#1565C0" />
-                    <circle cx="67" cy="60" r="2" fill="#1565C0" />
-                    <ellipse cx="50" cy="75" rx="8" ry="6" fill="#FF6B6B" />
-                    <polygon points="25,50 20,30 35,45" fill="#1565C0" />
-                    <polygon points="75,50 80,30 65,45" fill="#1565C0" />
-                    <ellipse cx="130" cy="65" rx="30" ry="28" fill="#E53935" />
-                    <circle cx="120" cy="55" r="4" fill="white" />
-                    <circle cx="140" cy="55" r="4" fill="white" />
-                    <circle cx="121" cy="55" r="1.5" fill="#333" />
-                    <circle cx="141" cy="55" r="1.5" fill="#333" />
-                    <polygon points="130,62 125,70 135,70" fill="#FF9800" />
-                    <path d="M 115 40 Q 120 25 125 40 Q 130 20 135 40 Q 140 25 145 40" fill="#E53935" stroke="#C62828" stroke-width="2" />
-                    <text x="170" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1565C0">3</text>
-                    <text x="185" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#E53935">P</text>
-                </svg>
                 <h2>Panel Administrador</h2>
             </div>
             
@@ -129,9 +89,8 @@
     <!-- PANEL ADMINISTRADOR -->
     <div id="admin-panel" class="admin-panel" style="display: none;">
         <header class="app-header admin-header">
-            <div class="header-logo">
-                <span class="logo-mini">🐷🐔</span>
-                <h1>3P Admin - Zona Veracruz</h1>
+            <div class="header-brand">
+                <span class="header-title">3P Admin - Zona Veracruz</span>
             </div>
             <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
         </header>
@@ -179,12 +138,14 @@
     <!-- APP PRINCIPAL (VENDEDOR) -->
     <div id="app" style="display: none;">
         <header class="app-header">
-            <div class="header-logo">
-                <span class="logo-mini">🐷🐔</span>
-                <div>
-                    <h1>3P S.A. DE C.V.</h1>
-                    <small>Zona Veracruz</small>
-                </div>
+            <div class="header-brand">
+                <img src="assets/images/logo-3p-header.png" 
+                     alt="3P S.A. DE C.V."
+                     class="logo-img logo-header"
+                     width="75"
+                     height="50"
+                     loading="lazy">
+                <span class="header-title">Control de Gastos</span>
             </div>
             <div class="header-user">
                 <span id="current-user-name">Vendedor</span>
@@ -482,6 +443,7 @@
     <!-- Scripts -->
     <script src="./db.js"></script>
     <script src="./app.js"></script>
+    <script src="./ux-improvements.js"></script>
     
     <script>
         if ('serviceWorker' in navigator) {
