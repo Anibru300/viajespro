@@ -3,42 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#2563eb">
-    <title>ViajesPro - Control de Gastos</title>
+    <meta name="theme-color" content="#E53935">
+    <title>3P ViajesPro - Control de Gastos</title>
     
-    <!-- Manifest para PWA -->
     <link rel="manifest" href="./manifest.json">
-    
-    <!-- Iconos -->
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚗%3C/text%3E%3C/svg%3E">
-    
-    <!-- Hojas de estilo -->
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- Librería para Excel -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='70'%3E🐷%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
-    <!-- Pantalla de carga inicial -->
-    <div id="loading-screen">
-        <div class="loader">🚗</div>
-        <h2>ViajesPro</h2>
-        <p>Cargando...</p>
+    <!-- PANTALLA DE LOGIN -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-container">
+            <div class="logo-3p">
+                <div class="logo-icon">🐷🐔</div>
+                <h1>3P S.A. DE C.V.</h1>
+                <p class="slogan">ViajesPro - Control de Gastos</p>
+            </div>
+            
+            <div class="login-form">
+                <h2>Iniciar Sesión</h2>
+                <div class="form-group">
+                    <label>Usuario:</label>
+                    <input type="text" id="login-username" class="form-control" placeholder="Ej: juan.perez">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="Tu contraseña">
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="remember-me" checked>
+                    <label for="remember-me">Mantener sesión abierta</label>
+                </div>
+                <button class="btn-primary btn-large" onclick="login()">
+                    Ingresar
+                </button>
+                <p class="login-error" id="login-error"></p>
+            </div>
+            
+            <div class="admin-access">
+                <button class="btn-link" onclick="showAdminLogin()">
+                    Acceso Administrador
+                </button>
+            </div>
+        </div>
     </div>
 
-    <!-- App Container -->
-    <div id="app" style="display: none;">
+    <!-- PANTALLA ADMIN LOGIN -->
+    <div id="admin-login-screen" class="login-screen" style="display: none;">
+        <div class="login-container">
+            <div class="logo-3p">
+                <div class="logo-icon">🔐</div>
+                <h2>Panel Administrador</h2>
+            </div>
+            
+            <div class="login-form">
+                <div class="form-group">
+                    <label>Usuario Admin:</label>
+                    <input type="text" id="admin-username" class="form-control" value="admin">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="admin-password" class="form-control">
+                </div>
+                <button class="btn-primary btn-large" onclick="loginAdmin()">
+                    Acceder
+                </button>
+                <button class="btn-secondary" onclick="backToLogin()">
+                    Volver
+                </button>
+                <p class="login-error" id="admin-login-error"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL ADMINISTRADOR -->
+    <div id="admin-panel" class="admin-panel" style="display: none;">
+        <header class="app-header admin-header">
+            <h1>🔐 Panel Administrador</h1>
+            <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+        </header>
         
-        <!-- Header -->
+        <div class="admin-content">
+            <div class="admin-section">
+                <h2>👥 Registrar Nuevo Vendedor</h2>
+                <div class="form-group">
+                    <label>Nombre completo:</label>
+                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan Pérez">
+                </div>
+                <div class="form-group">
+                    <label>Usuario (sin espacios):</label>
+                    <input type="text" id="new-vendor-username" class="form-control" placeholder="Ej: juan.perez">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="new-vendor-password" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="new-vendor-email" class="form-control" placeholder="opcional">
+                </div>
+                <div class="form-group">
+                    <label>Zona:</label>
+                    <select id="new-vendor-zone" class="form-control">
+                        <option value="Norte">Norte</option>
+                        <option value="Sur">Sur</option>
+                        <option value="Este">Este</option>
+                        <option value="Oeste">Oeste</option>
+                        <option value="Centro">Centro</option>
+                    </select>
+                </div>
+                <button class="btn-success btn-large" onclick="registerVendor()">
+                    Registrar Vendedor
+                </button>
+            </div>
+            
+            <div class="admin-section">
+                <h2>📋 Vendedores Registrados</h2>
+                <div id="vendors-list" class="vendors-list">
+                    <!-- Lista dinámica -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP PRINCIPAL (VENDEDOR) -->
+    <div id="app" style="display: none;">
         <header class="app-header">
-            <h1>🚗 ViajesPro</h1>
-            <div class="connection-status" id="connection-status">
-                <span class="status-dot offline"></span>
-                <span class="status-text">Offline</span>
+            <div class="header-logo">
+                <span class="logo-mini">🐷🐔</span>
+                <h1>3P ViajesPro</h1>
+            </div>
+            <div class="header-user">
+                <span id="current-user-name">Vendedor</span>
+                <button class="btn-logout-mini" onclick="logout()">Salir</button>
             </div>
         </header>
 
-        <!-- Navegación Principal -->
         <nav class="main-nav">
             <button class="nav-btn active" onclick="showSection('viajes')">
                 <span class="icon">🗺️</span>
@@ -66,12 +168,10 @@
                     ➕ Nuevo Viaje
                 </button>
             </div>
-            
             <div id="viajes-list" class="cards-container">
-                <!-- Los viajes se cargan dinámicamente aquí -->
                 <div class="empty-state">
                     <span class="icon-large">🗺️</span>
-                    <p>No tienes viajes activos</p>
+                    <p>No tienes viajes registrados</p>
                     <button class="btn-secondary" onclick="openModal('nuevo-viaje')">
                         Crear primer viaje
                     </button>
@@ -83,53 +183,40 @@
         <section id="gastos-section" class="section">
             <div class="section-header">
                 <h2>💰 Gastos del Viaje</h2>
-                <select id="viaje-select" class="select-viaje">
+                <select id="viaje-select" class="select-viaje" onchange="loadGastos(this.value)">
                     <option value="">Selecciona un viaje...</option>
                 </select>
             </div>
-            
             <div id="gastos-list" class="cards-container">
                 <div class="empty-state">
                     <span class="icon-large">💰</span>
                     <p>Selecciona un viaje para ver sus gastos</p>
                 </div>
             </div>
-            
             <div class="resumen-gastos" id="resumen-gastos" style="display: none;">
-                <h3>Resumen</h3>
-                <div class="totales-grid">
-                    <div class="total-item">
-                        <span class="label">Total Gasolina:</span>
-                        <span class="value" id="total-gasolina">$0.00</span>
-                    </div>
-                    <div class="total-item">
-                        <span class="label">Total Comida:</span>
-                        <span class="value" id="total-comida">$0.00</span>
-                    </div>
-                    <div class="total-item">
-                        <span class="label">Total Hotel:</span>
-                        <span class="value" id="total-hotel">$0.00</span>
-                    </div>
-                    <div class="total-item">
-                        <span class="label">TOTAL:</span>
-                        <span class="value total" id="total-general">$0.00</span>
-                    </div>
+                <h3>Resumen de Gastos</h3>
+                <div class="totales-grid" id="totales-grid">
+                    <!-- Dinámico -->
                 </div>
             </div>
         </section>
 
-        <!-- SECCIÓN: CAPTURA RÁPIDA -->
+        <!-- SECCIÓN: CAPTURA -->
         <section id="captura-section" class="section">
             <div class="section-header">
-                <h2>📸 Captura Rápida</h2>
+                <h2>📸 Captura de Gasto</h2>
             </div>
-            
             <div class="capture-form">
                 <div class="form-group">
-                    <label>Viaje actual:</label>
+                    <label>Viaje:</label>
                     <select id="captura-viaje-select" class="form-control">
                         <option value="">Selecciona un viaje...</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Folio de gasto (automático):</label>
+                    <input type="text" id="gasto-folio" class="form-control" readonly>
                 </div>
 
                 <div class="form-group">
@@ -156,9 +243,15 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Monto ($):</label>
-                    <input type="number" id="monto-gasto" class="form-control" placeholder="0.00" step="0.01">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Monto ($):</label>
+                        <input type="number" id="monto-gasto" class="form-control" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha:</label>
+                        <input type="datetime-local" id="fecha-gasto" class="form-control">
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -167,24 +260,54 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Fotos:</label>
-                    <div class="photo-buttons">
-                        <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
-                            📄 Factura
+                    <label>Ubicación GPS:</label>
+                    <div class="gps-container">
+                        <button type="button" class="btn-gps" onclick="getGPSLocation()">
+                            📍 Obtener Ubicación
                         </button>
-                        <button type="button" class="btn-photo" onclick="capturePhoto('nota')">
-                            📝 Nota Remisión
-                        </button>
-                        <button type="button" class="btn-photo" onclick="capturePhoto('otro')">
-                            📷 Otro
-                        </button>
+                        <div id="gps-info" class="gps-info">
+                            <span id="gps-coords">Sin ubicación</span>
+                            <button type="button" class="btn-map" onclick="openMap()" style="display: none;" id="btn-ver-mapa">
+                                Ver en Mapa
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Fotos (Factura, Nota Remisión, etc.):</label>
+                    <div class="photo-types">
+                        <div class="photo-type">
+                            <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
+                                📄 Factura
+                            </button>
+                            <span class="photo-count" id="count-factura">0</span>
+                        </div>
+                        <div class="photo-type">
+                            <button type="button" class="btn-photo" onclick="capturePhoto('nota_remision')">
+                                📝 Nota Remisión
+                            </button>
+                            <span class="photo-count" id="count-nota_remision">0</span>
+                        </div>
+                        <div class="photo-type">
+                            <button type="button" class="btn-photo" onclick="capturePhoto('ticket')">
+                                🧾 Ticket
+                            </button>
+                            <span class="photo-count" id="count-ticket">0</span>
+                        </div>
+                        <div class="photo-type">
+                            <button type="button" class="btn-photo" onclick="capturePhoto('otro')">
+                                📷 Otro
+                            </button>
+                            <span class="photo-count" id="count-otro">0</span>
+                        </div>
                     </div>
                     <div id="preview-fotos" class="preview-container"></div>
                 </div>
 
                 <div class="form-group">
                     <label>Notas adicionales:</label>
-                    <textarea id="notas-gasto" class="form-control" rows="3" placeholder="Observaciones..."></textarea>
+                    <textarea id="notas-gasto" class="form-control" rows="2" placeholder="Observaciones..."></textarea>
                 </div>
 
                 <button class="btn-primary btn-large" onclick="guardarGasto()">
@@ -201,8 +324,8 @@
             
             <div class="reportes-container">
                 <div class="report-card">
-                    <h3>📥 Exportar a Excel</h3>
-                    <p>Descarga todos los gastos con evidencias fotográficas para contabilidad</p>
+                    <h3>📦 Generar Reporte Completo</h3>
+                    <p>Incluye Excel + fotos organizadas en ZIP</p>
                     
                     <div class="form-group">
                         <label>Seleccionar Viaje:</label>
@@ -220,29 +343,33 @@
                         </div>
                     </div>
                     
-                    <button class="btn-success btn-large" onclick="exportarExcel()">
-                        📊 Generar Reporte Excel
+                    <button class="btn-success btn-large" onclick="generarReporteZIP()">
+                        📦 Generar Reporte (ZIP)
                     </button>
+                    
+                    <div class="report-info">
+                        <small>El ZIP incluirá: Excel + carpeta con fotos numeradas</small>
+                    </div>
                 </div>
 
                 <div class="report-card">
-                    <h3>📱 Compartir Datos</h3>
-                    <p>Envía el reporte por WhatsApp o Email</p>
-                    <button class="btn-secondary" onclick="compartirReporte()">
-                        📤 Compartir
+                    <h3>📤 Compartir Último Reporte</h3>
+                    <p>Envía por WhatsApp o Email</p>
+                    <button class="btn-primary btn-large" onclick="compartirUltimoReporte()" id="btn-compartir" disabled>
+                        📤 Compartir Reporte
                     </button>
+                    <p class="last-report" id="last-report-info">No hay reportes generados</p>
                 </div>
 
                 <div class="report-card">
-                    <h3>🗄️ Respaldo</h3>
-                    <p>Descarga una copia de toda la base de datos</p>
-                    <button class="btn-secondary" onclick="respaldoJSON()">
-                        💾 Descargar JSON
+                    <h3>💾 Respaldo de Datos</h3>
+                    <p>Guarda todos tus datos en tu dispositivo</p>
+                    <button class="btn-secondary btn-large" onclick="respaldoDatos()">
+                        💾 Crear Respaldo
                     </button>
                 </div>
             </div>
         </section>
-
     </div>
 
     <!-- MODAL: Nuevo Viaje -->
@@ -258,7 +385,7 @@
                     <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Monterrey, NL">
                 </div>
                 <div class="form-group">
-                    <label>Propósito:</label>
+                    <label>Propósito del viaje:</label>
                     <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita clientes zona industrial"></textarea>
                 </div>
                 <div class="form-row">
@@ -279,18 +406,46 @@
         </div>
     </div>
 
+    <!-- MODAL: Ver Mapa -->
+    <div id="modal-mapa" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>📍 Ubicación del Gasto</h3>
+                <button class="close-btn" onclick="closeModal('mapa')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="mapa-container" class="mapa-container">
+                    <iframe id="mapa-iframe" width="100%" height="400" frameborder="0" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+                </div>
+                <div class="mapa-info" id="mapa-info"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Ver Fotos de Gasto -->
+    <div id="modal-fotos" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>📸 Fotos del Gasto</h3>
+                <button class="close-btn" onclick="closeModal('fotos')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="fotos-detalle" class="fotos-detalle"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Input oculto para cámara -->
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
 
     <!-- Scripts -->
-    <script src="db.js"></script>
-    <script src="app.js"></script>
+    <script src="./db.js"></script>
+    <script src="./app.js"></script>
     
-    <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
+                navigator.serviceWorker.register('./sw.js')
                     .then((registration) => {
                         console.log('✅ SW registered:', registration.scope);
                     })
@@ -301,6 +456,4 @@
         }
     </script>
 </body>
-
 </html>
-
