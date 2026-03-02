@@ -2,12 +2,12 @@
     "name": "ViajesPro - Control de Gastos",
     "short_name": "ViajesPro",
     "description": "App para vendedores: control de gastos, facturas y viajes",
-    "start_url": "/",
+    "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#f1f5f9",
     "theme_color": "#2563eb",
     "orientation": "portrait",
-    "scope": "/",
+    "scope": ".",
     "lang": "es",
     "icons": [
         {
@@ -15,6 +15,5 @@
             "sizes": "192x192",
             "type": "image/svg+xml"
         }
-    ],
-    "categories": ["business", "finance", "productivity"]
+    ]
 }
