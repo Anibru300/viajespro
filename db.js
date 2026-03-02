@@ -1,17 +1,17 @@
 /**
- * VIAJESPRO - Database Module
- * IndexedDB for offline-first functionality
+ * 3P VIAJESPRO - Database Module
+ * IndexedDB para funcionamiento offline completo
  */
 
-const DB_NAME = 'ViajesProDB';
-const DB_VERSION = 1;
+const DB_NAME = 'ViajesProDB_v2';
+const DB_VERSION = 2;
 
 const STORES = {
     VENDEDORES: 'vendedores',
     VIAJES: 'viajes',
     GASTOS: 'gastos',
     FOTOS: 'fotos',
-    SYNC_QUEUE: 'syncQueue'
+    CONFIG: 'config'
 };
 
 class ViajesProDB {
@@ -26,7 +26,10 @@ class ViajesProDB {
         this.initPromise = new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-            request.onerror = () => reject(request.error);
+            request.onerror = () => {
+                console.error('Error opening database:', request.error);
+                reject(request.error);
+            };
 
             request.onsuccess = () => {
                 this.db = request.result;
@@ -36,13 +39,14 @@ class ViajesProDB {
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                console.log('🔄 Creating database...');
+                console.log('🔄 Upgrading database to version', DB_VERSION);
 
-                // Store: Vendedores
+                // Store: Vendedores (usuarios)
                 if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
                     const store = db.createObjectStore(STORES.VENDEDORES, { keyPath: 'id' });
-                    store.createIndex('email', 'email', { unique: true });
-                    store.createIndex('nombre', 'nombre', { unique: false });
+                    store.createIndex('username', 'username', { unique: true });
+                    store.createIndex('email', 'email', { unique: false });
+                    store.createIndex('status', 'status', { unique: false });
                 }
 
                 // Store: Viajes
@@ -57,25 +61,23 @@ class ViajesProDB {
                 if (!db.objectStoreNames.contains(STORES.GASTOS)) {
                     const store = db.createObjectStore(STORES.GASTOS, { keyPath: 'id' });
                     store.createIndex('viajeId', 'viajeId', { unique: false });
+                    store.createIndex('vendedorId', 'vendedorId', { unique: false });
                     store.createIndex('tipo', 'tipo', { unique: false });
                     store.createIndex('fecha', 'fecha', { unique: false });
+                    store.createIndex('folio', 'folio', { unique: false });
                 }
 
                 // Store: Fotos
                 if (!db.objectStoreNames.contains(STORES.FOTOS)) {
                     const store = db.createObjectStore(STORES.FOTOS, { keyPath: 'id' });
                     store.createIndex('gastoId', 'gastoId', { unique: false });
+                    store.createIndex('viajeId', 'viajeId', { unique: false });
                     store.createIndex('tipo', 'tipo', { unique: false });
                 }
 
-                // Store: Sync Queue
-                if (!db.objectStoreNames.contains(STORES.SYNC_QUEUE)) {
-                    const store = db.createObjectStore(STORES.SYNC_QUEUE, { 
-                        keyPath: 'id', 
-                        autoIncrement: true 
-                    });
-                    store.createIndex('tipo', 'tipo', { unique: false });
-                    store.createIndex('synced', 'synced', { unique: false });
+                // Store: Config
+                if (!db.objectStoreNames.contains(STORES.CONFIG)) {
+                    db.createObjectStore(STORES.CONFIG, { keyPath: 'key' });
                 }
             };
         });
@@ -83,14 +85,14 @@ class ViajesProDB {
         return this.initPromise;
     }
 
-    // ===== ADD =====
+    // ===== CRUD BÁSICO =====
     async add(storeName, data) {
         await this.init();
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([storeName], 'readwrite');
             const store = transaction.objectStore(storeName);
             
-            data.createdAt = new Date().toISOString();
+            data.createdAt = data.createdAt || new Date().toISOString();
             data.updatedAt = new Date().toISOString();
             
             const request = store.add(data);
@@ -99,7 +101,6 @@ class ViajesProDB {
         });
     }
 
-    // ===== GET =====
     async get(storeName, id) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -111,7 +112,6 @@ class ViajesProDB {
         });
     }
 
-    // ===== GET ALL =====
     async getAll(storeName) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -123,7 +123,6 @@ class ViajesProDB {
         });
     }
 
-    // ===== UPDATE =====
     async update(storeName, data) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -138,7 +137,6 @@ class ViajesProDB {
         });
     }
 
-    // ===== DELETE =====
     async delete(storeName, id) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -150,7 +148,6 @@ class ViajesProDB {
         });
     }
 
-    // ===== QUERY BY INDEX =====
     async queryByIndex(storeName, indexName, value) {
         await this.init();
         return new Promise((resolve, reject) => {
@@ -163,9 +160,22 @@ class ViajesProDB {
         });
     }
 
-    // ===== SPECIFIC METHODS =====
+    // ===== MÉTODOS ESPECÍFICOS =====
+    async getVendedorByUsername(username) {
+        const vendedores = await this.queryByIndex(STORES.VENDEDORES, 'username', username);
+        return vendedores[0] || null;
+    }
+
+    async getActiveVendedores() {
+        return await this.queryByIndex(STORES.VENDEDORES, 'status', 'active');
+    }
+
+    async getViajesByVendedor(vendedorId) {
+        return await this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
+    }
+
     async getActiveViajes(vendedorId) {
-        const viajes = await this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
+        const viajes = await this.getViajesByVendedor(vendedorId);
         return viajes.filter(v => v.estado === 'activo');
     }
 
@@ -173,8 +183,16 @@ class ViajesProDB {
         return await this.queryByIndex(STORES.GASTOS, 'viajeId', viajeId);
     }
 
+    async getGastosByVendedor(vendedorId) {
+        return await this.queryByIndex(STORES.GASTOS, 'vendedorId', vendedorId);
+    }
+
     async getFotosByGasto(gastoId) {
         return await this.queryByIndex(STORES.FOTOS, 'gastoId', gastoId);
+    }
+
+    async getFotosByViaje(viajeId) {
+        return await this.queryByIndex(STORES.FOTOS, 'viajeId', viajeId);
     }
 
     async getResumenGastos(viajeId) {
@@ -190,41 +208,43 @@ class ViajesProDB {
         };
 
         gastos.forEach(gasto => {
+            const monto = parseFloat(gasto.monto) || 0;
             if (resumen.hasOwnProperty(gasto.tipo)) {
-                resumen[gasto.tipo] += parseFloat(gasto.monto) || 0;
+                resumen[gasto.tipo] += monto;
             }
-            resumen.total += parseFloat(gasto.monto) || 0;
+            resumen.total += monto;
         });
 
         return resumen;
     }
 
-    async addToSyncQueue(tipo, data) {
-        const syncItem = {
-            tipo: tipo,
-            data: data,
-            timestamp: new Date().toISOString(),
-            synced: false,
-            attempts: 0
+    async getResumenByFecha(vendedorId, fechaInicio, fechaFin) {
+        const gastos = await this.getGastosByVendedor(vendedorId);
+        const start = new Date(fechaInicio);
+        const end = new Date(fechaFin);
+        end.setHours(23, 59, 59);
+
+        const filtrados = gastos.filter(g => {
+            const fecha = new Date(g.fecha);
+            return fecha >= start && fecha <= end;
+        });
+
+        const resumen = {
+            gasolina: 0, comida: 0, hotel: 0, transporte: 0, casetas: 0, otros: 0, total: 0
         };
-        
-        return await this.add(STORES.SYNC_QUEUE, syncItem);
+
+        filtrados.forEach(gasto => {
+            const monto = parseFloat(gasto.monto) || 0;
+            if (resumen.hasOwnProperty(gasto.tipo)) {
+                resumen[gasto.tipo] += monto;
+            }
+            resumen.total += monto;
+        });
+
+        return { resumen, gastos: filtrados };
     }
 
-    async getPendingSync() {
-        return await this.queryByIndex(STORES.SYNC_QUEUE, 'synced', false);
-    }
-
-    async markAsSynced(syncId) {
-        const item = await this.get(STORES.SYNC_QUEUE, syncId);
-        if (item) {
-            item.synced = true;
-            item.syncedAt = new Date().toISOString();
-            await this.update(STORES.SYNC_QUEUE, item);
-        }
-    }
-
-    // ===== EXPORT =====
+    // ===== EXPORTACIÓN =====
     async exportAllData(viajeId = null) {
         const data = {
             vendedores: await this.getAll(STORES.VENDEDORES),
@@ -240,38 +260,90 @@ class ViajesProDB {
             data.gastos = await this.getAll(STORES.GASTOS);
         }
 
+        // Obtener fotos de los gastos
         for (const gasto of data.gastos) {
-            const fotos = await this.getFotosByGasto(gasto.id);
-            data.fotos.push(...fotos);
+            if (gasto.fotos && gasto.fotos.length > 0) {
+                for (const fotoId of gasto.fotos) {
+                    const foto = await this.get(STORES.FOTOS, fotoId);
+                    if (foto) data.fotos.push(foto);
+                }
+            }
         }
 
         return data;
     }
 
-    // ===== STATS =====
+    async exportByVendedor(vendedorId) {
+        return {
+            vendedor: await this.get(STORES.VENDEDORES, vendedorId),
+            viajes: await this.getViajesByVendedor(vendedorId),
+            gastos: await this.getGastosByVendedor(vendedorId),
+            fotos: await this.getAll(STORES.FOTOS)
+        };
+    }
+
+    // ===== CONFIGURACIÓN =====
+    async setConfig(key, value) {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORES.CONFIG], 'readwrite');
+            const store = transaction.objectStore(STORES.CONFIG);
+            const request = store.put({ key, value, updatedAt: new Date().toISOString() });
+            request.onsuccess = () => resolve({ key, value });
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getConfig(key) {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORES.CONFIG], 'readonly');
+            const store = transaction.objectStore(STORES.CONFIG);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result?.value);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // ===== ESTADÍSTICAS =====
     async getStats() {
-        const stats = {};
-        for (const [key, storeName] of Object.entries(STORES)) {
-            const data = await this.getAll(storeName);
-            stats[storeName] = data.length;
-        }
+        const stats = {
+            vendedores: (await this.getAll(STORES.VENDEDORES)).length,
+            viajes: (await this.getAll(STORES.VIAJES)).length,
+            gastos: (await this.getAll(STORES.GASTOS)).length,
+            fotos: (await this.getAll(STORES.FOTOS)).length
+        };
         return stats;
+    }
+
+    // ===== LIMPIEZA =====
+    async clearAll() {
+        await this.init();
+        const stores = Object.values(STORES);
+        
+        for (const storeName of stores) {
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            await store.clear();
+        }
+        
+        console.log('🗑️ Database cleared');
     }
 }
 
-// Create global instance
+// Crear instancia global
 const db = new ViajesProDB();
 
-// Initialize on load
+// Inicializar al cargar
 document.addEventListener('DOMContentLoaded', () => {
     db.init().then(() => {
-        console.log('🚀 Database ready');
+        console.log('🚀 3P Database ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
         console.error('❌ Database initialization failed:', err);
     });
 });
 
-// Export for use in other modules
+// Exportar para uso global
 window.ViajesProDB = ViajesProDB;
 window.db = db;
