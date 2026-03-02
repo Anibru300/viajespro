@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563eb">
+    <title>ViajesPro - Control de Gastos</title>
+    
+    <!-- Manifest para PWA -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Iconos -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🚗%3C/text%3E%3C/svg%3E">
+    
+    <!-- Hojas de estilo -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Librería para Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Pantalla de carga inicial -->
+    <div id="loading-screen">
+        <div class="loader">🚗</div>
+        <h2>ViajesPro</h2>
+        <p>Cargando...</p>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" style="display: none;">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <h1>🚗 ViajesPro</h1>
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot offline"></span>
+                <span class="status-text">Offline</span>
+            </div>
+        </header>
+
+        <!-- Navegación Principal -->
+        <nav class="main-nav">
+            <button class="nav-btn active" onclick="showSection('viajes')">
+                <span class="icon">🗺️</span>
+                <span>Mis Viajes</span>
+            </button>
+            <button class="nav-btn" onclick="showSection('gastos')">
+                <span class="icon">💰</span>
+                <span>Gastos</span>
+            </button>
+            <button class="nav-btn" onclick="showSection('captura')">
+                <span class="icon">📸</span>
+                <span>Capturar</span>
+            </button>
+            <button class="nav-btn" onclick="showSection('reportes')">
+                <span class="icon">📊</span>
+                <span>Reportes</span>
+            </button>
+        </nav>
+
+        <!-- SECCIÓN: VIAJES -->
+        <section id="viajes-section" class="section active">
+            <div class="section-header">
+                <h2>🗺️ Mis Viajes</h2>
+                <button class="btn-primary" onclick="openModal('nuevo-viaje')">
+                    ➕ Nuevo Viaje
+                </button>
+            </div>
+            
+            <div id="viajes-list" class="cards-container">
+                <!-- Los viajes se cargan dinámicamente aquí -->
+                <div class="empty-state">
+                    <span class="icon-large">🗺️</span>
+                    <p>No tienes viajes activos</p>
+                    <button class="btn-secondary" onclick="openModal('nuevo-viaje')">
+                        Crear primer viaje
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN: GASTOS -->
+        <section id="gastos-section" class="section">
+            <div class="section-header">
+                <h2>💰 Gastos del Viaje</h2>
+                <select id="viaje-select" class="select-viaje">
+                    <option value="">Selecciona un viaje...</option>
+                </select>
+            </div>
+            
+            <div id="gastos-list" class="cards-container">
+                <div class="empty-state">
+                    <span class="icon-large">💰</span>
+                    <p>Selecciona un viaje para ver sus gastos</p>
+                </div>
+            </div>
+            
+            <div class="resumen-gastos" id="resumen-gastos" style="display: none;">
+                <h3>Resumen</h3>
+                <div class="totales-grid">
+                    <div class="total-item">
+                        <span class="label">Total Gasolina:</span>
+                        <span class="value" id="total-gasolina">$0.00</span>
+                    </div>
+                    <div class="total-item">
+                        <span class="label">Total Comida:</span>
+                        <span class="value" id="total-comida">$0.00</span>
+                    </div>
+                    <div class="total-item">
+                        <span class="label">Total Hotel:</span>
+                        <span class="value" id="total-hotel">$0.00</span>
+                    </div>
+                    <div class="total-item">
+                        <span class="label">TOTAL:</span>
+                        <span class="value total" id="total-general">$0.00</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN: CAPTURA RÁPIDA -->
+        <section id="captura-section" class="section">
+            <div class="section-header">
+                <h2>📸 Captura Rápida</h2>
+            </div>
+            
+            <div class="capture-form">
+                <div class="form-group">
+                    <label>Viaje actual:</label>
+                    <select id="captura-viaje-select" class="form-control">
+                        <option value="">Selecciona un viaje...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de gasto:</label>
+                    <div class="tipo-gasto-grid">
+                        <button type="button" class="tipo-btn" data-tipo="gasolina" onclick="selectTipoGasto(this)">
+                            ⛽ Gasolina
+                        </button>
+                        <button type="button" class="tipo-btn" data-tipo="comida" onclick="selectTipoGasto(this)">
+                            🍔 Comida
+                        </button>
+                        <button type="button" class="tipo-btn" data-tipo="hotel" onclick="selectTipoGasto(this)">
+                            🏨 Hotel
+                        </button>
+                        <button type="button" class="tipo-btn" data-tipo="transporte" onclick="selectTipoGasto(this)">
+                            🚌 Transporte
+                        </button>
+                        <button type="button" class="tipo-btn" data-tipo="casetas" onclick="selectTipoGasto(this)">
+                            🛣️ Casetas
+                        </button>
+                        <button type="button" class="tipo-btn" data-tipo="otros" onclick="selectTipoGasto(this)">
+                            📦 Otros
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Monto ($):</label>
+                    <input type="number" id="monto-gasto" class="form-control" placeholder="0.00" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label>Lugar/Concepto:</label>
+                    <input type="text" id="lugar-gasto" class="form-control" placeholder="Ej: Pemex Carretera 57">
+                </div>
+
+                <div class="form-group">
+                    <label>Fotos:</label>
+                    <div class="photo-buttons">
+                        <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
+                            📄 Factura
+                        </button>
+                        <button type="button" class="btn-photo" onclick="capturePhoto('nota')">
+                            📝 Nota Remisión
+                        </button>
+                        <button type="button" class="btn-photo" onclick="capturePhoto('otro')">
+                            📷 Otro
+                        </button>
+                    </div>
+                    <div id="preview-fotos" class="preview-container"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notas adicionales:</label>
+                    <textarea id="notas-gasto" class="form-control" rows="3" placeholder="Observaciones..."></textarea>
+                </div>
+
+                <button class="btn-primary btn-large" onclick="guardarGasto()">
+                    💾 Guardar Gasto
+                </button>
+            </div>
+        </section>
+
+        <!-- SECCIÓN: REPORTES -->
+        <section id="reportes-section" class="section">
+            <div class="section-header">
+                <h2>📊 Reportes para Contabilidad</h2>
+            </div>
+            
+            <div class="reportes-container">
+                <div class="report-card">
+                    <h3>📥 Exportar a Excel</h3>
+                    <p>Descarga todos los gastos con evidencias fotográficas para contabilidad</p>
+                    
+                    <div class="form-group">
+                        <label>Seleccionar Viaje:</label>
+                        <select id="reporte-viaje-select" class="form-control">
+                            <option value="todos">Todos los viajes</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Rango de fechas:</label>
+                        <div class="date-range">
+                            <input type="date" id="fecha-inicio" class="form-control">
+                            <span>a</span>
+                            <input type="date" id="fecha-fin" class="form-control">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-success btn-large" onclick="exportarExcel()">
+                        📊 Generar Reporte Excel
+                    </button>
+                </div>
+
+                <div class="report-card">
+                    <h3>📱 Compartir Datos</h3>
+                    <p>Envía el reporte por WhatsApp o Email</p>
+                    <button class="btn-secondary" onclick="compartirReporte()">
+                        📤 Compartir
+                    </button>
+                </div>
+
+                <div class="report-card">
+                    <h3>🗄️ Respaldo</h3>
+                    <p>Descarga una copia de toda la base de datos</p>
+                    <button class="btn-secondary" onclick="respaldoJSON()">
+                        💾 Descargar JSON
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- MODAL: Nuevo Viaje -->
+    <div id="modal-nuevo-viaje" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🗺️ Nuevo Viaje</h3>
+                <button class="close-btn" onclick="closeModal('nuevo-viaje')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Destino:</label>
+                    <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Monterrey, NL">
+                </div>
+                <div class="form-group">
+                    <label>Propósito:</label>
+                    <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita clientes zona industrial"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Fecha inicio:</label>
+                        <input type="date" id="viaje-fecha-inicio" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha fin (estimada):</label>
+                        <input type="date" id="viaje-fecha-fin" class="form-control">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('nuevo-viaje')">Cancelar</button>
+                <button class="btn-primary" onclick="crearViaje()">Crear Viaje</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input oculto para cámara -->
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
+
+    <!-- Scripts -->
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then((registration) => {
+                        console.log('✅ SW registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('❌ SW registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
