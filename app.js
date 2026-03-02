@@ -1,85 +1,265 @@
 /**
- * VIAJESPRO - Main Application
- * Expense tracking app for sales representatives
+ * 3P VIAJESPRO - Main Application
+ * Sistema completo de control de gastos
  */
 
-// ===== GLOBAL STATE =====
-const state = {
-    currentVendedor: {
-        id: 'V001',
-        nombre: 'Vendedor Demo',
-        email: 'vendedor@empresa.com'
-    },
-    currentViaje: null,
-    tempFotos: [],
-    isOnline: navigator.onLine
+// ===== CONFIGURACIÓN =====
+const CONFIG = {
+    ADMIN_USER: 'admin',
+    ADMIN_PASS: 'admin123', // Cambiar en producción
+    VERSION: '2.0.0'
 };
 
-// ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!window.db) {
-        window.addEventListener('dbReady', initApp);
-    } else {
-        initApp();
-    }
-});
+// ===== ESTADO GLOBAL =====
+const state = {
+    currentUser: null,
+    currentVendor: null,
+    currentViaje: null,
+    tempFotos: [],
+    tempLocation: null,
+    isOnline: navigator.onLine,
+    lastReport: null
+};
 
-async function initApp() {
-    console.log('🚀 Initializing ViajesPro...');
-    
+// ===== INICIALIZACIÓN =====
+document.addEventListener('DOMContentLoaded', () => {
+    checkSession();
+    setupEventListeners();
     updateConnectionStatus();
+    
     window.addEventListener('online', () => updateConnectionStatus(true));
     window.addEventListener('offline', () => updateConnectionStatus(false));
-    
-    await initVendedor();
-    await loadViajes();
-    setupCamera();
-    setDefaultDates();
-    
-    setTimeout(() => {
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('app').style.display = 'block';
-    }, 1000);
-    
-    console.log('✅ App initialized');
-}
+});
 
-async function initVendedor() {
-    try {
-        const vendedor = await db.get('vendedores', state.currentVendedor.id);
-        if (!vendedor) {
-            await db.add('vendedores', state.currentVendedor);
-            console.log('✅ Vendedor created');
+function checkSession() {
+    const savedSession = localStorage.getItem('viajespro_session');
+    if (savedSession) {
+        const session = JSON.parse(savedSession);
+        if (session.remember && session.user) {
+            state.currentUser = session.user;
+            state.currentVendor = session.vendor;
+            showMainApp();
+            return;
         }
-    } catch (error) {
-        console.error('Error initializing vendedor:', error);
+    }
+    showLoginScreen();
+}
+
+function setupEventListeners() {
+    // Camera input
+    const cameraInput = document.getElementById('camera-input');
+    if (cameraInput) {
+        cameraInput.addEventListener('change', handlePhotoCapture);
     }
 }
 
-function updateConnectionStatus(online = navigator.onLine) {
-    state.isOnline = online;
-    const statusDot = document.querySelector('.status-dot');
-    const statusText = document.querySelector('.status-text');
+// ===== LOGIN =====
+function showLoginScreen() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('admin-login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('app').style.display = 'none';
+}
+
+function showAdminLogin() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-login-screen').style.display = 'flex';
+}
+
+function backToLogin() {
+    showLoginScreen();
+}
+
+async function login() {
+    const username = document.getElementById('login-username').value.trim().toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const remember = document.getElementById('remember-me').checked;
     
-    if (online) {
-        statusDot.classList.remove('offline');
-        statusDot.classList.add('online');
-        statusText.textContent = 'Online';
-    } else {
-        statusDot.classList.remove('online');
-        statusDot.classList.add('offline');
-        statusText.textContent = 'Offline';
+    if (!username || !password) {
+        showLoginError('Ingresa usuario y contraseña');
+        return;
+    }
+    
+    try {
+        const vendor = await db.get('vendedores', username);
+        
+        if (!vendor || vendor.password !== password) {
+            showLoginError('Usuario o contraseña incorrectos');
+            return;
+        }
+        
+        if (vendor.status === 'inactive') {
+            showLoginError('Usuario inactivo. Contacta al administrador');
+            return;
+        }
+        
+        state.currentUser = { username, type: 'vendor' };
+        state.currentVendor = vendor;
+        
+        if (remember) {
+            localStorage.setItem('viajespro_session', JSON.stringify({
+                user: state.currentUser,
+                vendor: vendor,
+                remember: true
+            }));
+        }
+        
+        showMainApp();
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        showLoginError('Error al iniciar sesión');
     }
 }
 
-function setDefaultDates() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('viaje-fecha-inicio').value = today;
-    document.getElementById('fecha-inicio').value = today;
-    document.getElementById('fecha-fin').value = today;
+function showLoginError(message) {
+    document.getElementById('login-error').textContent = message;
 }
 
-// ===== NAVIGATION =====
+async function loginAdmin() {
+    const username = document.getElementById('admin-username').value;
+    const password = document.getElementById('admin-password').value;
+    
+    if (username === CONFIG.ADMIN_USER && password === CONFIG.ADMIN_PASS) {
+        state.currentUser = { username, type: 'admin' };
+        showAdminPanel();
+    } else {
+        document.getElementById('admin-login-error').textContent = 'Credenciales incorrectas';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('viajespro_session');
+    state.currentUser = null;
+    state.currentVendor = null;
+    state.currentViaje = null;
+    location.reload();
+}
+
+// ===== ADMIN PANEL =====
+function showAdminPanel() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    
+    loadVendorsList();
+}
+
+async function registerVendor() {
+    const name = document.getElementById('new-vendor-name').value.trim();
+    const username = document.getElementById('new-vendor-username').value.trim().toLowerCase();
+    const password = document.getElementById('new-vendor-password').value;
+    const email = document.getElementById('new-vendor-email').value.trim();
+    const zone = document.getElementById('new-vendor-zone').value;
+    
+    if (!name || !username || !password) {
+        showToast('Nombre, usuario y contraseña son obligatorios', 'error');
+        return;
+    }
+    
+    // Validar username (solo letras, números, puntos)
+    if (!/^[a-z0-9.]+$/.test(username)) {
+        showToast('Usuario solo puede contener letras minúsculas, números y puntos', 'error');
+        return;
+    }
+    
+    try {
+        // Verificar si ya existe
+        const existing = await db.get('vendedores', username);
+        if (existing) {
+            showToast('Este nombre de usuario ya existe', 'error');
+            return;
+        }
+        
+        const vendor = {
+            id: username,
+            name: name,
+            username: username,
+            password: password,
+            email: email,
+            zone: zone,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            createdBy: 'admin'
+        };
+        
+        await db.add('vendedores', vendor);
+        
+        showToast('Vendedor registrado exitosamente', 'success');
+        
+        // Limpiar formulario
+        document.getElementById('new-vendor-name').value = '';
+        document.getElementById('new-vendor-username').value = '';
+        document.getElementById('new-vendor-password').value = '';
+        document.getElementById('new-vendor-email').value = '';
+        
+        loadVendorsList();
+        
+    } catch (error) {
+        console.error('Error registering vendor:', error);
+        showToast('Error al registrar vendedor', 'error');
+    }
+}
+
+async function loadVendorsList() {
+    try {
+        const vendors = await db.getAll('vendedores');
+        const container = document.getElementById('vendors-list');
+        
+        if (vendors.length === 0) {
+            container.innerHTML = '<p class="empty-text">No hay vendedores registrados</p>';
+            return;
+        }
+        
+        container.innerHTML = vendors.map(v => `
+            <div class="vendor-item">
+                <div class="vendor-info">
+                    <h4>${v.name}</h4>
+                    <p>@${v.username} • Zona: ${v.zone} • ${v.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+                </div>
+                <button class="btn-secondary btn-small" onclick="toggleVendorStatus('${v.username}', '${v.status}')">
+                    ${v.status === 'active' ? 'Desactivar' : 'Activar'}
+                </button>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading vendors:', error);
+    }
+}
+
+async function toggleVendorStatus(username, currentStatus) {
+    try {
+        const vendor = await db.get('vendedores', username);
+        vendor.status = currentStatus === 'active' ? 'inactive' : 'active';
+        vendor.updatedAt = new Date().toISOString();
+        
+        await db.update('vendedores', vendor);
+        showToast(`Vendedor ${vendor.status === 'active' ? 'activado' : 'desactivado'}`, 'success');
+        loadVendorsList();
+        
+    } catch (error) {
+        console.error('Error toggling vendor status:', error);
+        showToast('Error al cambiar estado', 'error');
+    }
+}
+
+// ===== MAIN APP =====
+function showMainApp() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    
+    // Mostrar nombre de usuario
+    document.getElementById('current-user-name').textContent = state.currentVendor?.name || 'Vendedor';
+    
+    loadViajes();
+    updateFolioGasto();
+}
+
+// ===== NAVEGACIÓN =====
 function showSection(sectionName) {
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
@@ -90,18 +270,26 @@ function showSection(sectionName) {
     });
     
     document.getElementById(`${sectionName}-section`).classList.add('active');
-    event.target.closest('.nav-btn').classList.add('active');
+    
+    if (event && event.target) {
+        event.target.closest('.nav-btn').classList.add('active');
+    }
     
     if (sectionName === 'viajes') loadViajes();
     if (sectionName === 'gastos') loadGastosSection();
-    if (sectionName === 'captura') loadCapturaSection();
+    if (sectionName === 'captura') {
+        loadCapturaSection();
+        updateFolioGasto();
+    }
     if (sectionName === 'reportes') loadReportesSection();
 }
 
-// ===== VIAJES MANAGEMENT =====
+// ===== VIAJES =====
 async function loadViajes() {
+    if (!state.currentVendor) return;
+    
     try {
-        const viajes = await db.queryByIndex('viajes', 'vendedorId', state.currentVendedor.id);
+        const viajes = await db.queryByIndex('viajes', 'vendedorId', state.currentVendor.username);
         const container = document.getElementById('viajes-list');
         
         if (viajes.length === 0) {
@@ -114,6 +302,7 @@ async function loadViajes() {
                     </button>
                 </div>
             `;
+            updateViajeSelects([]);
             return;
         }
         
@@ -154,8 +343,10 @@ function updateViajeSelects(viajes) {
         `<option value="${v.id}">${v.destino} (${new Date(v.fechaInicio).toLocaleDateString('es-MX')})</option>`
     ).join('');
     
-    document.getElementById('viaje-select').innerHTML = '<option value="">Selecciona un viaje...</option>' + options;
-    document.getElementById('captura-viaje-select').innerHTML = '<option value="">Selecciona un viaje...</option>' + options;
+    const defaultOption = '<option value="">Selecciona un viaje...</option>';
+    
+    document.getElementById('viaje-select').innerHTML = defaultOption + options;
+    document.getElementById('captura-viaje-select').innerHTML = defaultOption + options;
     document.getElementById('reporte-viaje-select').innerHTML = '<option value="todos">Todos los viajes</option>' + options;
 }
 
@@ -172,7 +363,7 @@ async function crearViaje() {
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
-        vendedorId: state.currentVendedor.id,
+        vendedorId: state.currentVendor.username,
         destino: destino,
         proposito: proposito,
         fechaInicio: fechaInicio,
@@ -190,6 +381,7 @@ async function crearViaje() {
         document.getElementById('viaje-proposito').value = '';
         
         loadViajes();
+        
     } catch (error) {
         console.error('Error creating viaje:', error);
         showToast('Error al crear viaje', 'error');
@@ -207,11 +399,19 @@ function verGastos(viajeId) {
     selectViaje(viajeId);
 }
 
-// ===== GASTOS MANAGEMENT =====
+// ===== GASTOS =====
 async function loadGastosSection() {
     const viajeId = document.getElementById('viaje-select').value;
     if (viajeId) {
         await loadGastos(viajeId);
+    } else {
+        document.getElementById('gastos-list').innerHTML = `
+            <div class="empty-state">
+                <span class="icon-large">💰</span>
+                <p>Selecciona un viaje para ver sus gastos</p>
+            </div>
+        `;
+        document.getElementById('resumen-gastos').style.display = 'none';
     }
 }
 
@@ -244,17 +444,23 @@ async function loadGastos(viajeId) {
         
         container.innerHTML = gastos.map(gasto => {
             const fecha = new Date(gasto.fecha).toLocaleString('es-MX');
+            const tieneFotos = gasto.fotos && gasto.fotos.length > 0;
+            const tieneGPS = gasto.coordenadas && gasto.coordenadas.lat;
             
             return `
-                <div class="card gasto-card ${gasto.tipo}">
+                <div class="card gasto-card ${gasto.tipo}" onclick="verDetalleGasto('${gasto.id}')">
                     <div class="card-header">
                         <div>
-                            <span class="gasto-monto">$${parseFloat(gasto.monto).toFixed(2)}</span>
+                            <span class="gasto-folio">${gasto.folio}</span>
+                            <div class="gasto-monto">$${parseFloat(gasto.monto).toFixed(2)}</div>
                             <div class="gasto-tipo">
                                 ${iconos[gasto.tipo] || '📦'} ${gasto.tipo.toUpperCase()}
                             </div>
                         </div>
-                        <span class="card-badge">${gasto.fotos?.length || 0} 📷</span>
+                        <div style="text-align: right;">
+                            ${tieneFotos ? '<span style="font-size: 1.2rem;">📷</span>' : ''}
+                            ${tieneGPS ? '<span style="font-size: 1.2rem;">📍</span>' : ''}
+                        </div>
                     </div>
                     <div class="card-body">
                         <p><strong>${gasto.lugar || 'Sin lugar'}</strong></p>
@@ -262,7 +468,7 @@ async function loadGastos(viajeId) {
                     </div>
                     <div class="card-footer">
                         <span>📅 ${fecha}</span>
-                        <span>📍 ${gasto.coordenadas ? 'GPS ✓' : 'Sin GPS'}</span>
+                        <span>👤 ${gasto.vendedorName || ''}</span>
                     </div>
                 </div>
             `;
@@ -271,10 +477,36 @@ async function loadGastos(viajeId) {
         resumenContainer.style.display = 'block';
         const resumen = await db.getResumenGastos(viajeId);
         
-        document.getElementById('total-gasolina').textContent = `$${resumen.gasolina.toFixed(2)}`;
-        document.getElementById('total-comida').textContent = `$${resumen.comida.toFixed(2)}`;
-        document.getElementById('total-hotel').textContent = `$${resumen.hotel.toFixed(2)}`;
-        document.getElementById('total-general').textContent = `$${resumen.total.toFixed(2)}`;
+        document.getElementById('totales-grid').innerHTML = `
+            <div class="total-item">
+                <span class="label">Gasolina</span>
+                <span class="value">$${resumen.gasolina.toFixed(2)}</span>
+            </div>
+            <div class="total-item">
+                <span class="label">Comida</span>
+                <span class="value">$${resumen.comida.toFixed(2)}</span>
+            </div>
+            <div class="total-item">
+                <span class="label">Hotel</span>
+                <span class="value">$${resumen.hotel.toFixed(2)}</span>
+            </div>
+            <div class="total-item">
+                <span class="label">Transporte</span>
+                <span class="value">$${resumen.transporte.toFixed(2)}</span>
+            </div>
+            <div class="total-item">
+                <span class="label">Casetas</span>
+                <span class="value">$${resumen.casetas.toFixed(2)}</span>
+            </div>
+            <div class="total-item">
+                <span class="label">Otros</span>
+                <span class="value">$${resumen.otros.toFixed(2)}</span>
+            </div>
+            <div class="total-item" style="grid-column: span 2; background: linear-gradient(135deg, #E53935 0%, #C62828 100%); color: white;">
+                <span class="label" style="color: rgba(255,255,255,0.9);">TOTAL GENERAL</span>
+                <span class="value total" style="color: white; font-size: 1.5rem;">$${resumen.total.toFixed(2)}</span>
+            </div>
+        `;
         
     } catch (error) {
         console.error('Error loading gastos:', error);
@@ -282,14 +514,54 @@ async function loadGastos(viajeId) {
     }
 }
 
-// ===== CAPTURA RÁPIDA =====
+async function verDetalleGasto(gastoId) {
+    try {
+        const gasto = await db.get('gastos', gastoId);
+        if (!gasto) return;
+        
+        // Mostrar fotos si tiene
+        if (gasto.fotos && gasto.fotos.length > 0) {
+            const fotos = await Promise.all(gasto.fotos.map(fotoId => db.get('fotos', fotoId)));
+            const fotosContainer = document.getElementById('fotos-detalle');
+            
+            fotosContainer.innerHTML = fotos.map((foto, idx) => `
+                <div class="foto-item">
+                    <img src="${foto.imagen}" alt="Foto ${idx + 1}">
+                    <div class="foto-label">${foto.tipo.toUpperCase()}</div>
+                </div>
+            `).join('');
+            
+            openModal('fotos');
+        }
+        
+    } catch (error) {
+        console.error('Error viewing gasto:', error);
+    }
+}
+
+// ===== CAPTURA =====
 function loadCapturaSection() {
     state.tempFotos = [];
+    state.tempLocation = null;
     updateFotosPreview();
+    updatePhotoCounts();
+    
+    // Set fecha actual
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('fecha-gasto').value = now.toISOString().slice(0, 16);
     
     if (state.currentViaje) {
         document.getElementById('captura-viaje-select').value = state.currentViaje;
     }
+    
+    document.getElementById('gps-coords').textContent = 'Sin ubicación';
+    document.getElementById('btn-ver-mapa').style.display = 'none';
+}
+
+function updateFolioGasto() {
+    const folio = 'G-' + Date.now().toString().slice(-8);
+    document.getElementById('gasto-folio').value = folio;
 }
 
 function selectTipoGasto(btn) {
@@ -297,41 +569,89 @@ function selectTipoGasto(btn) {
     btn.classList.add('selected');
 }
 
-function setupCamera() {
-    const cameraInput = document.getElementById('camera-input');
+async function getGPSLocation() {
+    showToast('Obteniendo ubicación...', 'success');
     
-    cameraInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        try {
-            const base64 = await fileToBase64(file);
-            const coordenadas = await getCurrentPosition();
-            
-            state.tempFotos.push({
-                id: 'FOTO_' + Date.now(),
-                tipo: cameraInput.dataset.tipo || 'otro',
-                imagen: base64,
-                coordenadas: coordenadas,
-                fecha: new Date().toISOString()
+    try {
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             });
-            
-            updateFotosPreview();
-            showToast('Foto capturada', 'success');
-            
-        } catch (error) {
-            console.error('Error processing photo:', error);
-            showToast('Error al procesar foto', 'error');
-        }
+        });
         
-        cameraInput.value = '';
-    });
+        state.tempLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+        };
+        
+        document.getElementById('gps-coords').textContent = 
+            `${state.tempLocation.lat.toFixed(6)}, ${state.tempLocation.lng.toFixed(6)}`;
+        document.getElementById('btn-ver-mapa').style.display = 'inline-block';
+        
+        showToast('Ubicación obtenida con éxito', 'success');
+        
+    } catch (error) {
+        console.error('GPS error:', error);
+        showToast('No se pudo obtener la ubicación. Verifica permisos.', 'error');
+    }
 }
 
+function openMap() {
+    if (!state.tempLocation) return;
+    
+    const { lat, lng } = state.tempLocation;
+    const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+    
+    document.getElementById('mapa-iframe').src = mapsUrl;
+    document.getElementById('mapa-info').innerHTML = `
+        <strong>Coordenadas:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+        <a href="${mapsUrl}" target="_blank">Abrir en Google Maps</a>
+    `;
+    
+    openModal('mapa');
+}
+
+let currentPhotoType = '';
+
 function capturePhoto(tipo) {
-    const cameraInput = document.getElementById('camera-input');
-    cameraInput.dataset.tipo = tipo;
-    cameraInput.click();
+    currentPhotoType = tipo;
+    document.getElementById('camera-input').click();
+}
+
+async function handlePhotoCapture(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+        showToast('Procesando foto...', 'success');
+        
+        const base64 = await fileToBase64(file);
+        
+        // Comprimir imagen si es muy grande
+        const compressedBase64 = await compressImage(base64, 1200);
+        
+        const foto = {
+            id: 'FOTO_' + Date.now(),
+            tipo: currentPhotoType,
+            imagen: compressedBase64,
+            fecha: new Date().toISOString()
+        };
+        
+        state.tempFotos.push(foto);
+        updateFotosPreview();
+        updatePhotoCounts();
+        
+        showToast('Foto agregada', 'success');
+        
+    } catch (error) {
+        console.error('Error processing photo:', error);
+        showToast('Error al procesar foto', 'error');
+    }
+    
+    e.target.value = '';
 }
 
 function fileToBase64(file) {
@@ -343,24 +663,26 @@ function fileToBase64(file) {
     });
 }
 
-function getCurrentPosition() {
+function compressImage(base64, maxWidth) {
     return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-            resolve(null);
-            return;
-        }
-        
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                resolve({
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                });
-            },
-            () => resolve(null),
-            { timeout: 5000 }
-        );
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+            if (img.width <= maxWidth) {
+                resolve(base64);
+                return;
+            }
+            
+            const canvas = document.createElement('canvas');
+            const scale = maxWidth / img.width;
+            canvas.width = maxWidth;
+            canvas.height = img.height * scale;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
     });
 }
 
@@ -376,21 +698,39 @@ function updateFotosPreview() {
         <div class="preview-item">
             <img src="${foto.imagen}" alt="Foto ${index + 1}">
             <button class="remove-btn" onclick="removeFoto(${index})">×</button>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(229,57,53,0.9); color: white; font-size: 0.7rem; padding: 2px; text-align: center; text-transform: uppercase;">
+                ${foto.tipo}
+            </div>
         </div>
     `).join('');
+}
+
+function updatePhotoCounts() {
+    const counts = { factura: 0, nota_remision: 0, ticket: 0, otro: 0 };
+    state.tempFotos.forEach(f => {
+        if (counts.hasOwnProperty(f.tipo)) counts[f.tipo]++;
+    });
+    
+    document.getElementById('count-factura').textContent = counts.factura;
+    document.getElementById('count-nota_remision').textContent = counts.nota_remision;
+    document.getElementById('count-ticket').textContent = counts.ticket;
+    document.getElementById('count-otro').textContent = counts.otro;
 }
 
 function removeFoto(index) {
     state.tempFotos.splice(index, 1);
     updateFotosPreview();
+    updatePhotoCounts();
 }
 
 async function guardarGasto() {
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoBtn = document.querySelector('.tipo-btn.selected');
     const monto = document.getElementById('monto-gasto').value;
+    const fecha = document.getElementById('fecha-gasto').value;
     const lugar = document.getElementById('lugar-gasto').value.trim();
     const notas = document.getElementById('notas-gasto').value.trim();
+    const folio = document.getElementById('gasto-folio').value;
     
     if (!viajeId) {
         showToast('Selecciona un viaje', 'error');
@@ -411,33 +751,46 @@ async function guardarGasto() {
     
     const gasto = {
         id: 'GASTO_' + Date.now(),
+        folio: folio,
         viajeId: viajeId,
+        vendedorId: state.currentVendor.username,
+        vendedorName: state.currentVendor.name,
         tipo: tipo,
         monto: parseFloat(monto),
+        fecha: fecha || new Date().toISOString(),
         lugar: lugar,
         notas: notas,
-        fecha: new Date().toISOString(),
-        coordenadas: state.tempFotos.length > 0 ? state.tempFotos[0].coordenadas : await getCurrentPosition(),
-        fotos: state.tempFotos.map(f => f.id),
-        synced: false
+        coordenadas: state.tempLocation,
+        fotos: [],
+        createdAt: new Date().toISOString()
     };
     
     try {
-        await db.add('gastos', gasto);
-        
+        // Guardar fotos primero
         for (const foto of state.tempFotos) {
             foto.gastoId = gasto.id;
+            foto.viajeId = viajeId;
             await db.add('fotos', foto);
+            gasto.fotos.push(foto.id);
         }
         
+        await db.add('gastos', gasto);
+        
+        // Limpiar formulario
         document.getElementById('monto-gasto').value = '';
         document.getElementById('lugar-gasto').value = '';
         document.getElementById('notas-gasto').value = '';
         document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('selected'));
         state.tempFotos = [];
+        state.tempLocation = null;
         updateFotosPreview();
+        updatePhotoCounts();
+        updateFolioGasto();
         
-        showToast('Gasto guardado exitosamente', 'success');
+        document.getElementById('gps-coords').textContent = 'Sin ubicación';
+        document.getElementById('btn-ver-mapa').style.display = 'none';
+        
+        showToast(`Gasto ${folio} guardado exitosamente`, 'success');
         state.currentViaje = viajeId;
         
     } catch (error) {
@@ -446,50 +799,79 @@ async function guardarGasto() {
     }
 }
 
-// ===== REPORTES Y EXPORTACIÓN =====
+// ===== REPORTES =====
 function loadReportesSection() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('fecha-fin').value = today;
+    
+    // Calcular inicio de mes
+    const inicioMes = new Date();
+    inicioMes.setDate(1);
+    document.getElementById('fecha-inicio').value = inicioMes.toISOString().split('T')[0];
+    
+    // Actualizar info de último reporte
+    if (state.lastReport) {
+        document.getElementById('last-report-info').textContent = 
+            `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
+        document.getElementById('btn-compartir').disabled = false;
+    }
 }
 
-async function exportarExcel() {
+async function generarReporteZIP() {
     const viajeId = document.getElementById('reporte-viaje-select').value;
     const fechaInicio = document.getElementById('fecha-inicio').value;
     const fechaFin = document.getElementById('fecha-fin').value;
     
+    if (!fechaInicio || !fechaFin) {
+        showToast('Selecciona el rango de fechas', 'error');
+        return;
+    }
+    
     try {
-        showToast('Generando reporte...', 'success');
+        showToast('Generando reporte profesional...', 'success');
         
+        // Obtener datos
         const data = await db.exportAllData(viajeId === 'todos' ? null : viajeId);
         
+        // Filtrar por fecha
         let gastos = data.gastos;
-        if (fechaInicio && fechaFin) {
-            const start = new Date(fechaInicio);
-            const end = new Date(fechaFin);
-            end.setHours(23, 59, 59);
-            
-            gastos = gastos.filter(g => {
-                const fecha = new Date(g.fecha);
-                return fecha >= start && fecha <= end;
-            });
-        }
+        const start = new Date(fechaInicio);
+        const end = new Date(fechaFin);
+        end.setHours(23, 59, 59);
+        
+        gastos = gastos.filter(g => {
+            const fecha = new Date(g.fecha);
+            return fecha >= start && fecha <= end;
+        });
         
         if (gastos.length === 0) {
             showToast('No hay gastos en el período seleccionado', 'error');
             return;
         }
         
+        // Crear ZIP
+        const zip = new JSZip();
+        const folderName = `Reporte_3P_${state.currentVendor.name.replace(/\s+/g, '_')}_${fechaInicio}`;
+        const mainFolder = zip.folder(folderName);
+        
+        // 1. Crear Excel profesional
         const wb = XLSX.utils.book_new();
         
-        // Hoja 1: Resumen
-        const resumenData = [
-            ['REPORTE DE GASTOS - VIAJESPRO'],
-            ['Generado:', new Date().toLocaleString('es-MX')],
-            ['Vendedor:', state.currentVendedor.nombre],
+        // Hoja 1: Portada
+        const portadaData = [
+            ['3P S.A. DE C.V.'],
+            ['SISTEMA DE CONTROL DE GASTOS'],
+            [''],
+            ['REPORTE DE GASTOS DE VIAJE'],
+            [''],
+            ['Vendedor:', state.currentVendor.name],
+            ['Usuario:', '@' + state.currentVendor.username],
+            ['Zona:', state.currentVendor.zone],
             ['Período:', `${fechaInicio} a ${fechaFin}`],
-            [],
-            ['RESUMEN POR TIPO'],
-            ['Tipo', 'Total']
+            ['Fecha de generación:', new Date().toLocaleString('es-MX')],
+            [''],
+            ['RESUMEN EJECUTIVO'],
+            ['']
         ];
         
         const totales = {};
@@ -498,38 +880,40 @@ async function exportarExcel() {
         });
         
         Object.entries(totales).forEach(([tipo, total]) => {
-            resumenData.push([tipo.toUpperCase(), total]);
+            portadaData.push([tipo.toUpperCase(), `$${total.toFixed(2)}`]);
         });
         
-        resumenData.push(['TOTAL GENERAL', Object.values(totales).reduce((a, b) => a + b, 0)]);
+        portadaData.push(['']);
+        portadaData.push(['TOTAL GENERAL', `$${Object.values(totales).reduce((a, b) => a + b, 0).toFixed(2)}`]);
         
-        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+        const wsPortada = XLSX.utils.aoa_to_sheet(portadaData);
+        XLSX.utils.book_append_sheet(wb, wsPortada, 'Portada');
         
-        // Hoja 2: Detalle
+        // Hoja 2: Detalle de Gastos
         const detalleData = [
-            ['ID', 'Fecha', 'Tipo', 'Monto', 'Lugar', 'Notas', 'Coordenadas', 'Fotos']
+            ['FOLIO', 'FECHA', 'TIPO', 'MONTO', 'LUGAR', 'VENDEDOR', 'COORDENADAS', 'NOTAS', 'FOTOS']
         ];
         
         gastos.forEach(gasto => {
             detalleData.push([
-                gasto.id,
+                gasto.folio,
                 new Date(gasto.fecha).toLocaleString('es-MX'),
-                gasto.tipo,
+                gasto.tipo.toUpperCase(),
                 parseFloat(gasto.monto),
                 gasto.lugar || '',
-                gasto.notas || '',
+                gasto.vendedorName,
                 gasto.coordenadas ? `${gasto.coordenadas.lat}, ${gasto.coordenadas.lng}` : '',
+                gasto.notas || '',
                 gasto.fotos ? gasto.fotos.length : 0
             ]);
         });
         
         const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
-        XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Gastos');
+        XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle de Gastos');
         
         // Hoja 3: Viajes
         const viajesData = [
-            ['ID', 'Destino', 'Propósito', 'Fecha Inicio', 'Fecha Fin', 'Estado']
+            ['ID', 'DESTINO', 'PROPÓSITO', 'FECHA INICIO', 'FECHA FIN', 'ESTADO']
         ];
         
         data.viajes.forEach(viaje => {
@@ -546,58 +930,165 @@ async function exportarExcel() {
         const wsViajes = XLSX.utils.aoa_to_sheet(viajesData);
         XLSX.utils.book_append_sheet(wb, wsViajes, 'Viajes');
         
-        const filename = `Reporte_Gastos_${state.currentVendedor.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        // Guardar Excel en ZIP
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        mainFolder.file(`${folderName}.xlsx`, excelBuffer);
         
-        XLSX.writeFile(wb, filename);
+        // 2. Crear carpeta de fotos
+        const fotosFolder = mainFolder.folder('EVIDENCIAS_FOTOGRAFICAS');
         
-        showToast('✅ Reporte descargado exitosamente', 'success');
+        // Organizar fotos por tipo
+        const fotosPorTipo = { factura: [], nota_remision: [], ticket: [], otro: [] };
+        
+        for (const gasto of gastos) {
+            if (gasto.fotos && gasto.fotos.length > 0) {
+                for (const fotoId of gasto.fotos) {
+                    const foto = await db.get('fotos', fotoId);
+                    if (foto) {
+                        const tipo = foto.tipo || 'otro';
+                        const base64Data = foto.imagen.split(',')[1];
+                        const fileName = `${gasto.folio}_${tipo}_${fotoId.slice(-6)}.jpg`;
+                        
+                        fotosPorTipo[tipo].push({
+                            name: fileName,
+                            data: base64Data,
+                            gastoFolio: gasto.folio
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Guardar fotos organizadas
+        Object.entries(fotosPorTipo).forEach(([tipo, fotos]) => {
+            if (fotos.length > 0) {
+                const tipoFolder = fotosFolder.folder(tipo.toUpperCase());
+                fotos.forEach(foto => {
+                    tipoFolder.file(foto.name, foto.data, { base64: true });
+                });
+            }
+        });
+        
+        // 3. Crear archivo de relación (TXT)
+        let relacionTexto = `3P S.A. DE C.V. - RELACIÓN DE GASTOS Y EVIDENCIAS\n`;
+        relacionTexto += `================================================\n\n`;
+        relacionTexto += `Vendedor: ${state.currentVendor.name}\n`;
+        relacionTexto += `Período: ${fechaInicio} a ${fechaFin}\n\n`;
+        relacionTexto += `RELACIÓN DE GASTOS CON SUS EVIDENCIAS:\n\n`;
+        
+        gastos.forEach(gasto => {
+            relacionTexto += `FOLIO: ${gasto.folio}\n`;
+            relacionTexto += `  Fecha: ${new Date(gasto.fecha).toLocaleString('es-MX')}\n`;
+            relacionTexto += `  Tipo: ${gasto.tipo.toUpperCase()}\n`;
+            relacionTexto += `  Monto: $${parseFloat(gasto.monto).toFixed(2)}\n`;
+            relacionTexto += `  Lugar: ${gasto.lugar || 'N/A'}\n`;
+            if (gasto.fotos && gasto.fotos.length > 0) {
+                relacionTexto += `  Fotos: ${gasto.fotos.length} archivo(s) en carpeta EVIDENCIAS_FOTOGRAFICAS/\n`;
+            }
+            relacionTexto += `\n`;
+        });
+        
+        mainFolder.file('RELACION_GASTOS.txt', relacionTexto);
+        
+        // Generar ZIP
+        const zipContent = await zip.generateAsync({ type: 'blob' });
+        
+        // Descargar
+        const url = URL.createObjectURL(zipContent);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${folderName}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        // Guardar referencia para compartir
+        state.lastReport = {
+            fecha: new Date().toLocaleString('es-MX'),
+            viajes: data.viajes.length,
+            gastos: gastos.length,
+            blob: zipContent,
+            filename: `${folderName}.zip`
+        };
+        
+        document.getElementById('last-report-info').textContent = 
+            `Último: ${state.lastReport.fecha} - ${gastos.length} gastos`;
+        document.getElementById('btn-compartir').disabled = false;
+        
+        showToast('✅ Reporte generado y descargado', 'success');
         
     } catch (error) {
-        console.error('Error exporting Excel:', error);
+        console.error('Error generating report:', error);
         showToast('Error al generar reporte', 'error');
     }
 }
 
-async function compartirReporte() {
-    if (!navigator.share) {
-        showToast('Compartir no soportado en este navegador', 'error');
+async function compartirUltimoReporte() {
+    if (!state.lastReport) {
+        showToast('No hay reporte para compartir', 'error');
         return;
     }
     
     try {
-        await navigator.share({
-            title: 'Reporte de Gastos ViajesPro',
-            text: `Reporte de gastos de ${state.currentVendedor.nombre}`,
-            url: window.location.href
+        const file = new File([state.lastReport.blob], state.lastReport.filename, {
+            type: 'application/zip'
         });
+        
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                title: 'Reporte de Gastos 3P',
+                text: `Reporte de gastos de ${state.currentVendor.name}`,
+                files: [file]
+            });
+        } else {
+            // Fallback: descargar de nuevo
+            const url = URL.createObjectURL(state.lastReport.blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = state.lastReport.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast('Reporte descargado. Adjúntalo manualmente en WhatsApp/Email.', 'success');
+        }
+        
     } catch (error) {
-        console.log('Share cancelled');
+        console.error('Error sharing:', error);
+        showToast('Error al compartir. Intenta descargar manualmente.', 'error');
     }
 }
 
-async function respaldoJSON() {
+async function respaldoDatos() {
     try {
+        showToast('Preparando respaldo...', 'success');
+        
         const data = await db.exportAllData();
         const dataStr = JSON.stringify(data, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
         
-        const url = URL.createObjectURL(dataBlob);
+        // Crear archivo de texto descargable
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
         const link = document.createElement('a');
         link.href = url;
-        link.download = `Respaldo_ViajesPro_${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `Respaldo_3P_${state.currentVendor.username}_${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
         showToast('✅ Respaldo descargado', 'success');
+        
     } catch (error) {
         console.error('Error creating backup:', error);
         showToast('Error al crear respaldo', 'error');
     }
 }
 
-// ===== UI UTILITIES =====
+// ===== UTILIDADES =====
 function openModal(modalId) {
     document.getElementById(`modal-${modalId}`).classList.add('active');
 }
@@ -619,16 +1110,16 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+function updateConnectionStatus(online = navigator.onLine) {
+    state.isOnline = online;
+    // Actualizar UI si es necesario
+}
+
+// Cerrar modales al hacer clic fuera
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal')) {
         e.target.classList.remove('active');
     }
 });
 
-document.getElementById('viaje-select')?.addEventListener('change', (e) => {
-    if (e.target.value) {
-        loadGastos(e.target.value);
-    }
-});
-
-console.log('📱 ViajesPro App loaded');
+console.log('🐷🐔 3P ViajesPro v2.0 loaded');
