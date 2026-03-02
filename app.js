@@ -3,10 +3,37 @@
  * Sistema completo de control de gastos
  */
 
+// === FUNCIONES HELPER PARA FECHAS (TIMEZONE-SAFE) ===
+function crearFechaLocal(dateString) {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function formatearFechaMX(fecha) {
+    if (!fecha) return 'Sin fecha';
+    let dateObj = (typeof fecha === 'string' && fecha.match(/^\d{4}-\d{2}-\d{2}$/)) 
+        ? crearFechaLocal(fecha) 
+        : new Date(fecha);
+    if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+    return dateObj.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function getFechaHoraActualInput() {
+    const ahora = new Date();
+    const year = ahora.getFullYear();
+    const month = String(ahora.getMonth() + 1).padStart(2, '0');
+    const day = String(ahora.getDate()).padStart(2, '0');
+    const hours = String(ahora.getHours()).padStart(2, '0');
+    const minutes = String(ahora.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+// === FIN FUNCIONES HELPER ===
+
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
     ADMIN_USER: 'admin',
-    ADMIN_PASS: 'admin123', // Cambiar en producción
+    ADMIN_PASS: 'admin123',
     VERSION: '2.0.0'
 };
 
@@ -46,7 +73,6 @@ function checkSession() {
 }
 
 function setupEventListeners() {
-    // Camera input
     const cameraInput = document.getElementById('camera-input');
     if (cameraInput) {
         cameraInput.addEventListener('change', handlePhotoCapture);
@@ -158,14 +184,12 @@ async function registerVendor() {
         return;
     }
     
-    // Validar username (solo letras, números, puntos)
     if (!/^[a-z0-9.]+$/.test(username)) {
         showToast('Usuario solo puede contener letras minúsculas, números y puntos', 'error');
         return;
     }
     
     try {
-        // Verificar si ya existe
         const existing = await db.get('vendedores', username);
         if (existing) {
             showToast('Este nombre de usuario ya existe', 'error');
@@ -188,7 +212,6 @@ async function registerVendor() {
         
         showToast('Vendedor registrado exitosamente', 'success');
         
-        // Limpiar formulario
         document.getElementById('new-vendor-name').value = '';
         document.getElementById('new-vendor-username').value = '';
         document.getElementById('new-vendor-password').value = '';
@@ -252,7 +275,6 @@ function showMainApp() {
     document.getElementById('admin-panel').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     
-    // Mostrar nombre de usuario
     document.getElementById('current-user-name').textContent = state.currentVendor?.name || 'Vendedor';
     
     loadViajes();
@@ -306,12 +328,16 @@ async function loadViajes() {
             return;
         }
         
-        viajes.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+        viajes.sort((a, b) => {
+            const fechaA = crearFechaLocal(a.fechaInicio);
+            const fechaB = crearFechaLocal(b.fechaInicio);
+            return fechaB - fechaA;
+        });
         
         container.innerHTML = viajes.map(viaje => {
             const isActive = viaje.estado === 'activo';
-            const fechaInicio = new Date(viaje.fechaInicio).toLocaleDateString('es-MX');
-            const fechaFin = viaje.fechaFin ? new Date(viaje.fechaFin).toLocaleDateString('es-MX') : 'Sin fecha fin';
+            const fechaInicio = formatearFechaMX(viaje.fechaInicio);
+            const fechaFin = viaje.fechaFin ? formatearFechaMX(viaje.fechaFin) : 'Sin fecha fin';
             
             return `
                 <div class="card" onclick="selectViaje('${viaje.id}')">
@@ -340,7 +366,7 @@ async function loadViajes() {
 
 function updateViajeSelects(viajes) {
     const options = viajes.map(v => 
-        `<option value="${v.id}">${v.destino} (${new Date(v.fechaInicio).toLocaleDateString('es-MX')})</option>`
+        `<option value="${v.id}">${v.destino} (${formatearFechaMX(v.fechaInicio)})</option>`
     ).join('');
     
     const defaultOption = '<option value="">Selecciona un viaje...</option>';
@@ -379,6 +405,8 @@ async function crearViaje() {
         
         document.getElementById('viaje-destino').value = '';
         document.getElementById('viaje-proposito').value = '';
+        document.getElementById('viaje-fecha-inicio').value = '';
+        document.getElementById('viaje-fecha-fin').value = '';
         
         loadViajes();
         
@@ -519,7 +547,6 @@ async function verDetalleGasto(gastoId) {
         const gasto = await db.get('gastos', gastoId);
         if (!gasto) return;
         
-        // Mostrar fotos si tiene
         if (gasto.fotos && gasto.fotos.length > 0) {
             const fotos = await Promise.all(gasto.fotos.map(fotoId => db.get('fotos', fotoId)));
             const fotosContainer = document.getElementById('fotos-detalle');
@@ -546,10 +573,7 @@ function loadCapturaSection() {
     updateFotosPreview();
     updatePhotoCounts();
     
-    // Set fecha actual
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('fecha-gasto').value = now.toISOString().slice(0, 16);
+    document.getElementById('fecha-gasto').value = getFechaHoraActualInput();
     
     if (state.currentViaje) {
         document.getElementById('captura-viaje-select').value = state.currentViaje;
@@ -629,8 +653,6 @@ async function handlePhotoCapture(e) {
         showToast('Procesando foto...', 'success');
         
         const base64 = await fileToBase64(file);
-        
-        // Comprimir imagen si es muy grande
         const compressedBase64 = await compressImage(base64, 1200);
         
         const foto = {
@@ -766,7 +788,6 @@ async function guardarGasto() {
     };
     
     try {
-        // Guardar fotos primero
         for (const foto of state.tempFotos) {
             foto.gastoId = gasto.id;
             foto.viajeId = viajeId;
@@ -776,7 +797,6 @@ async function guardarGasto() {
         
         await db.add('gastos', gasto);
         
-        // Limpiar formulario
         document.getElementById('monto-gasto').value = '';
         document.getElementById('lugar-gasto').value = '';
         document.getElementById('notas-gasto').value = '';
@@ -804,12 +824,10 @@ function loadReportesSection() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('fecha-fin').value = today;
     
-    // Calcular inicio de mes
     const inicioMes = new Date();
     inicioMes.setDate(1);
     document.getElementById('fecha-inicio').value = inicioMes.toISOString().split('T')[0];
     
-    // Actualizar info de último reporte
     if (state.lastReport) {
         document.getElementById('last-report-info').textContent = 
             `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
@@ -830,10 +848,8 @@ async function generarReporteZIP() {
     try {
         showToast('Generando reporte profesional...', 'success');
         
-        // Obtener datos
         const data = await db.exportAllData(viajeId === 'todos' ? null : viajeId);
         
-        // Filtrar por fecha
         let gastos = data.gastos;
         const start = new Date(fechaInicio);
         const end = new Date(fechaFin);
@@ -849,15 +865,12 @@ async function generarReporteZIP() {
             return;
         }
         
-        // Crear ZIP
         const zip = new JSZip();
         const folderName = `Reporte_3P_${state.currentVendor.name.replace(/\s+/g, '_')}_${fechaInicio}`;
         const mainFolder = zip.folder(folderName);
         
-        // 1. Crear Excel profesional
         const wb = XLSX.utils.book_new();
         
-        // Hoja 1: Portada
         const portadaData = [
             ['3P S.A. DE C.V.'],
             ['SISTEMA DE CONTROL DE GASTOS'],
@@ -889,7 +902,6 @@ async function generarReporteZIP() {
         const wsPortada = XLSX.utils.aoa_to_sheet(portadaData);
         XLSX.utils.book_append_sheet(wb, wsPortada, 'Portada');
         
-        // Hoja 2: Detalle de Gastos
         const detalleData = [
             ['FOLIO', 'FECHA', 'TIPO', 'MONTO', 'LUGAR', 'VENDEDOR', 'COORDENADAS', 'NOTAS', 'FOTOS']
         ];
@@ -911,7 +923,6 @@ async function generarReporteZIP() {
         const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
         XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle de Gastos');
         
-        // Hoja 3: Viajes
         const viajesData = [
             ['ID', 'DESTINO', 'PROPÓSITO', 'FECHA INICIO', 'FECHA FIN', 'ESTADO']
         ];
@@ -930,14 +941,11 @@ async function generarReporteZIP() {
         const wsViajes = XLSX.utils.aoa_to_sheet(viajesData);
         XLSX.utils.book_append_sheet(wb, wsViajes, 'Viajes');
         
-        // Guardar Excel en ZIP
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         mainFolder.file(`${folderName}.xlsx`, excelBuffer);
         
-        // 2. Crear carpeta de fotos
         const fotosFolder = mainFolder.folder('EVIDENCIAS_FOTOGRAFICAS');
         
-        // Organizar fotos por tipo
         const fotosPorTipo = { factura: [], nota_remision: [], ticket: [], otro: [] };
         
         for (const gasto of gastos) {
@@ -959,7 +967,6 @@ async function generarReporteZIP() {
             }
         }
         
-        // Guardar fotos organizadas
         Object.entries(fotosPorTipo).forEach(([tipo, fotos]) => {
             if (fotos.length > 0) {
                 const tipoFolder = fotosFolder.folder(tipo.toUpperCase());
@@ -969,7 +976,6 @@ async function generarReporteZIP() {
             }
         });
         
-        // 3. Crear archivo de relación (TXT)
         let relacionTexto = `3P S.A. DE C.V. - RELACIÓN DE GASTOS Y EVIDENCIAS\n`;
         relacionTexto += `================================================\n\n`;
         relacionTexto += `Vendedor: ${state.currentVendor.name}\n`;
@@ -990,10 +996,8 @@ async function generarReporteZIP() {
         
         mainFolder.file('RELACION_GASTOS.txt', relacionTexto);
         
-        // Generar ZIP
         const zipContent = await zip.generateAsync({ type: 'blob' });
         
-        // Descargar
         const url = URL.createObjectURL(zipContent);
         const link = document.createElement('a');
         link.href = url;
@@ -1003,20 +1007,17 @@ async function generarReporteZIP() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        // Guardar referencia para compartir
         state.lastReport = {
             fecha: new Date().toLocaleString('es-MX'),
             viajes: data.viajes.length,
-            gastos: gastos.length,
-            blob: zipContent,
-            filename: `${folderName}.zip`
+            gastos: gastos.length
         };
         
         document.getElementById('last-report-info').textContent = 
-            `Último: ${state.lastReport.fecha} - ${gastos.length} gastos`;
+            `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
         document.getElementById('btn-compartir').disabled = false;
         
-        showToast('✅ Reporte generado y descargado', 'success');
+        showToast('Reporte generado exitosamente', 'success');
         
     } catch (error) {
         console.error('Error generating report:', error);
@@ -1026,66 +1027,19 @@ async function generarReporteZIP() {
 
 async function compartirUltimoReporte() {
     if (!state.lastReport) {
-        showToast('No hay reporte para compartir', 'error');
+        showToast('No hay reportes generados', 'error');
         return;
     }
     
-    try {
-        const file = new File([state.lastReport.blob], state.lastReport.filename, {
-            type: 'application/zip'
-        });
-        
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                title: 'Reporte de Gastos 3P',
-                text: `Reporte de gastos de ${state.currentVendor.name}`,
-                files: [file]
-            });
-        } else {
-            // Fallback: descargar de nuevo
-            const url = URL.createObjectURL(state.lastReport.blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = state.lastReport.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            showToast('Reporte descargado. Adjúntalo manualmente en WhatsApp/Email.', 'success');
-        }
-        
-    } catch (error) {
-        console.error('Error sharing:', error);
-        showToast('Error al compartir. Intenta descargar manualmente.', 'error');
-    }
-}
-
-async function respaldoDatos() {
-    try {
-        showToast('Preparando respaldo...', 'success');
-        
-        const data = await db.exportAllData();
-        const dataStr = JSON.stringify(data, null, 2);
-        
-        // Crear archivo de texto descargable
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Respaldo_3P_${state.currentVendor.username}_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        showToast('✅ Respaldo descargado', 'success');
-        
-    } catch (error) {
-        console.error('Error creating backup:', error);
-        showToast('Error al crear respaldo', 'error');
-    }
+    const message = `*Reporte de Gastos 3P S.A. DE C.V.*\n\n` +
+        `Vendedor: ${state.currentVendor.name}\n` +
+        `Generado: ${state.lastReport.fecha}\n` +
+        `Viajes: ${state.lastReport.viajes}\n` +
+        `Gastos: ${state.lastReport.gastos}\n\n` +
+        `_Reporte completo disponible en la aplicación_`;
+    
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
 }
 
 // ===== UTILIDADES =====
@@ -1097,29 +1051,33 @@ function closeModal(modalId) {
     document.getElementById(`modal-${modalId}`).classList.remove('active');
 }
 
-function showToast(message, type = 'success') {
-    document.querySelectorAll('.toast').forEach(t => t.remove());
-    
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
-}
-
 function updateConnectionStatus(online = navigator.onLine) {
     state.isOnline = online;
-    // Actualizar UI si es necesario
+    if (!online) {
+        showToast('Modo offline - Los datos se guardarán localmente', 'warning');
+    }
 }
 
-// Cerrar modales al hacer clic fuera
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
+function showToast(message, type = 'info') {
+    if (window.ToastSystem) {
+        ToastSystem.show(message, type);
+    } else {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${type === 'error' ? '#E53935' : type === 'success' ? '#2E7D32' : '#1565C0'};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-weight: 500;
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
     }
-});
-
-console.log('🐷🐔 3P ViajesPro v2.0 loaded');
+}
