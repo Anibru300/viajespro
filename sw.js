@@ -1,9 +1,8 @@
 /**
- * 3P VIAJESPRO - Service Worker v4.0
- * Controla el cache y actualizaciones de la PWA
+ * 3P VIAJESPRO - Service Worker v5.0
  */
 
-const CACHE_NAME = 'viajespro-v4.0.0';
+const CACHE_NAME = 'viajespro-v5.0.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -15,9 +14,8 @@ const STATIC_ASSETS = [
   './manifest.json'
 ];
 
-// Instalación: Guardar archivos en caché
 self.addEventListener('install', (event) => {
-  console.log('[SW v4.0] Instalando...');
+  console.log('[SW v5.0] Instalando...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -25,15 +23,14 @@ self.addEventListener('install', (event) => {
         return cache.addAll(STATIC_ASSETS);
       })
       .then(() => {
-        console.log('[SW v4.0] Cacheado');
+        console.log('[SW v5.0] Cacheado');
         return self.skipWaiting();
       })
   );
 });
 
-// Activación: Limpiar cachés viejas
 self.addEventListener('activate', (event) => {
-  console.log('[SW v4.0] Activando...');
+  console.log('[SW v5.0] Activando...');
   
   event.waitUntil(
     caches.keys()
@@ -51,7 +48,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Servir desde caché o red
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   
@@ -61,4 +57,4 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-console.log('[SW v4.0] Cargado');
+console.log('[SW v5.0] Cargado');
