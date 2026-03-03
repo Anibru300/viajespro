@@ -1,7 +1,7 @@
 {
-  "name": "3P ViajesPro",
+  "name": "3P ViajesPro v4",
   "short_name": "ViajesPro",
-  "description": "Sistema de Control de Gastos de Viaje",
+  "description": "Sistema de Control de Gastos de Viaje - Versión 4.0",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#dc2626",
