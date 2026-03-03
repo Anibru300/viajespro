@@ -1,10 +1,12 @@
 /**
- * 3P VIAJESPRO - Database Module
- * IndexedDB funcional 100%
+ * 3P VIAJESPRO - Database Module v3.2
+ * IndexedDB con sistema de respaldo robusto, recuperaci&oacute;n de datos y seed inicial
  */
 
 const DB_NAME = 'ViajesProDB_v3';
 const DB_VERSION = 3;
+const BACKUP_PREFIX = 'VP_backup_';
+const BACKUP_TIMESTAMP_KEY = 'VP_backup_timestamp';
 
 const STORES = {
     VENDEDORES: 'vendedores',
@@ -14,46 +16,105 @@ const STORES = {
     CONFIG: 'config'
 };
 
+class LocalStorageBackup {
+    constructor() {
+        this.isAvailable = this.checkAvailability();
+    }
+
+    checkAvailability() {
+        try {
+            const test = '__test__';
+            localStorage.setItem(test, test);
+            localStorage.removeItem(test);
+            return true;
+        } catch (e) {
+            console.warn('localStorage no disponible');
+            return false;
+        }
+    }
+
+    save(storeName, data) {
+        if (!this.isAvailable) return false;
+        try {
+            const key = BACKUP_PREFIX + storeName;
+            const existing = this.get(storeName) || [];
+            const index = existing.findIndex(item => item.id === data.id);
+            const dataWithTimestamp = { ...data, _backupAt: new Date().toISOString() };
+            
+            if (index >= 0) {
+                existing[index] = dataWithTimestamp;
+            } else {
+                existing.push(dataWithTimestamp);
+            }
+            
+            localStorage.setItem(key, JSON.stringify(existing));
+            localStorage.setItem(BACKUP_TIMESTAMP_KEY, new Date().toISOString());
+            return true;
+        } catch (e) {
+            console.warn('Error guardando backup:', e.message);
+            return false;
+        }
+    }
+
+    get(storeName) {
+        if (!this.isAvailable) return null;
+        try {
+            const key = BACKUP_PREFIX + storeName;
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    getAll() {
+        if (!this.isAvailable) return null;
+        const backup = {};
+        Object.values(STORES).forEach(storeName => {
+            backup[storeName] = this.get(storeName) || [];
+        });
+        backup._timestamp = localStorage.getItem(BACKUP_TIMESTAMP_KEY);
+        return backup;
+    }
+}
+
 class ViajesProDB {
     constructor() {
         this.db = null;
-        this.initialized = false;
-        console.log('📦 ViajesProDB creado');
+        this.initPromise = null;
+        this.backup = new LocalStorageBackup();
     }
 
     async init() {
-        if (this.initialized && this.db) {
-            console.log('✅ DB ya inicializada');
-            return this.db;
-        }
+        if (this.initPromise) return this.initPromise;
+        
+        this.initPromise = new Promise(async (resolve, reject) => {
+            try {
+                await this.openDatabase();
+                await this.checkAndRecoverFromBackup();
+                await this.seedInitialData();
+                console.log('Database initialized');
+                resolve(this.db);
+            } catch (error) {
+                console.error('Database error:', error);
+                reject(error);
+            }
+        });
 
-        console.log('🚀 Inicializando DB...');
+        return this.initPromise;
+    }
 
+    openDatabase() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
-            
-            request.onerror = (event) => {
-                console.error('❌ Error abriendo DB:', request.error);
-                reject(request.error);
-            };
-            
-            request.onsuccess = (event) => {
-                console.log('✅ DB abierta');
+
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
                 this.db = request.result;
-                this.initialized = true;
-                
-                // Crear datos de prueba si no hay vendedores
-                this.seedData().then(() => {
-                    console.log('✅ DB lista');
-                    resolve(this.db);
-                }).catch(err => {
-                    console.warn('Error en seedData:', err);
-                    resolve(this.db);
-                });
+                resolve(this.db);
             };
 
             request.onupgradeneeded = (event) => {
-                console.log('⚙️ Creando object stores...');
                 const db = event.target.result;
 
                 if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
@@ -83,178 +144,184 @@ class ViajesProDB {
         });
     }
 
-    async seedData() {
+    async _count(storeName) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async _put(storeName, data) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const request = store.put(data);
+            request.onsuccess = () => resolve(data);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async checkAndRecoverFromBackup() {
+        const stores = [STORES.VENDEDORES, STORES.VIAJES, STORES.GASTOS];
+        let totalRecords = 0;
+        
+        for (const storeName of stores) {
+            try {
+                const count = await this._count(storeName);
+                totalRecords += count;
+            } catch (e) {
+                console.warn('Error al contar en', storeName, e);
+            }
+        }
+
+        if (totalRecords === 0) {
+            const backup = this.backup.getAll();
+            let backupTotal = 0;
+            for (const storeName of stores) {
+                if (backup[storeName]) backupTotal += backup[storeName].length;
+            }
+
+            if (backupTotal > 0) {
+                console.log(`Recuperando ${backupTotal} registros desde backup...`);
+                for (const storeName of stores) {
+                    if (backup[storeName]) {
+                        for (const item of backup[storeName]) {
+                            const { _backupAt, ...cleanItem } = item;
+                            try {
+                                await this._put(storeName, cleanItem);
+                            } catch (e) {
+                                console.warn('Error recuperando item:', e.message);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async seedInitialData() {
         try {
-            const count = await this.count(STORES.VENDEDORES);
-            if (count === 0) {
-                console.log('🌱 Creando vendedor de prueba...');
-                await this.add(STORES.VENDEDORES, {
+            const vendedores = await this.getAll(STORES.VENDEDORES);
+            if (vendedores.length === 0) {
+                console.log('Sembrando datos iniciales...');
+                const vendorEjemplo = {
                     id: 'juan.perez',
-                    name: 'Juan Pérez',
+                    name: 'Juan P&eacute;rez',
                     username: 'juan.perez',
                     password: '123456',
                     email: 'juan@ejemplo.com',
                     zone: 'Centro',
                     status: 'active',
                     createdAt: new Date().toISOString()
-                });
-                console.log('✅ Vendedor de prueba creado (juan.perez / 123456)');
+                };
+                await this.add(STORES.VENDEDORES, vendorEjemplo, false);
+                console.log('Vendedor de prueba creado (usuario: juan.perez / contrase&ntilde;a: 123456)');
             }
         } catch (e) {
-            console.warn('Error en seedData:', e);
+            console.warn('Error al sembrar datos iniciales:', e);
         }
     }
 
-    async count(storeName) {
-        if (!this.db) await this.init();
-        
+    async add(storeName, data, doBackup = true) {
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.count();
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            
+            const dataToAdd = {
+                ...data,
+                createdAt: data.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            const request = store.add(dataToAdd);
+            
+            request.onsuccess = () => {
+                if (doBackup) this.backup.save(storeName, dataToAdd);
+                resolve(dataToAdd);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
-    async add(storeName, data) {
-        console.log(`➕ Agregando a ${storeName}:`, data.id);
-        if (!this.db) await this.init();
-        
+    async put(storeName, data, doBackup = true) {
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const dataToAdd = {
-                    ...data,
-                    createdAt: data.createdAt || new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                };
-                
-                const request = store.add(dataToAdd);
-                
-                request.onsuccess = () => {
-                    console.log(`✅ Guardado en ${storeName}:`, data.id);
-                    resolve(dataToAdd);
-                };
-                
-                request.onerror = () => {
-                    console.error(`❌ Error guardando:`, request.error);
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            
+            const dataToPut = {
+                ...data,
+                updatedAt: new Date().toISOString()
+            };
+            
+            const request = store.put(dataToPut);
+            
+            request.onsuccess = () => {
+                if (doBackup) this.backup.save(storeName, dataToPut);
+                resolve(dataToPut);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
     async get(storeName, id) {
-        console.log(`🔍 Buscando en ${storeName}:`, id);
-        if (!this.db) await this.init();
-        
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.get(id);
-                
-                request.onsuccess = () => {
-                    console.log(`🔍 Resultado:`, request.result ? 'ENCONTRADO' : 'NO ENCONTRADO');
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => {
-                    console.error(`❌ Error buscando:`, request.error);
-                    reject(request.error);
-                };
-            } catch (e) {
-                console.error(`❌ Error en get:`, e);
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
     async getAll(storeName) {
-        console.log(`📋 Obteniendo todos de ${storeName}`);
-        if (!this.db) await this.init();
-        
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.getAll();
-                
-                request.onsuccess = () => {
-                    console.log(`📋 Encontrados:`, request.result.length);
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
-    async update(storeName, data) {
-        console.log(`📝 Actualizando en ${storeName}:`, data.id);
-        if (!this.db) await this.init();
-        
-        return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const dataToPut = {
-                    ...data,
-                    updatedAt: new Date().toISOString()
-                };
-                
-                const request = store.put(dataToPut);
-                request.onsuccess = () => resolve(dataToPut);
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
-        });
+    async update(storeName, data, doBackup = true) {
+        return this.put(storeName, data, doBackup);
     }
 
-    async delete(storeName, id) {
-        console.log(`🗑️ Eliminando de ${storeName}:`, id);
-        if (!this.db) await this.init();
-        
+    async delete(storeName, id, doBackup = true) {
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                const request = store.delete(id);
-                request.onsuccess = () => resolve(id);
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const request = store.delete(id);
+            
+            request.onsuccess = () => {
+                if (doBackup) {
+                    const existing = this.backup.get(storeName) || [];
+                    const filtered = existing.filter(item => item.id !== id);
+                    localStorage.setItem(BACKUP_PREFIX + storeName, JSON.stringify(filtered));
+                }
+                resolve(id);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
     async queryByIndex(storeName, indexName, value) {
-        if (!this.db) await this.init();
-        
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const index = store.index(indexName);
-                const request = index.getAll(value);
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const index = store.index(indexName);
+            const request = index.getAll(value);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
@@ -316,60 +383,52 @@ class ViajesProDB {
     }
 
     async setConfig(key, value) {
-        if (!this.db) await this.init();
-        
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([STORES.CONFIG], 'readwrite');
-                const store = transaction.objectStore(STORES.CONFIG);
-                const data = { key, value, updatedAt: new Date().toISOString() };
-                const request = store.put(data);
-                request.onsuccess = () => resolve({ key, value });
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([STORES.CONFIG], 'readwrite');
+            const store = transaction.objectStore(STORES.CONFIG);
+            const data = { key, value, updatedAt: new Date().toISOString() };
+            const request = store.put(data);
+            request.onsuccess = () => resolve({ key, value });
+            request.onerror = () => reject(request.error);
         });
     }
 
     async getConfig(key) {
-        if (!this.db) await this.init();
-        
+        await this.init();
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([STORES.CONFIG], 'readonly');
-                const store = transaction.objectStore(STORES.CONFIG);
-                const request = store.get(key);
-                request.onsuccess = () => resolve(request.result?.value);
-                request.onerror = () => reject(request.error);
-            } catch (e) {
-                reject(e);
-            }
+            const transaction = this.db.transaction([STORES.CONFIG], 'readonly');
+            const store = transaction.objectStore(STORES.CONFIG);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result?.value);
+            request.onerror = () => reject(request.error);
         });
     }
 
     async clearAll() {
-        if (!this.db) await this.init();
+        await this.init();
         const stores = Object.values(STORES);
         for (const storeName of stores) {
             const transaction = this.db.transaction([storeName], 'readwrite');
             const store = transaction.objectStore(storeName);
             await store.clear();
         }
+        for (const storeName of stores) {
+            localStorage.removeItem(BACKUP_PREFIX + storeName);
+        }
+        localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
     }
 }
 
-// Crear instancia global
 const db = new ViajesProDB();
 
-// Inicializar automáticamente
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando ViajesProDB...');
     db.init().then(() => {
-        console.log('✅ 3P Database ready');
+        console.log('3P Database ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
-        console.error('❌ Database initialization failed:', err);
+        console.error('Database initialization failed:', err);
+        alert('Error al inicializar la base de datos. Por favor, recarga la p&aacute;gina o contacta al administrador.');
     });
 });
 
