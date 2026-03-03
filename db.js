@@ -1,9 +1,8 @@
 /**
- * 3P VIAJESPRO - Database Module v5.0
- * Con sincronización Firebase mejorada
+ * 3P VIAJESPRO - Database Module v5.1
  */
 
-console.log('🚀 db.js v5.0 cargando...');
+console.log('🚀 db.js v5.1 cargando...');
 
 if (!window.indexedDB) {
     console.error('❌ Tu navegador no soporta IndexedDB');
@@ -27,7 +26,8 @@ class ViajesProDB {
         this.db = null;
         this.initialized = false;
         this.firebaseAvailable = false;
-        console.log('📦 ViajesProDB v5.0 creado');
+        this.syncInProgress = false;
+        console.log('📦 ViajesProDB v5.1 creado');
     }
 
     async init() {
@@ -44,8 +44,8 @@ class ViajesProDB {
                 this.db = event.target.result;
                 this.initialized = true;
                 
-                // Verificar Firebase
-                if (typeof window.dbFirebase !== 'undefined') {
+                // Verificar Firebase UNA SOLA VEZ
+                if (typeof window.dbFirebase !== 'undefined' && !this.firebaseAvailable) {
                     console.log('🔥 Firebase disponible');
                     this.firebaseAvailable = true;
                     
@@ -53,15 +53,15 @@ class ViajesProDB {
                         window.setupRealtimeListeners();
                     }
                     
-                    // Sincronizar al iniciar (con delay para evitar conflictos)
-                    if (window.syncFromFirebase) {
-                        console.log('⬇️ Iniciando sincronización en 2 segundos...');
-                        setTimeout(() => {
-                            window.syncFromFirebase();
-                        }, 2000);
+                    // Sincronizar al iniciar (solo una vez)
+                    if (window.syncFromFirebase && !this.syncInProgress) {
+                        this.syncInProgress = true;
+                        console.log('⬇️ Iniciando sincronización...');
+                        setTimeout(async () => {
+                            await window.syncFromFirebase();
+                            this.syncInProgress = false;
+                        }, 1000);
                     }
-                } else {
-                    console.log('⚠️ Firebase no disponible');
                 }
                 
                 await this.seedData();
@@ -136,7 +136,7 @@ class ViajesProDB {
         });
     }
 
-    // Método SILENCIOSO - no sincroniza con Firebase (para evitar bucles)
+    // Método SILENCIOSO - no sincroniza con Firebase
     async addSilent(storeName, data) {
         const dataToAdd = {
             ...data,
@@ -168,7 +168,6 @@ class ViajesProDB {
             const request = store.add(dataToAdd);
             
             request.onsuccess = async () => {
-                // Sincronizar con Firebase
                 if (window.saveToFirebase) {
                     await window.saveToFirebase(storeName, dataToAdd);
                 }
