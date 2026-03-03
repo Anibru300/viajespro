@@ -1,6 +1,6 @@
 /**
  * 3P VIAJESPRO - Main Application
- * Versión corregida con manejo de errores y mejoras en registro de vendedores
+ * Versión con depuración y mensajes de error visibles
  */
 
 // === FUNCIONES HELPER PARA FECHAS ===
@@ -49,6 +49,7 @@ const state = {
 
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM cargado, iniciando app...');
     checkSession();
     setupEventListeners();
     updateConnectionStatus();
@@ -110,7 +111,6 @@ async function login() {
     }
     
     try {
-        // Asegurar que la base de datos esté inicializada
         await db.init();
         const vendor = await db.get('vendedores', username);
         
@@ -181,7 +181,10 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
+// ***** FUNCIÓN REGISTRO DE VENDEDORES (CORREGIDA) *****
 async function registerVendor() {
+    console.log('registerVendor() llamada');
+    
     const name = document.getElementById('new-vendor-name').value.trim();
     const username = document.getElementById('new-vendor-username').value.trim().toLowerCase();
     const password = document.getElementById('new-vendor-password').value;
@@ -192,29 +195,42 @@ async function registerVendor() {
     // Limpiar mensaje de error anterior
     if (errorDiv) errorDiv.textContent = '';
     
+    // Validaciones básicas
     if (!name || !username || !password) {
-        alert('Nombre, usuario y contraseña son obligatorios');
+        const msg = 'Nombre, usuario y contraseña son obligatorios';
+        alert(msg);
+        if (errorDiv) errorDiv.textContent = msg;
         return;
     }
     
     if (!/^[a-z0-9.]+$/.test(username)) {
-        alert('Usuario solo puede contener letras minúsculas, números y puntos');
+        const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
+        alert(msg);
+        if (errorDiv) errorDiv.textContent = msg;
         return;
     }
     
     try {
-        // Verificar que la base de datos esté lista
+        // Verificar que db esté definido
+        if (typeof db === 'undefined') {
+            throw new Error('La base de datos no está disponible. Recarga la página.');
+        }
+        
+        console.log('Inicializando DB...');
         await db.init();
+        console.log('DB lista');
         
         // Verificar si el usuario ya existe
         const existing = await db.get('vendedores', username);
         if (existing) {
-            alert('Este nombre de usuario ya existe');
+            const msg = 'Este nombre de usuario ya existe';
+            alert(msg);
+            if (errorDiv) errorDiv.textContent = msg;
             return;
         }
         
         const vendor = {
-            id: username,  // Usamos el username como ID
+            id: username,
             name: name,
             username: username,
             password: password,
@@ -225,6 +241,7 @@ async function registerVendor() {
             createdBy: 'admin'
         };
         
+        console.log('Guardando vendedor:', vendor);
         await db.add('vendedores', vendor);
         
         alert('✅ Vendedor registrado exitosamente');
@@ -239,18 +256,19 @@ async function registerVendor() {
         await loadVendorsList();
         
     } catch (error) {
-        console.error('Error registering vendor:', error);
+        console.error('Error en registerVendor:', error);
+        const msg = 'Error al registrar: ' + error.message;
         if (errorDiv) {
-            errorDiv.textContent = 'Error al registrar: ' + error.message;
+            errorDiv.textContent = msg;
         } else {
-            alert('Error al registrar vendedor: ' + error.message);
+            alert(msg);
         }
     }
 }
 
 async function loadVendorsList() {
     try {
-        await db.init(); // Asegurar DB lista
+        await db.init();
         const vendors = await db.getAll('vendedores');
         const container = document.getElementById('vendors-list');
         
@@ -288,7 +306,7 @@ async function editVendor(username) {
         document.getElementById('edit-vendor-id').value = vendor.id;
         document.getElementById('edit-vendor-name').value = vendor.name;
         document.getElementById('edit-vendor-username').value = vendor.username;
-        document.getElementById('edit-vendor-password').value = ''; // dejar vacío
+        document.getElementById('edit-vendor-password').value = '';
         document.getElementById('edit-vendor-email').value = vendor.email || '';
         document.getElementById('edit-vendor-zone').value = vendor.zone;
         document.getElementById('edit-vendor-status').value = vendor.status;
@@ -303,7 +321,7 @@ async function editVendor(username) {
 async function saveVendorChanges() {
     const id = document.getElementById('edit-vendor-id').value;
     const name = document.getElementById('edit-vendor-name').value.trim();
-    const username = document.getElementById('edit-vendor-username').value; // readonly
+    const username = document.getElementById('edit-vendor-username').value;
     const password = document.getElementById('edit-vendor-password').value;
     const email = document.getElementById('edit-vendor-email').value.trim();
     const zone = document.getElementById('edit-vendor-zone').value;
@@ -322,7 +340,7 @@ async function saveVendorChanges() {
         }
         vendor.name = name;
         if (password) {
-            vendor.password = password; // actualizar solo si se proporciona
+            vendor.password = password;
         }
         vendor.email = email;
         vendor.zone = zone;
@@ -332,7 +350,7 @@ async function saveVendorChanges() {
         await db.update('vendedores', vendor);
         closeModal('editar-vendedor');
         alert('✅ Vendedor actualizado');
-        loadVendorsList(); // recargar lista
+        loadVendorsList();
     } catch (error) {
         console.error('Error al guardar cambios:', error);
         alert('Error al guardar');
@@ -344,17 +362,14 @@ async function deleteVendor(username) {
         return;
     }
     try {
-        // Verificar si tiene viajes asociados
         const viajes = await db.getViajesByVendedor(username);
         if (viajes.length > 0) {
             if (!confirm('El vendedor tiene viajes registrados. ¿Eliminar también todos sus viajes y gastos?')) {
                 return;
             }
-            // Eliminar viajes y gastos asociados
             for (const viaje of viajes) {
                 const gastos = await db.getGastosByViaje(viaje.id);
                 for (const gasto of gastos) {
-                    // Eliminar fotos asociadas
                     if (gasto.fotos && gasto.fotos.length > 0) {
                         for (const fotoId of gasto.fotos) {
                             await db.delete('fotos', fotoId, false);
