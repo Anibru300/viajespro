@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - UX Improvements JavaScript
+ * 3P VIAJESPRO - UX Improvements JavaScript v5.0
  * Mejoras de experiencia de usuario y utilidades
  */
 
@@ -9,7 +9,7 @@
  * Muestra un toast notification
  * @param {string} message - Mensaje a mostrar
  * @param {string} type - Tipo: 'success', 'error', 'info'
- * @param {number} duration - Duraci&oacute;n en ms
+ * @param {number} duration - Duración en ms
  */
 function showToast(message, type = 'info', duration = 3000) {
     // Remover toast anterior si existe
@@ -24,7 +24,7 @@ function showToast(message, type = 'info', duration = 3000) {
     toast.textContent = message;
     document.body.appendChild(toast);
     
-    // Auto-remover despu&eacute;s de la duraci&oacute;n
+    // Auto-remover después de la duración
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(-50%) translateY(20px)';
@@ -53,7 +53,7 @@ function toggleLoading(element, show = true) {
 /**
  * Valida un campo de formulario visualmente
  * @param {HTMLElement} input - Input a validar
- * @param {boolean} isValid - Si es v&aacute;lido o no
+ * @param {boolean} isValid - Si es válido o no
  * @param {string} message - Mensaje de error (opcional)
  */
 function validateField(input, isValid, message = '') {
@@ -66,11 +66,10 @@ function validateField(input, isValid, message = '') {
         existingError.remove();
     }
     
-    // Agregar mensaje de error si no es v&aacute;lido
+    // Agregar mensaje de error si no es válido
     if (!isValid && message) {
         const error = document.createElement('span');
         error.className = 'field-error';
-        error.style.cssText = 'color: var(--color-secondary); font-size: 0.8rem; margin-top: 0.25rem; display: block;';
         error.textContent = message;
         input.parentElement.appendChild(error);
     }
@@ -139,7 +138,7 @@ function formatCurrencyInput(input) {
 }
 
 /**
- * Convierte un input a may&uacute;sculas autom&aacute;ticamente
+ * Convierte un input a mayúsculas automáticamente
  * @param {HTMLInputElement} input - Input a convertir
  */
 function autoUppercase(input) {
@@ -148,10 +147,10 @@ function autoUppercase(input) {
     });
 }
 
-// ===== INICIALIZACI&Oacute;N =====
+// ===== INICIALIZACIÓN =====
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('UX Improvements loaded');
+    console.log('UX Improvements v5.0 loaded');
     
     // Mejorar accesibilidad
     enhanceKeyboardAccessibility();
@@ -163,9 +162,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Auto-uppercase para campos de texto espec&iacute;ficos
+    // Auto-uppercase para campos de texto específicos
     document.querySelectorAll('input[type="text"]').forEach(input => {
-        if (input.id.includes('destino') || input.id.includes('lugar')) {
+        if (input.id.includes('destino') || input.id.includes('lugar') || input.id.includes('cliente')) {
             autoUppercase(input);
         }
     });
