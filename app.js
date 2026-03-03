@@ -330,6 +330,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
+// ===== REGISTER VENDOR - VERSIÓN CORREGIDA =====
 async function registerVendor() {
     debug('=== INICIANDO REGISTRO DE VENDEDOR ===');
     
@@ -358,7 +359,7 @@ async function registerVendor() {
         const name = nameInput.value.trim();
         const username = usernameInput.value.trim().toLowerCase();
         const password = passwordInput.value;
-        const email = emailInput.value.trim();
+        const email = emailInput ? emailInput.value.trim() : '';
         const zone = zoneInput ? zoneInput.value : 'Centro';
         
         debug('Valores:', { name, username, email, zone, passwordLength: password?.length });
@@ -382,10 +383,17 @@ async function registerVendor() {
             return;
         }
         
-        // Verificar si existe
+        // Verificar si existe - CON MANEJO DE ERRORES EXPLÍCITO
         debug('Verificando si el usuario existe...');
-        const existing = await db.get('vendedores', username);
-        debug('Usuario existente:', existing);
+        
+        let existing;
+        try {
+            existing = await db.get('vendedores', username);
+            debug('Resultado de búsqueda:', existing);
+        } catch (dbError) {
+            debug('ERROR en db.get():', dbError);
+            throw new Error('Error al consultar la base de datos: ' + dbError.message);
+        }
         
         if (existing) {
             const msg = 'Este nombre de usuario ya existe';
@@ -410,9 +418,13 @@ async function registerVendor() {
         
         debug('Guardando vendedor:', vendor);
         
-        await db.add('vendedores', vendor);
-        
-        debug('Vendedor guardado exitosamente');
+        try {
+            await db.add('vendedores', vendor);
+            debug('Vendedor guardado exitosamente');
+        } catch (addError) {
+            debug('ERROR en db.add():', addError);
+            throw new Error('Error al guardar: ' + addError.message);
+        }
         
         showToast('✅ Vendedor registrado exitosamente', 'success');
         
@@ -433,9 +445,6 @@ async function registerVendor() {
         
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'error');
-        
-        // Mostrar alert para errores críticos
-        alert('Error al registrar vendedor:\n' + error.message + '\n\nRevisa la consola (F12) para más detalles.');
     }
     
     debug('=== FIN REGISTRO ===');
