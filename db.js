@@ -5,7 +5,8 @@
 console.log('🚀 db.js v4.0 cargando...');
 
 if (!window.indexedDB) {
-    alert('Tu navegador no soporta IndexedDB');
+    console.error('❌ Tu navegador no soporta IndexedDB');
+    alert('Tu navegador no soporta IndexedDB. La aplicación no funcionará correctamente.');
 }
 
 const DB_NAME = 'ViajesProDB_v4';
@@ -24,199 +25,323 @@ class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
+        console.log('📦 ViajesProDB v4.0 creado');
     }
 
     async init() {
-        if (this.initialized && this.db) return this.db;
+        if (this.initialized && this.db) {
+            console.log('✅ DB ya inicializada');
+            return this.db;
+        }
+
+        console.log('🚀 Inicializando DB v4.0...');
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             
-            request.onerror = () => reject(request.error);
+            request.onerror = (event) => {
+                console.error('❌ Error abriendo DB:', request.error);
+                reject(request.error);
+            };
             
-            request.onsuccess = () => {
+            request.onsuccess = async (event) => {
+                console.log('✅ DB abierta');
                 this.db = request.result;
                 this.initialized = true;
-                this.seedData().then(() => resolve(this.db));
+                
+                try {
+                    await this.seedData();
+                    console.log('✅ DB lista');
+                    resolve(this.db);
+                } catch (err) {
+                    console.warn('Error en seedData:', err);
+                    resolve(this.db);
+                }
             };
 
-            request.onupgradeneeded = async (event) => {
+            request.onupgradeneeded = (event) => {
+                console.log('⚙️ Migrando base de datos a v4.0...');
                 const db = event.target.result;
                 const oldVersion = event.oldVersion;
-                const transaction = event.target.transaction;
-
-                // Crear stores si no existen
+                
+                // Crear stores
                 if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
                     const store = db.createObjectStore(STORES.VENDEDORES, { keyPath: 'id' });
                     store.createIndex('username', 'username', { unique: true });
+                    console.log('✅ Store vendedores creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.VIAJES)) {
                     const store = db.createObjectStore(STORES.VIAJES, { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
                     store.createIndex('cliente', 'cliente', { unique: false });
+                    console.log('✅ Store viajes creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.GASTOS)) {
                     const store = db.createObjectStore(STORES.GASTOS, { keyPath: 'id' });
                     store.createIndex('viajeId', 'viajeId', { unique: false });
                     store.createIndex('tipo', 'tipo', { unique: false });
+                    console.log('✅ Store gastos creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.FOTOS)) {
                     const store = db.createObjectStore(STORES.FOTOS, { keyPath: 'id' });
                     store.createIndex('gastoId', 'gastoId', { unique: false });
+                    console.log('✅ Store fotos creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.CONFIG)) {
                     db.createObjectStore(STORES.CONFIG, { keyPath: 'key' });
+                    console.log('✅ Store config creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.REPORTES)) {
                     const store = db.createObjectStore(STORES.REPORTES, { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
+                    console.log('✅ Store reportes creado');
                 }
 
-                // MIGRACIÓN: Si venimos de versión anterior
-                if (oldVersion > 0 && oldVersion < 4) {
-                    await this.migrateToV4(db, transaction);
-                }
+                // Nota: La migración de datos se hace en onsuccess, no aquí
+                // porque onupgradeneeded no permite operaciones async complejas
             };
         });
     }
 
-    async migrateToV4(db, transaction) {
-        console.log('🔄 Migrando datos a v4...');
-        
-        // Migrar viajes existentes
-        if (db.objectStoreNames.contains(STORES.VIAJES)) {
-            const store = transaction.objectStore(STORES.VIAJES);
-            const viajes = await store.getAll();
-            
-            for (const viaje of viajes) {
-                const actualizado = {
-                    ...viaje,
-                    cliente: viaje.cliente || 'NO ESPECIFICADO',
-                    lugarVisita: viaje.lugarVisita || viaje.destino || 'NO ESPECIFICADO',
-                    objetivo: viaje.objetivo || viaje.proposito || '',
-                    responsable: viaje.responsable || viaje.vendedorId || '',
-                    zona: viaje.zona || 'Centro',
-                    updatedAt: new Date().toISOString(),
-                    version: 4
-                };
-                await store.put(actualizado);
-            }
-            console.log(`✅ ${viajes.length} viajes migrados`);
-        }
-
-        // Migrar gastos existentes
-        if (db.objectStoreNames.contains(STORES.GASTOS)) {
-            const store = transaction.objectStore(STORES.GASTOS);
-            const gastos = await store.getAll();
-            
-            for (const gasto of gastos) {
-                const actualizado = {
-                    ...gasto,
-                    folioFactura: gasto.folioFactura || '',
-                    razonSocial: gasto.razonSocial || '',
-                    comentarios: gasto.comentarios || '',
-                    esFacturable: gasto.esFacturable !== undefined ? gasto.esFacturable : true,
-                    fotos: Array.isArray(gasto.fotos) ? gasto.fotos : [],
-                    editable: true,
-                    updatedAt: new Date().toISOString(),
-                    version: 4
-                };
-                await store.put(actualizado);
-            }
-            console.log(`✅ ${gastos.length} gastos migrados`);
-        }
-    }
-
     async seedData() {
-        const count = await this.count(STORES.VENDEDORES);
-        if (count === 0) {
-            await this.add(STORES.VENDEDORES, {
-                id: 'juan.perez',
-                name: 'Juan Pérez',
-                username: 'juan.perez',
-                password: '123456',
-                email: 'juan@ejemplo.com',
-                zone: 'Centro',
-                status: 'active',
-                createdAt: new Date().toISOString()
-            });
-            console.log('✅ Vendedor de prueba creado');
+        try {
+            const count = await this.count(STORES.VENDEDORES);
+            console.log('📊 Vendedores existentes:', count);
+            
+            if (count === 0) {
+                console.log('🌱 Creando vendedor de prueba...');
+                await this.add(STORES.VENDEDORES, {
+                    id: 'juan.perez',
+                    name: 'Juan Pérez',
+                    username: 'juan.perez',
+                    password: '123456',
+                    email: 'juan@ejemplo.com',
+                    zone: 'Centro',
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                });
+                console.log('✅ Vendedor de prueba creado (juan.perez / 123456)');
+            }
+        } catch (e) {
+            console.warn('⚠️ Error en seedData:', e);
         }
     }
 
-    // Operaciones CRUD básicas
-    async count(storeName) {
-        const tx = this.db.transaction([storeName], 'readonly');
-        const store = tx.objectStore(storeName);
-        return await store.count();
-    }
+    // ===== OPERACIONES CRUD =====
 
-    async add(storeName, data) {
-        const tx = this.db.transaction([storeName], 'readwrite');
-        const store = tx.objectStore(storeName);
-        const dataToAdd = {
-            ...data,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        return await store.add(dataToAdd);
-    }
-
-    async get(storeName, id) {
-        const tx = this.db.transaction([storeName], 'readonly');
-        const store = tx.objectStore(storeName);
-        return await store.get(id);
-    }
-
-    async getAll(storeName) {
-        const tx = this.db.transaction([storeName], 'readonly');
-        const store = tx.objectStore(storeName);
-        return await store.getAll();
-    }
-
-    async update(storeName, data) {
-        const tx = this.db.transaction([storeName], 'readwrite');
-        const store = tx.objectStore(storeName);
-        return await store.put({
-            ...data,
-            updatedAt: new Date().toISOString()
+    count(storeName) {
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.count();
+                
+                request.onsuccess = () => {
+                    resolve(request.result);
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            } catch (e) {
+                reject(e);
+            }
         });
     }
 
-    async delete(storeName, id) {
-        const tx = this.db.transaction([storeName], 'readwrite');
-        const store = tx.objectStore(storeName);
-        return await store.delete(id);
+    add(storeName, data) {
+        console.log(`➕ Agregando a ${storeName}:`, data.id || 'sin-id');
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                
+                const dataToAdd = {
+                    ...data,
+                    createdAt: data.createdAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    version: 4
+                };
+                
+                const request = store.add(dataToAdd);
+                
+                request.onsuccess = () => {
+                    console.log(`✅ Guardado en ${storeName}:`, data.id);
+                    resolve(dataToAdd);
+                };
+                
+                request.onerror = () => {
+                    console.error(`❌ Error guardando en ${storeName}:`, request.error);
+                    reject(request.error);
+                };
+            } catch (e) {
+                console.error(`❌ Error en add ${storeName}:`, e);
+                reject(e);
+            }
+        });
     }
 
-    async queryByIndex(storeName, indexName, value) {
-        const tx = this.db.transaction([storeName], 'readonly');
-        const store = tx.objectStore(storeName);
-        const index = store.index(indexName);
-        return await index.getAll(value);
+    get(storeName, id) {
+        console.log(`🔍 Buscando en ${storeName}:`, id);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.get(id);
+                
+                request.onsuccess = () => {
+                    console.log(`🔍 Resultado ${storeName}:`, request.result ? 'ENCONTRADO' : 'NO ENCONTRADO');
+                    resolve(request.result);
+                };
+                
+                request.onerror = () => {
+                    console.error(`❌ Error buscando en ${storeName}:`, request.error);
+                    reject(request.error);
+                };
+            } catch (e) {
+                console.error(`❌ Error en get ${storeName}:`, e);
+                reject(e);
+            }
+        });
     }
 
-    // Métodos específicos
-    async getViajesByVendedor(vendedorId) {
-        return await this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
+    getAll(storeName) {
+        console.log(`📋 Obteniendo todos de ${storeName}`);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    console.log(`📋 Encontrados en ${storeName}:`, request.result.length);
+                    resolve(request.result);
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 
-    async getGastosByViaje(viajeId) {
-        return await this.queryByIndex(STORES.GASTOS, 'viajeId', viajeId);
+    update(storeName, data) {
+        console.log(`📝 Actualizando en ${storeName}:`, data.id);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                
+                const dataToPut = {
+                    ...data,
+                    updatedAt: new Date().toISOString(),
+                    version: 4
+                };
+                
+                const request = store.put(dataToPut);
+                
+                request.onsuccess = () => {
+                    console.log(`✅ Actualizado en ${storeName}:`, data.id);
+                    resolve(dataToPut);
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    delete(storeName, id) {
+        console.log(`🗑️ Eliminando de ${storeName}:`, id);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readwrite');
+                const store = transaction.objectStore(storeName);
+                const request = store.delete(id);
+                
+                request.onsuccess = () => {
+                    console.log(`✅ Eliminado de ${storeName}:`, id);
+                    resolve(id);
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    queryByIndex(storeName, indexName, value) {
+        console.log(`🔍 Query ${storeName} por ${indexName}:`, value);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const transaction = this.db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const index = store.index(indexName);
+                const request = index.getAll(value);
+                
+                request.onsuccess = () => {
+                    resolve(request.result);
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    // ===== MÉTODOS ESPECÍFICOS =====
+
+    getVendedorByUsername(username) {
+        return this.queryByIndex(STORES.VENDEDORES, 'username', username)
+            .then(results => results[0] || null);
+    }
+
+    getViajesByVendedor(vendedorId) {
+        return this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
+    }
+
+    getGastosByViaje(viajeId) {
+        return this.queryByIndex(STORES.GASTOS, 'viajeId', viajeId);
     }
 }
 
+// Crear instancia global
 const db = new ViajesProDB();
 
+// Inicializar automáticamente
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Inicializando ViajesProDB v4.0...');
     db.init().then(() => {
+        console.log('✅ 3P Database v4.0 ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
+    }).catch(err => {
+        console.error('❌ Database initialization failed:', err);
     });
 });
 
+window.ViajesProDB = ViajesProDB;
 window.db = db;
+
+console.log('✅ db.js v4.0 cargado completamente');
