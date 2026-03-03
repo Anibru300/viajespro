@@ -1200,15 +1200,32 @@ function generarExcelProfesional() {
 
 async function loadGlobalReport() {
     try {
-        const allGastos = await db.getAll('gastos');
-        const allViajes = await db.getAll('viajes');
-        const allVendors = await db.getAll('vendedores');
+        let allGastos, allViajes, allVendors;
+        
+        // Si hay Firebase, obtener datos en tiempo real
+        if (typeof window.dbFirebase !== 'undefined') {
+            const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js");
+            
+            const [gastosSnap, viajesSnap, vendedoresSnap] = await Promise.all([
+                getDocs(collection(window.dbFirebase, 'gastos')),
+                getDocs(collection(window.dbFirebase, 'viajes')),
+                getDocs(collection(window.dbFirebase, 'vendedores'))
+            ]);
+            
+            allGastos = gastosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            allViajes = viajesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            allVendors = vendedoresSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else {
+            allGastos = await db.getAll('gastos');
+            allViajes = await db.getAll('viajes');
+            allVendors = await db.getAll('vendedores');
+        }
         
         const stats = {
             totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
             totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0),
             totalViajes: allViajes.length,
-            totalVendedores: allVendors.length
+            totalVendedores: allVendors.filter(v => v.status === 'active').length
         };
         
         const statsContainer = document.getElementById('admin-stats');
@@ -1228,49 +1245,115 @@ async function loadGlobalReport() {
                 </div>
                 <div class="stat-card">
                     <span class="stat-value">${stats.totalVendedores}</span>
-                    <span class="stat-label">Vendedores</span>
+                    <span class="stat-label">Vendedores Activos</span>
                 </div>
             `;
         }
         
+        // Crear resumen por vendedor
+        const resumenPorVendedor = {};
+        allVendors.forEach(v => {
+            if (v.status === 'active') {
+                resumenPorVendedor[v.id] = {
+                    nombre: v.name,
+                    zona: v.zone,
+                    viajes: 0,
+                    gastos: 0,
+                    total: 0,
+                    totalFacturable: 0
+                };
+            }
+        });
+        
+        allViajes.forEach(v => {
+            if (resumenPorVendedor[v.vendedorId]) {
+                resumenPorVendedor[v.vendedorId].viajes++;
+            }
+        });
+        
+        allGastos.forEach(g => {
+            if (resumenPorVendedor[g.vendedorId]) {
+                resumenPorVendedor[g.vendedorId].gastos++;
+                resumenPorVendedor[g.vendedorId].total += g.monto;
+                if (g.esFacturable !== false) {
+                    resumenPorVendedor[g.vendedorId].totalFacturable += g.monto;
+                }
+            }
+        });
+        
+        // Mostrar resumen de vendedores
+        const container = document.getElementById('admin-vendors-summary');
+        if (container) {
+            const vendedoresArray = Object.entries(resumenPorVendedor);
+            
+            if (vendedoresArray.length === 0) {
+                container.innerHTML = '<p>No hay vendedores activos</p>';
+            } else {
+                container.innerHTML = vendedoresArray.map(([id, v]) => `
+                    <div class="vendor-summary-card" style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="margin: 0; color: #1f2937;">${v.nombre}</h4>
+                                <p style="margin: 0.25rem 0; color: #6b7280; font-size: 0.875rem;">
+                                    📍 ${v.zona} | 🚗 ${v.viajes} viajes | 🧾 ${v.gastos} gastos
+                                </p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.25rem; font-weight: bold; color: #dc2626;">
+                                    ${formatMoney(v.total)}
+                                </div>
+                                <div style="font-size: 0.75rem; color: #059669;">
+                                    📄 ${formatMoney(v.totalFacturable)} fact.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        // Gráfico global
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
         });
         
-        const ctx = document.getElementById('global-chart').getContext('2d');
-        if (state.charts.global) state.charts.global.destroy();
-        
-        state.charts.global = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.label || t),
-                datasets: [{
-                    label: 'Monto por categoría',
-                    data: Object.values(porTipo),
-                    backgroundColor: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.color || '#6b7280'),
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toLocaleString();
+        const ctx = document.getElementById('global-chart')?.getContext('2d');
+        if (ctx) {
+            if (state.charts.global) state.charts.global.destroy();
+            
+            state.charts.global = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.label || t),
+                    datasets: [{
+                        label: 'Monto por categoría',
+                        data: Object.values(porTipo),
+                        backgroundColor: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.color || '#6b7280'),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
         
     } catch (error) {
-        debug('Error cargando reporte global:', error);
+        console.error('Error cargando reporte global:', error);
+        showToast('Error cargando datos: ' + error.message, 'error');
     }
 }
 
