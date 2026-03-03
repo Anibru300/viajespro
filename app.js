@@ -1,13 +1,20 @@
 /**
- * 3P VIAJESPRO - Main Application v2.0 (DEBUG VERSION)
+ * 3P VIAJESPRO - Main Application v4.0 (Professional Edition)
+ * Con exportación Excel profesional, edición de gastos y campos corporativos
  */
 
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
-    VERSION: '2.0.0',
-    APP_NAME: '3P Control de Viáticos'
+    VERSION: '4.0.0',
+    APP_NAME: '3P Control de Viáticos Pro',
+    EMPRESA: {
+        nombre: '3P SA DE CV',
+        rfc: '3P-XXXXXX-XXX',
+        direccion: 'Dirección corporativa',
+        logo: './assets/images/logo-3p-login.png'
+    }
 };
 
 // ===== ESTADO GLOBAL =====
@@ -15,6 +22,7 @@ const state = {
     currentUser: null,
     currentVendor: null,
     currentViaje: null,
+    currentGasto: null, // Para edición
     tempFotos: [],
     tempLocation: null,
     isOnline: navigator.onLine,
@@ -42,7 +50,7 @@ function debug(msg, data) {
 
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
-    debug('DOM cargado, iniciando...');
+    debug('DOM cargado, iniciando v4.0...');
     
     // Mostrar splash screen
     setTimeout(() => {
@@ -62,12 +70,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initApp() {
-    debug('Iniciando app...');
+    debug('Iniciando app v4.0...');
     
     try {
-        // Verificar que db existe
         if (typeof db === 'undefined') {
-            throw new Error('La base de datos no está cargada. Verifica que db.js se cargó antes que app.js');
+            throw new Error('La base de datos no está cargada');
         }
         
         debug('Inicializando DB...');
@@ -97,7 +104,7 @@ async function initApp() {
         }
         if (reporteFin) reporteFin.value = today;
         
-        debug('App iniciada correctamente');
+        debug('App v4.0 iniciada correctamente');
         
     } catch (error) {
         debug('Error en initApp:', error);
@@ -170,7 +177,10 @@ function showSection(sectionName) {
             loadViajesSelect();
             loadGastosList();
         }
-        if (sectionName === 'captura') loadViajesSelect();
+        if (sectionName === 'captura') {
+            loadViajesSelect();
+            resetCapturaForm();
+        }
         if (sectionName === 'reportes') {
             loadViajesSelect();
         }
@@ -540,7 +550,7 @@ function showMainApp() {
     loadViajes();
 }
 
-// ===== VIAJES =====
+// ===== VIAJES MEJORADOS V4.0 =====
 async function loadViajes() {
     if (!state.currentVendor) return;
     
@@ -571,7 +581,8 @@ async function loadViajes() {
         const viajesConStats = await Promise.all(viajes.map(async v => {
             const gastos = await db.getGastosByViaje(v.id);
             const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
-            return { ...v, gastosCount: gastos.length, totalGastos: total };
+            const facturable = gastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
+            return { ...v, gastosCount: gastos.length, totalGastos: total, totalFacturable: facturable };
         }));
         
         container.innerHTML = viajesConStats.map(v => `
@@ -579,13 +590,15 @@ async function loadViajes() {
                 <div class="viaje-header">
                     <div>
                         <div class="viaje-title">${v.destino}</div>
-                        <div class="viaje-proposito">${v.proposito || 'Sin propósito especificado'}</div>
+                        <div class="viaje-cliente">👤 ${v.cliente || 'Sin cliente'}</div>
+                        <div class="viaje-proposito">${v.objetivo || v.proposito || 'Sin objetivo especificado'}</div>
                     </div>
                     <span class="viaje-badge ${v.estado}">${v.estado}</span>
                 </div>
                 <div class="viaje-meta">
                     <span>📅 ${formatDate(v.fechaInicio)}</span>
                     ${v.fechaFin ? `<span>🏁 ${formatDate(v.fechaFin)}</span>` : ''}
+                    <span>📍 ${v.lugarVisita || v.destino}</span>
                 </div>
                 <div class="viaje-stats">
                     <div class="viaje-stat">
@@ -596,6 +609,12 @@ async function loadViajes() {
                         <span>💰</span>
                         <span>${formatMoney(v.totalGastos)}</span>
                     </div>
+                    ${v.totalFacturable > 0 ? `
+                    <div class="viaje-stat facturable">
+                        <span>📄</span>
+                        <span>${formatMoney(v.totalFacturable)} fact.</span>
+                    </div>
+                    ` : ''}
                 </div>
             </div>
         `).join('');
@@ -605,36 +624,47 @@ async function loadViajes() {
     }
 }
 
-// ===== CREAR VIAJE CON CORRECCIÓN DE FECHA =====
+// ===== CREAR VIAJE V4.0 CON NUEVOS CAMPOS =====
 async function crearViaje() {
-    debug('Creando viaje...');
+    debug('Creando viaje v4.0...');
     
+    const cliente = document.getElementById('viaje-cliente').value.trim();
     const destino = document.getElementById('viaje-destino').value.trim();
-    const proposito = document.getElementById('viaje-proposito').value.trim();
+    const lugarVisita = document.getElementById('viaje-lugar-visita').value.trim();
+    const objetivo = document.getElementById('viaje-objetivo').value.trim();
     const fechaInicioInput = document.getElementById('viaje-fecha-inicio').value;
     const fechaFinInput = document.getElementById('viaje-fecha-fin').value;
     const presupuesto = document.getElementById('viaje-presupuesto').value;
+    
+    if (!cliente) {
+        showToast('El cliente es obligatorio', 'warning');
+        return;
+    }
     
     if (!destino || !fechaInicioInput) {
         showToast('Destino y fecha de inicio son obligatorios', 'warning');
         return;
     }
     
-    // CORRECCIÓN: Ajustar fecha para evitar problema de zona horaria
-    // Creamos la fecha a las 12:00 del mediodía para evitar el cambio de día
+    // Ajustar fecha para evitar problema de zona horaria
     const fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
     const fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
         vendedorId: state.currentVendor.username,
-        destino: destino,
-        proposito: proposito,
+        cliente: cliente.toUpperCase(),
+        destino: destino.toUpperCase(),
+        lugarVisita: lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase(),
+        objetivo: objetivo,
+        responsable: state.currentVendor.name,
+        zona: state.currentVendor.zone || 'Centro',
         fechaInicio: fechaInicio,
         fechaFin: fechaFin,
         presupuesto: presupuesto ? parseFloat(presupuesto) : null,
         estado: 'activo',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        version: 4
     };
     
     try {
@@ -642,8 +672,11 @@ async function crearViaje() {
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
         
+        // Limpiar formulario
+        document.getElementById('viaje-cliente').value = '';
         document.getElementById('viaje-destino').value = '';
-        document.getElementById('viaje-proposito').value = '';
+        document.getElementById('viaje-lugar-visita').value = '';
+        document.getElementById('viaje-objetivo').value = '';
         document.getElementById('viaje-fecha-fin').value = '';
         document.getElementById('viaje-presupuesto').value = '';
         
@@ -661,7 +694,7 @@ function selectViaje(viajeId) {
     loadGastosList();
 }
 
-// ===== GASTOS =====
+// ===== GASTOS MEJORADOS V4.0 =====
 async function loadViajesSelect() {
     if (!state.currentVendor) return;
     
@@ -681,7 +714,7 @@ async function loadViajesSelect() {
                 '<option value="">Todos los viajes</option>';
             
             select.innerHTML = defaultOption + activos.map(v => 
-                `<option value="${v.id}">${v.destino} (${formatDate(v.fechaInicio)})</option>`
+                `<option value="${v.id}">${v.cliente} - ${v.destino} (${formatDate(v.fechaInicio)})</option>`
             ).join('');
             
             if (currentValue) select.value = currentValue;
@@ -697,12 +730,41 @@ function selectTipoGasto(btn) {
     btn.classList.add('selected');
 }
 
+function resetCapturaForm() {
+    state.tempFotos = [];
+    state.currentGasto = null;
+    
+    document.getElementById('monto-gasto').value = '';
+    document.getElementById('lugar-gasto').value = '';
+    document.getElementById('folio-factura').value = '';
+    document.getElementById('razon-social').value = '';
+    document.getElementById('comentarios-gasto').value = '';
+    document.getElementById('es-facturable').checked = true;
+    document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
+    
+    const preview = document.getElementById('photo-preview');
+    if (preview) {
+        preview.innerHTML = `
+            <span class="upload-icon">📷</span>
+            <span class="upload-text">Toca para capturar foto</span>
+        `;
+    }
+    
+    // Cambiar texto del botón
+    const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
+    if (btnGuardar) btnGuardar.textContent = '💾 GUARDAR GASTO';
+}
+
 async function guardarGasto() {
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoCard = document.querySelector('.tipo-card.selected');
     const monto = document.getElementById('monto-gasto').value;
     const lugar = document.getElementById('lugar-gasto').value.trim();
     const fecha = document.getElementById('fecha-gasto').value;
+    const folioFactura = document.getElementById('folio-factura')?.value.trim() || '';
+    const razonSocial = document.getElementById('razon-social')?.value.trim() || '';
+    const comentarios = document.getElementById('comentarios-gasto')?.value.trim() || '';
+    const esFacturable = document.getElementById('es-facturable')?.checked !== false;
     
     if (!viajeId) {
         showToast('Selecciona un viaje', 'warning');
@@ -719,42 +781,53 @@ async function guardarGasto() {
         return;
     }
     
-    const gasto = {
-        id: 'GASTO_' + Date.now(),
+    const esEdicion = state.currentGasto !== null;
+    
+    const gastoData = {
         viajeId: viajeId,
         vendedorId: state.currentVendor.username,
         tipo: tipoCard.dataset.tipo,
         monto: parseFloat(monto),
         lugar: lugar,
         fecha: fecha || new Date().toISOString(),
+        folioFactura: folioFactura,
+        razonSocial: razonSocial,
+        comentarios: comentarios,
+        esFacturable: esFacturable,
         fotos: state.tempFotos,
-        createdAt: new Date().toISOString()
+        editable: true,
+        updatedAt: new Date().toISOString()
     };
     
     try {
-        await db.add('gastos', gasto);
-        
-        document.getElementById('monto-gasto').value = '';
-        document.getElementById('lugar-gasto').value = '';
-        document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
-        
-        state.tempFotos = [];
-        const preview = document.getElementById('photo-preview');
-        if (preview) {
-            preview.innerHTML = `
-                <span class="upload-icon">📷</span>
-                <span class="upload-text">Toca para capturar foto</span>
-            `;
+        if (esEdicion) {
+            // Actualizar gasto existente
+            const gastoActualizado = {
+                ...state.currentGasto,
+                ...gastoData,
+                id: state.currentGasto.id
+            };
+            await db.update('gastos', gastoActualizado);
+            showToast('✅ Gasto actualizado exitosamente', 'success');
+        } else {
+            // Crear nuevo gasto
+            const nuevoGasto = {
+                ...gastoData,
+                id: 'GASTO_' + Date.now(),
+                createdAt: new Date().toISOString()
+            };
+            await db.add('gastos', nuevoGasto);
+            showToast('✅ Gasto guardado exitosamente', 'success');
         }
         
-        showToast('✅ Gasto guardado exitosamente', 'success');
+        resetCapturaForm();
         
         if (document.getElementById('gastos-section').classList.contains('active')) {
             loadGastosList();
         }
         
     } catch (error) {
-        showToast('Error al guardar gasto', 'error');
+        showToast('Error al guardar gasto: ' + error.message, 'error');
     }
 }
 
@@ -769,15 +842,20 @@ async function loadGastosList() {
             const viajes = await db.getViajesByVendedor(state.currentVendor.username);
             for (const viaje of viajes) {
                 const g = await db.getGastosByViaje(viaje.id);
-                gastos = gastos.concat(g.map(item => ({...item, viajeDestino: viaje.destino})));
+                gastos = gastos.concat(g.map(item => ({...item, viajeDestino: viaje.destino, viajeCliente: viaje.cliente})));
             }
         }
         
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
         
-        const resumen = { total: 0, porTipo: {} };
+        const resumen = { total: 0, facturable: 0, noFacturable: 0, porTipo: {} };
         gastos.forEach(g => {
             resumen.total += g.monto;
+            if (g.esFacturable !== false) {
+                resumen.facturable += g.monto;
+            } else {
+                resumen.noFacturable += g.monto;
+            }
             resumen.porTipo[g.tipo] = (resumen.porTipo[g.tipo] || 0) + g.monto;
         });
         
@@ -793,6 +871,14 @@ async function loadGastosList() {
                         <span class="amount">${formatMoney(resumen.total)}</span>
                     </div>
                     <div class="resumen-grid">
+                        <div class="resumen-item">
+                            <span class="label">📄 Facturable</span>
+                            <span class="amount">${formatMoney(resumen.facturable)}</span>
+                        </div>
+                        <div class="resumen-item">
+                            <span class="label">🚫 No Facturable</span>
+                            <span class="amount">${formatMoney(resumen.noFacturable)}</span>
+                        </div>
                         ${Object.entries(resumen.porTipo).map(([tipo, monto]) => `
                             <div class="resumen-item">
                                 <span class="label">${TIPOS_GASTO[tipo]?.icon || '📦'} ${TIPOS_GASTO[tipo]?.label || tipo}</span>
@@ -824,9 +910,10 @@ async function loadGastosList() {
                         ${TIPOS_GASTO[g.tipo]?.icon || '📦'}
                     </div>
                     <div class="gasto-details">
-                        <h4>${TIPOS_GASTO[g.tipo]?.label || g.tipo}</h4>
+                        <h4>${TIPOS_GASTO[g.tipo]?.label || g.tipo} ${g.esFacturable === false ? '🚫' : '📄'}</h4>
                         <p>${g.lugar || 'Sin lugar'} • ${formatDate(g.fecha || g.createdAt)}</p>
-                        ${g.viajeDestino ? `<p style="color: var(--primary); font-size: 0.7rem;">🚗 ${g.viajeDestino}</p>` : ''}
+                        ${g.folioFactura ? `<p style="color: var(--success); font-size: 0.7rem;">📄 Folio: ${g.folioFactura}</p>` : ''}
+                        ${g.viajeDestino ? `<p style="color: var(--primary); font-size: 0.7rem;">🚗 ${g.viajeCliente || ''} - ${g.viajeDestino}</p>` : ''}
                     </div>
                 </div>
                 <div class="gasto-amount">${formatMoney(g.monto)}</div>
@@ -844,6 +931,7 @@ async function showDetalleGasto(gastoId) {
         if (!gasto) return;
         
         const viaje = await db.get('viajes', gasto.viajeId);
+        state.currentGasto = gasto; // Guardar para posible edición
         
         const content = document.getElementById('detalle-gasto-content');
         content.innerHTML = `
@@ -851,6 +939,7 @@ async function showDetalleGasto(gastoId) {
                 <div style="font-size: 3rem; margin-bottom: 0.5rem;">${TIPOS_GASTO[gasto.tipo]?.icon || '📦'}</div>
                 <h2 style="color: var(--primary); font-size: 2rem; margin-bottom: 0.5rem;">${formatMoney(gasto.monto)}</h2>
                 <p style="color: var(--gray-500);">${TIPOS_GASTO[gasto.tipo]?.label || gasto.tipo}</p>
+                ${gasto.esFacturable === false ? '<span style="background: #fee2e2; color: #dc2626; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">NO FACTURABLE</span>' : '<span style="background: #d1fae5; color: #059669; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">FACTURABLE</span>'}
             </div>
             
             <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-lg); margin-bottom: 1rem;">
@@ -862,24 +951,45 @@ async function showDetalleGasto(gastoId) {
                     <span style="color: var(--gray-500); font-size: 0.875rem;">📅 Fecha:</span>
                     <p style="font-weight: 600;">${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
                 </div>
+                ${gasto.folioFactura ? `
+                <div style="margin-bottom: 0.75rem;">
+                    <span style="color: var(--gray-500); font-size: 0.875rem;">📄 Folio Factura:</span>
+                    <p style="font-weight: 600;">${gasto.folioFactura}</p>
+                </div>
+                ` : ''}
+                ${gasto.razonSocial ? `
+                <div style="margin-bottom: 0.75rem;">
+                    <span style="color: var(--gray-500); font-size: 0.875rem;">🏢 Razón Social:</span>
+                    <p style="font-weight: 600;">${gasto.razonSocial}</p>
+                </div>
+                ` : ''}
+                ${gasto.comentarios ? `
+                <div style="margin-bottom: 0.75rem;">
+                    <span style="color: var(--gray-500); font-size: 0.875rem;">💬 Comentarios:</span>
+                    <p style="font-weight: 600;">${gasto.comentarios}</p>
+                </div>
+                ` : ''}
                 <div>
                     <span style="color: var(--gray-500); font-size: 0.875rem;">🚗 Viaje:</span>
-                    <p style="font-weight: 600;">${viaje?.destino || 'Desconocido'}</p>
+                    <p style="font-weight: 600;">${viaje?.cliente || ''} - ${viaje?.destino || 'Desconocido'}</p>
                 </div>
             </div>
             
             ${gasto.fotos && gasto.fotos.length > 0 ? `
                 <div style="margin-bottom: 1rem;">
-                    <p style="color: var(--gray-500); font-size: 0.875rem; margin-bottom: 0.5rem;">📷 Fotos:</p>
+                    <p style="color: var(--gray-500); font-size: 0.875rem; margin-bottom: 0.5rem;">📷 Fotos (${gasto.fotos.length}):</p>
                     <div style="display: flex; gap: 0.5rem; overflow-x: auto;">
                         ${gasto.fotos.map(foto => `
-                            <img src="${foto}" style="height: 100px; border-radius: var(--radius); object-fit: cover;">
+                            <img src="${foto}" style="height: 100px; border-radius: var(--radius); object-fit: cover; cursor: pointer;" onclick="window.open('${foto}', '_blank')">
                         `).join('')}
                     </div>
                 </div>
             ` : ''}
             
-            <button class="btn btn-danger btn-large" onclick="eliminarGasto('${gasto.id}')">🗑️ Eliminar Gasto</button>
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button class="btn btn-primary btn-large" style="flex: 1;" onclick="editarGasto('${gasto.id}')">✏️ Editar</button>
+                <button class="btn btn-danger btn-large" style="flex: 1;" onclick="eliminarGasto('${gasto.id}')">🗑️ Eliminar</button>
+            </div>
         `;
         
         openModal('detalle-gasto');
@@ -888,8 +998,92 @@ async function showDetalleGasto(gastoId) {
     }
 }
 
+async function editarGasto(gastoId) {
+    try {
+        const gasto = await db.get('gastos', gastoId);
+        if (!gasto) {
+            showToast('Gasto no encontrado', 'error');
+            return;
+        }
+        
+        // Cerrar modal de detalle
+        closeModal('detalle-gasto');
+        
+        // Cambiar a sección de captura
+        showSection('captura');
+        
+        // Cargar datos en el formulario
+        document.getElementById('captura-viaje-select').value = gasto.viajeId;
+        document.getElementById('monto-gasto').value = gasto.monto;
+        document.getElementById('lugar-gasto').value = gasto.lugar || '';
+        document.getElementById('fecha-gasto').value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
+        document.getElementById('folio-factura').value = gasto.folioFactura || '';
+        document.getElementById('razon-social').value = gasto.razonSocial || '';
+        document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
+        document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
+        
+        // Seleccionar tipo
+        document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
+        const tipoCard = document.querySelector(`.tipo-card[data-tipo="${gasto.tipo}"]`);
+        if (tipoCard) tipoCard.classList.add('selected');
+        
+        // Cargar fotos existentes
+        state.tempFotos = gasto.fotos || [];
+        if (state.tempFotos.length > 0) {
+            const preview = document.getElementById('photo-preview');
+            preview.innerHTML = `
+                <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
+                    ${state.tempFotos.map((foto, idx) => `
+                        <div style="position: relative;">
+                            <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
+                            <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
+            `;
+        }
+        
+        // Cambiar texto del botón
+        const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
+        if (btnGuardar) btnGuardar.textContent = '💾 ACTUALIZAR GASTO';
+        
+        // Guardar referencia al gasto actual
+        state.currentGasto = gasto;
+        
+        showToast('Modo edición activado. Modifica los datos y guarda.', 'info');
+        
+    } catch (error) {
+        showToast('Error al cargar gasto para edición', 'error');
+    }
+}
+
+function removeFoto(index) {
+    state.tempFotos.splice(index, 1);
+    // Actualizar preview
+    const preview = document.getElementById('photo-preview');
+    if (state.tempFotos.length === 0) {
+        preview.innerHTML = `
+            <span class="upload-icon">📷</span>
+            <span class="upload-text">Toca para capturar foto</span>
+        `;
+    } else {
+        preview.innerHTML = `
+            <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
+                ${state.tempFotos.map((foto, idx) => `
+                    <div style="position: relative;">
+                        <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
+                        <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
+                    </div>
+                `).join('')}
+            </div>
+            <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
+        `;
+    }
+}
+
 async function eliminarGasto(gastoId) {
-    if (!confirm('¿Eliminar este gasto?')) return;
+    if (!confirm('¿Eliminar este gasto permanentemente?')) return;
     
     try {
         await db.delete('gastos', gastoId);
@@ -901,7 +1095,7 @@ async function eliminarGasto(gastoId) {
     }
 }
 
-// ===== REPORTES =====
+// ===== REPORTES Y EXPORTACIÓN EXCEL PROFESIONAL =====
 async function generarReporte() {
     const fechaInicio = document.getElementById('reporte-fecha-inicio').value;
     const fechaFin = document.getElementById('reporte-fecha-fin').value;
@@ -914,14 +1108,19 @@ async function generarReporte() {
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         let allGastos = [];
+        let viajesMap = {};
         
         for (const viaje of viajes) {
+            viajesMap[viaje.id] = viaje;
             const gastos = await db.getGastosByViaje(viaje.id);
             const gastosFiltrados = gastos.filter(g => {
                 const fecha = new Date(g.fecha || g.createdAt);
                 return fecha >= new Date(fechaInicio) && fecha <= new Date(fechaFin + 'T23:59:59');
             });
-            allGastos = allGastos.concat(gastosFiltrados);
+            allGastos = allGastos.concat(gastosFiltrados.map(g => ({
+                ...g,
+                viaje: viaje
+            })));
         }
         
         if (allGastos.length === 0) {
@@ -929,20 +1128,25 @@ async function generarReporte() {
             return;
         }
         
+        // Calcular estadísticas
         const porTipo = {};
         const porMes = {};
         let total = 0;
+        let totalFacturable = 0;
         
         allGastos.forEach(g => {
             total += g.monto;
+            if (g.esFacturable !== false) totalFacturable += g.monto;
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
             
             const mes = new Date(g.fecha || g.createdAt).toLocaleString('es-MX', { month: 'short', year: '2-digit' });
             porMes[mes] = (porMes[mes] || 0) + g.monto;
         });
         
+        // Mostrar resultados
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
+        // Gráfico de distribución
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -979,6 +1183,7 @@ async function generarReporte() {
             }
         });
         
+        // Gráfico de tendencia
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1020,17 +1225,183 @@ async function generarReporte() {
             }
         });
         
+        // Guardar datos para exportación
         state.lastReport = {
             fechaInicio,
             fechaFin,
             total,
+            totalFacturable,
             porTipo,
             porMes,
-            gastos: allGastos
+            gastos: allGastos,
+            responsable: state.currentVendor.name,
+            zona: state.currentVendor.zone
         };
         
     } catch (error) {
         showToast('Error al generar reporte', 'error');
+    }
+}
+
+// ===== EXPORTACIÓN EXCEL PROFESIONAL 3P =====
+function exportReport(format) {
+    if (!state.lastReport) {
+        showToast('Primero genera un reporte', 'warning');
+        return;
+    }
+    
+    if (format === 'excel') {
+        generarExcelProfesional();
+    } else if (format === 'pdf') {
+        window.print();
+        showToast('Reporte preparado para imprimir', 'success');
+    }
+}
+
+function generarExcelProfesional() {
+    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
+    
+    // Generar número de reporte único
+    const numReporte = `3P-VIA-${Date.now().toString().slice(-6)}`;
+    const fechaGeneracion = new Date().toLocaleDateString('es-MX');
+    
+    // Crear HTML para Excel (formato profesional)
+    let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body { font-family: Arial, sans-serif; }
+            .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .header h2 { margin: 5px 0 0 0; font-size: 16px; font-weight: normal; }
+            .info-section { background-color: #f3f4f6; padding: 15px; margin: 10px 0; }
+            .info-row { display: flex; justify-content: space-between; margin: 5px 0; }
+            .label { font-weight: bold; color: #374151; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background-color: #dc2626; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #b91c1c; }
+            td { padding: 10px; border: 1px solid #d1d5db; }
+            tr:nth-child(even) { background-color: #f9fafb; }
+            .total-row { background-color: #fee2e2 !important; font-weight: bold; }
+            .facturable { color: #059669; }
+            .no-facturable { color: #dc2626; }
+            .footer { margin-top: 20px; text-align: center; color: #6b7280; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>3P SA DE CV</h1>
+            <h2>Reporte de Viáticos y Gastos de Viaje</h2>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-row">
+                <span><span class="label">Responsable:</span> ${responsable}</span>
+                <span><span class="label">Zona:</span> ${zona || 'No especificada'}</span>
+            </div>
+            <div class="info-row">
+                <span><span class="label">Período:</span> ${formatDate(fechaInicio)} al ${formatDate(fechaFin)}</span>
+                <span><span class="label">No. Reporte:</span> ${numReporte}</span>
+            </div>
+            <div class="info-row">
+                <span><span class="label">Fecha de generación:</span> ${fechaGeneracion}</span>
+                <span><span class="label">Total General:</span> ${formatMoney(total)}</span>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Lugar de Visita</th>
+                    <th>Tipo Gasto</th>
+                    <th>Folio Factura</th>
+                    <th>Razón Social</th>
+                    <th>Total</th>
+                    <th>Facturable</th>
+                    <th>Comentarios</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    // Agregar filas de datos
+    gastos.forEach(g => {
+        const esFacturable = g.esFacturable !== false;
+        html += `
+            <tr>
+                <td>${formatDate(g.fecha || g.createdAt)}</td>
+                <td>${g.viaje?.cliente || 'N/A'}</td>
+                <td>${g.viaje?.lugarVisita || g.viaje?.destino || 'N/A'}</td>
+                <td>${TIPOS_GASTO[g.tipo]?.label || g.tipo}</td>
+                <td>${g.folioFactura || '-'}</td>
+                <td>${g.razonSocial || '-'}</td>
+                <td style="text-align: right;">${formatMoney(g.monto)}</td>
+                <td style="text-align: center;" class="${esFacturable ? 'facturable' : 'no-facturable'}">
+                    ${esFacturable ? 'SÍ' : 'NO'}
+                </td>
+                <td>${g.comentarios || ''}</td>
+            </tr>
+        `;
+    });
+    
+    // Fila de totales
+    html += `
+            <tr class="total-row">
+                <td colspan="6" style="text-align: right;">TOTALES:</td>
+                <td style="text-align: right;">${formatMoney(total)}</td>
+                <td colspan="2"></td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="6" style="text-align: right;">Total Facturable:</td>
+                <td style="text-align: right; color: #059669;">${formatMoney(totalFacturable)}</td>
+                <td colspan="2"></td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="6" style="text-align: right;">Total No Facturable:</td>
+                <td style="text-align: right; color: #dc2626;">${formatMoney(total - totalFacturable)}</td>
+                <td colspan="2"></td>
+            </tr>
+        </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Documento generado por 3P ViajesPro v${CONFIG.VERSION}</p>
+            <p>Este reporte es un documento oficial de 3P SA DE CV</p>
+        </div>
+    </body>
+    </html>
+    `;
+    
+    // Crear blob y descargar
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Reporte_3P_Viaticos_${responsable.replace(/\\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`;
+    link.click();
+    
+    showToast('📊 Reporte Excel profesional descargado', 'success');
+    
+    // Guardar en historial de reportes
+    guardarReporteEnHistorial({
+        id: 'REPORTE_' + Date.now(),
+        vendedorId: state.currentVendor.username,
+        numReporte: numReporte,
+        fechaInicio,
+        fechaFin,
+        total,
+        totalFacturable,
+        cantidadGastos: gastos.length,
+        fechaGenerado: new Date().toISOString()
+    });
+}
+
+async function guardarReporteEnHistorial(reporteData) {
+    try {
+        await db.add('reportes', reporteData);
+    } catch (e) {
+        console.warn('No se pudo guardar en historial:', e);
     }
 }
 
@@ -1044,7 +1415,8 @@ async function loadGlobalReport() {
             totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
             totalViajes: allViajes.length,
             totalVendedores: allVendors.length,
-            promedioPorViaje: allViajes.length ? allGastos.reduce((sum, g) => sum + g.monto, 0) / allViajes.length : 0
+            promedioPorViaje: allViajes.length ? allGastos.reduce((sum, g) => sum + g.monto, 0) / allViajes.length : 0,
+            totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0)
         };
         
         const statsContainer = document.getElementById('admin-stats');
@@ -1055,16 +1427,16 @@ async function loadGlobalReport() {
                     <span class="stat-label">Total Gastos</span>
                 </div>
                 <div class="stat-card">
+                    <span class="stat-value">${formatMoney(stats.totalFacturable)}</span>
+                    <span class="stat-label">Total Facturable</span>
+                </div>
+                <div class="stat-card">
                     <span class="stat-value">${stats.totalViajes}</span>
                     <span class="stat-label">Viajes</span>
                 </div>
                 <div class="stat-card">
                     <span class="stat-value">${stats.totalVendedores}</span>
                     <span class="stat-label">Vendedores</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${formatMoney(stats.promedioPorViaje)}</span>
-                    <span class="stat-label">Promedio/Viaje</span>
                 </div>
             `;
         }
@@ -1107,38 +1479,6 @@ async function loadGlobalReport() {
         
     } catch (error) {
         debug('Error cargando reporte global:', error);
-    }
-}
-
-// ===== EXPORTACIÓN =====
-function exportReport(format) {
-    if (!state.lastReport) {
-        showToast('Primero genera un reporte', 'warning');
-        return;
-    }
-    
-    if (format === 'pdf') {
-        window.print();
-        showToast('Reporte preparado para imprimir', 'success');
-    } else if (format === 'excel') {
-        const { gastos, fechaInicio, fechaFin } = state.lastReport;
-        
-        let csv = 'Fecha,Tipo,Concepto,Monto,Viaje\n';
-        
-        gastos.forEach(g => {
-            const fecha = formatDate(g.fecha || g.createdAt);
-            const tipo = TIPOS_GASTO[g.tipo]?.label || g.tipo;
-            const linea = `"${fecha}","${tipo}","${g.lugar || ''}",${g.monto},"${g.viajeId}"\n`;
-            csv += linea;
-        });
-        
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Reporte_Gastos_${fechaInicio}_${fechaFin}.csv`;
-        link.click();
-        
-        showToast('Reporte descargado como CSV', 'success');
     }
 }
 
@@ -1230,7 +1570,6 @@ function formatMoney(amount) {
 function formatDate(dateString) {
     if (!dateString) return '-';
     
-    // CORRECCIÓN: Ajustar fecha para zona horaria
     const date = new Date(dateString);
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
@@ -1263,17 +1602,31 @@ function handlePhotoCapture(event) {
     
     const reader = new FileReader();
     reader.onload = function(e) {
-        state.tempFotos = [e.target.result];
+        state.tempFotos.push(e.target.result);
         
         const preview = document.getElementById('photo-preview');
         if (preview) {
+            if (state.tempFotos.length === 1) {
+                preview.innerHTML = '';
+            }
+            
             preview.innerHTML = `
-                <img src="${e.target.result}" class="photo-preview" style="max-width: 100%; max-height: 200px; border-radius: var(--radius);">
-                <button type="button" class="btn btn-small btn-danger" onclick="clearPhoto()" style="margin-top: 0.5rem;">Eliminar foto</button>
+                <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
+                    ${state.tempFotos.map((foto, idx) => `
+                        <div style="position: relative;">
+                            <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
+                            <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
             `;
         }
     };
     reader.readAsDataURL(file);
+    
+    // Limpiar input para permitir seleccionar la misma foto de nuevo
+    event.target.value = '';
 }
 
 function clearPhoto() {
@@ -1310,11 +1663,13 @@ window.selectViaje = selectViaje;
 window.selectTipoGasto = selectTipoGasto;
 window.guardarGasto = guardarGasto;
 window.showDetalleGasto = showDetalleGasto;
+window.editarGasto = editarGasto;
 window.eliminarGasto = eliminarGasto;
 window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
+window.removeFoto = removeFoto;
 
-debug('App.js cargado completamente');
+debug('App.js v4.0 cargado completamente');
