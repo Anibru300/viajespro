@@ -126,21 +126,14 @@ function initUX() {
     LoadingSystem.init();
     ToastSystem.init();
     
+    // Exponer funciones globalmente
     window.showToast = (message, type = 'info') => {
         ToastSystem.show(message, type);
     };
     
-    const originalLogout = window.logout;
-    window.logout = async () => {
-        const confirmed = await ConfirmSystem.confirm({
-            title: '¿Cerrar sesión?',
-            message: 'Se cerrará tu sesión actual.',
-            confirmText: 'Sí, salir',
-            cancelText: 'Cancelar',
-            type: 'info'
-        });
-        if (confirmed) originalLogout();
-    };
+    window.ToastSystem = ToastSystem;
+    window.LoadingSystem = LoadingSystem;
+    window.ConfirmSystem = ConfirmSystem;
     
     console.log('✅ UX Improvements initialized');
 }
