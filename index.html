@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./ux-improvements.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<base target="_blank">
 </head>
 <body>
     <!-- PANTALLA DE LOGIN -->
@@ -28,22 +29,21 @@
                      loading="eager">
                 <h1 class="company-name">3P S.A. DE C.V.</h1>
                 <p class="slogan">Control de Gastos de Viaje</p>
-                <!-- Zona Veracruz eliminada -->
             </div>
             
             <div class="login-form">
-                <h2>Iniciar Sesión</h2>
+                <h2>Iniciar Sesi&oacute;n</h2>
                 <div class="form-group">
                     <label>Usuario:</label>
                     <input type="text" id="login-username" class="form-control" placeholder="Ej: juan.perez">
                 </div>
                 <div class="form-group">
-                    <label>Contraseña:</label>
-                    <input type="password" id="login-password" class="form-control" placeholder="Tu contraseña">
+                    <label>Contrase&ntilde;a:</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="Tu contrase&ntilde;a">
                 </div>
                 <div class="form-check">
                     <input type="checkbox" id="remember-me" checked>
-                    <label for="remember-me">Mantener sesión abierta</label>
+                    <label for="remember-me">Mantener sesi&oacute;n abierta</label>
                 </div>
                 <button class="btn-primary btn-large" onclick="login()">
                     Ingresar
@@ -53,7 +53,7 @@
             
             <div class="admin-access">
                 <button class="btn-link" onclick="showAdminLogin()">
-                    🔐 Acceso Administrador
+                    Acceso Administrador
                 </button>
             </div>
         </div>
@@ -72,14 +72,14 @@
                     <input type="text" id="admin-username" class="form-control" value="admin">
                 </div>
                 <div class="form-group">
-                    <label>Contraseña:</label>
+                    <label>Contrase&ntilde;a:</label>
                     <input type="password" id="admin-password" class="form-control">
                 </div>
                 <button class="btn-primary btn-large" onclick="loginAdmin()">
                     Acceder
                 </button>
                 <button class="btn-secondary" onclick="backToLogin()">
-                    ← Volver
+                    Volver
                 </button>
                 <p class="login-error" id="admin-login-error"></p>
             </div>
@@ -92,22 +92,22 @@
             <div class="header-brand">
                 <span class="header-title">3P Admin - Zona Veracruz</span>
             </div>
-            <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+            <button class="btn-logout" onclick="logout()">Cerrar Sesi&oacute;n</button>
         </header>
         
         <div class="admin-content">
             <div class="admin-section">
-                <h2>👤 Registrar Nuevo Vendedor</h2>
+                <h2>Registrar Nuevo Vendedor</h2>
                 <div class="form-group">
                     <label>Nombre completo:</label>
-                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan Pérez García">
+                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan P&eacute;rez Garc&iacute;a">
                 </div>
                 <div class="form-group">
-                    <label>Usuario (sin espacios, solo minúsculas, números y puntos):</label>
+                    <label>Usuario (sin espacios, solo min&uacute;sculas, n&uacute;meros y puntos):</label>
                     <input type="text" id="new-vendor-username" class="form-control" placeholder="Ej: juan.perez">
                 </div>
                 <div class="form-group">
-                    <label>Contraseña:</label>
+                    <label>Contrase&ntilde;a:</label>
                     <input type="password" id="new-vendor-password" class="form-control">
                 </div>
                 <div class="form-group">
@@ -122,15 +122,15 @@
                     </select>
                 </div>
                 <button class="btn-success btn-large" onclick="registerVendor()">
-                    ✅ Registrar Vendedor
+                    Registrar Vendedor
                 </button>
                 <div id="register-error" style="color: red; margin-top: 10px; text-align: center;"></div>
             </div>
             
             <div class="admin-section">
-                <h2>📋 Vendedores Registrados</h2>
+                <h2>Vendedores Registrados</h2>
                 <div id="vendors-list" class="vendors-list">
-                    <!-- Lista dinámica -->
+                    <!-- Lista din&aacute;mica -->
                 </div>
             </div>
         </div>
@@ -156,34 +156,34 @@
 
         <nav class="main-nav">
             <button class="nav-btn active" onclick="showSection('viajes')">
-                <span class="icon">🗺️</span>
+                <span class="icon">Viajes</span>
                 <span>Mis Viajes</span>
             </button>
             <button class="nav-btn" onclick="showSection('gastos')">
-                <span class="icon">💰</span>
+                <span class="icon">Gastos</span>
                 <span>Gastos</span>
             </button>
             <button class="nav-btn" onclick="showSection('captura')">
-                <span class="icon">📸</span>
+                <span class="icon">Capturar</span>
                 <span>Capturar</span>
             </button>
             <button class="nav-btn" onclick="showSection('reportes')">
-                <span class="icon">📊</span>
+                <span class="icon">Reportes</span>
                 <span>Reportes</span>
             </button>
         </nav>
 
-        <!-- SECCIÓN: VIAJES -->
+        <!-- SECCI&Oacute;N: VIAJES -->
         <section id="viajes-section" class="section active">
             <div class="section-header">
-                <h2>🗺️ Mis Viajes</h2>
+                <h2>Mis Viajes</h2>
                 <button class="btn-primary" onclick="openModal('nuevo-viaje')">
-                    ➕ Nuevo Viaje
+                    Nuevo Viaje
                 </button>
             </div>
             <div id="viajes-list" class="cards-container">
                 <div class="empty-state">
-                    <span class="icon-large">🗺️</span>
+                    <span class="icon-large">Viajes</span>
                     <p>No tienes viajes registrados</p>
                     <button class="btn-secondary" onclick="openModal('nuevo-viaje')">
                         Crear primer viaje
@@ -192,17 +192,17 @@
             </div>
         </section>
 
-        <!-- SECCIÓN: GASTOS -->
+        <!-- SECCI&Oacute;N: GASTOS -->
         <section id="gastos-section" class="section">
             <div class="section-header">
-                <h2>💰 Gastos del Viaje</h2>
+                <h2>Gastos del Viaje</h2>
                 <select id="viaje-select" class="select-viaje" onchange="loadGastos(this.value)">
                     <option value="">Selecciona un viaje...</option>
                 </select>
             </div>
             <div id="gastos-list" class="cards-container">
                 <div class="empty-state">
-                    <span class="icon-large">💰</span>
+                    <span class="icon-large">Gastos</span>
                     <p>Selecciona un viaje para ver sus gastos</p>
                 </div>
             </div>
@@ -212,10 +212,10 @@
             </div>
         </section>
 
-        <!-- SECCIÓN: CAPTURA -->
+        <!-- SECCI&Oacute;N: CAPTURA -->
         <section id="captura-section" class="section">
             <div class="section-header">
-                <h2>📸 Captura de Gasto</h2>
+                <h2>Captura de Gasto</h2>
             </div>
             <div class="capture-form">
                 <div class="form-group">
@@ -226,7 +226,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Folio de gasto (automático):</label>
+                    <label>Folio de gasto (autom&aacute;tico):</label>
                     <input type="text" id="gasto-folio" class="form-control" readonly>
                 </div>
 
@@ -234,22 +234,22 @@
                     <label>Tipo de gasto:</label>
                     <div class="tipo-gasto-grid">
                         <button type="button" class="tipo-btn" data-tipo="gasolina" onclick="selectTipoGasto(this)">
-                            ⛽ Gasolina
+                            Gasolina
                         </button>
                         <button type="button" class="tipo-btn" data-tipo="comida" onclick="selectTipoGasto(this)">
-                            🍔 Comida
+                            Comida
                         </button>
                         <button type="button" class="tipo-btn" data-tipo="hotel" onclick="selectTipoGasto(this)">
-                            🏨 Hotel
+                            Hotel
                         </button>
                         <button type="button" class="tipo-btn" data-tipo="transporte" onclick="selectTipoGasto(this)">
-                            🚌 Transporte
+                            Transporte
                         </button>
                         <button type="button" class="tipo-btn" data-tipo="casetas" onclick="selectTipoGasto(this)">
-                            🛣️ Casetas
+                            Casetas
                         </button>
                         <button type="button" class="tipo-btn" data-tipo="otros" onclick="selectTipoGasto(this)">
-                            📦 Otros
+                            Otros
                         </button>
                     </div>
                 </div>
@@ -271,13 +271,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Ubicación GPS:</label>
+                    <label>Ubicaci&oacute;n GPS:</label>
                     <div class="gps-container">
                         <button type="button" class="btn-gps" onclick="getGPSLocation()">
-                            📍 Obtener Ubicación
+                            Obtener Ubicaci&oacute;n
                         </button>
                         <div id="gps-info" class="gps-info">
-                            <span id="gps-coords">Sin ubicación</span>
+                            <span id="gps-coords">Sin ubicaci&oacute;n</span>
                             <button type="button" class="btn-map" onclick="openMap()" style="display: none;" id="btn-ver-mapa">
                                 Ver Mapa
                             </button>
@@ -290,25 +290,25 @@
                     <div class="photo-types">
                         <div class="photo-type">
                             <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
-                                📄 Factura
+                                Factura
                             </button>
                             <span class="photo-count" id="count-factura">0</span>
                         </div>
                         <div class="photo-type">
                             <button type="button" class="btn-photo" onclick="capturePhoto('nota_remision')">
-                                📝 Nota Remisión
+                                Nota Remisi&oacute;n
                             </button>
                             <span class="photo-count" id="count-nota_remision">0</span>
                         </div>
                         <div class="photo-type">
                             <button type="button" class="btn-photo" onclick="capturePhoto('ticket')">
-                                🧾 Ticket
+                                Ticket
                             </button>
                             <span class="photo-count" id="count-ticket">0</span>
                         </div>
                         <div class="photo-type">
                             <button type="button" class="btn-photo" onclick="capturePhoto('otro')">
-                                📷 Otro
+                                Otro
                             </button>
                             <span class="photo-count" id="count-otro">0</span>
                         </div>
@@ -322,20 +322,20 @@
                 </div>
 
                 <button class="btn-primary btn-large" onclick="guardarGasto()">
-                    💾 Guardar Gasto
+                    Guardar Gasto
                 </button>
             </div>
         </section>
 
-        <!-- SECCIÓN: REPORTES -->
+        <!-- SECCI&Oacute;N: REPORTES -->
         <section id="reportes-section" class="section">
             <div class="section-header">
-                <h2>📊 Reportes para Contabilidad</h2>
+                <h2>Reportes para Contabilidad</h2>
             </div>
             
             <div class="reportes-container">
                 <div class="report-card">
-                    <h3>📦 Generar Reporte Profesional</h3>
+                    <h3>Generar Reporte Profesional</h3>
                     <p>Excel formateado + fotos organizadas en ZIP</p>
                     
                     <div class="form-group">
@@ -355,19 +355,19 @@
                     </div>
                     
                     <button class="btn-success btn-large" onclick="generarReporteZIP()">
-                        📦 Generar Reporte (ZIP)
+                        Generar Reporte (ZIP)
                     </button>
                     
                     <div class="report-info">
-                        <small>✅ Incluye: Excel con formato profesional + fotos numeradas por carpeta</small>
+                        <small>Incluye: Excel con formato profesional + fotos numeradas por carpeta</small>
                     </div>
                 </div>
 
                 <div class="report-card">
-                    <h3>📤 Compartir Último Reporte</h3>
-                    <p>Envía por WhatsApp o Email</p>
+                    <h3>Compartir &Uacute;ltimo Reporte</h3>
+                    <p>Env&iacute;a por WhatsApp o Email</p>
                     <button class="btn-primary btn-large" onclick="compartirUltimoReporte()" id="btn-compartir" disabled>
-                        📤 Compartir Reporte
+                        Compartir Reporte
                     </button>
                     <p class="last-report" id="last-report-info">No hay reportes generados</p>
                 </div>
@@ -379,7 +379,7 @@
     <div id="modal-nuevo-viaje" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>🗺️ Nuevo Viaje</h3>
+                <h3>Nuevo Viaje</h3>
                 <button class="close-btn" onclick="closeModal('nuevo-viaje')">&times;</button>
             </div>
             <div class="modal-body">
@@ -388,7 +388,7 @@
                     <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Xalapa, Veracruz">
                 </div>
                 <div class="form-group">
-                    <label>Propósito del viaje:</label>
+                    <label>Prop&oacute;sito del viaje:</label>
                     <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita a clientes, entrega de productos..."></textarea>
                 </div>
                 <div class="form-row">
@@ -413,7 +413,7 @@
     <div id="modal-editar-vendedor" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>✏️ Editar Vendedor</h3>
+                <h3>Editar Vendedor</h3>
                 <button class="close-btn" onclick="closeModal('editar-vendedor')">&times;</button>
             </div>
             <div class="modal-body">
@@ -427,8 +427,8 @@
                     <input type="text" id="edit-vendor-username" class="form-control" readonly>
                 </div>
                 <div class="form-group">
-                    <label>Contraseña (dejar vacío para no cambiar):</label>
-                    <input type="password" id="edit-vendor-password" class="form-control" placeholder="Nueva contraseña">
+                    <label>Contrase&ntilde;a (dejar vac&iacute;o para no cambiar):</label>
+                    <input type="password" id="edit-vendor-password" class="form-control" placeholder="Nueva contrase&ntilde;a">
                 </div>
                 <div class="form-group">
                     <label>Email:</label>
@@ -460,7 +460,7 @@
     <div id="modal-mapa" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3>📍 Ubicación del Gasto</h3>
+                <h3>Ubicaci&oacute;n del Gasto</h3>
                 <button class="close-btn" onclick="closeModal('mapa')">&times;</button>
             </div>
             <div class="modal-body">
@@ -476,7 +476,7 @@
     <div id="modal-fotos" class="modal">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3>📸 Fotos del Gasto</h3>
+                <h3>Fotos del Gasto</h3>
                 <button class="close-btn" onclick="closeModal('fotos')">&times;</button>
             </div>
             <div class="modal-body">
@@ -485,7 +485,7 @@
         </div>
     </div>
 
-    <!-- Input oculto para cámara -->
+    <!-- Input oculto para c&aacute;mara -->
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
 
     <!-- Scripts -->
@@ -498,10 +498,10 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then((registration) => {
-                        console.log('✅ SW registered:', registration.scope);
+                        console.log('SW registered:', registration.scope);
                     })
                     .catch((error) => {
-                        console.log('❌ SW registration failed:', error);
+                        console.log('SW registration failed:', error);
                     });
             });
         }
