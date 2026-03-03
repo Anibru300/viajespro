@@ -178,19 +178,36 @@
                 </div>
             </div>
             
-            <!-- Tab Reportes Admin -->
+                    <!-- Tab Reportes Admin V5 -->
             <div id="admin-tab-reportes" class="admin-tab hidden">
                 <div class="card">
-                    <h2>📊 Reportes Globales</h2>
+                    <h2>📊 Resumen Global</h2>
                     <div class="stats-grid" id="admin-stats"></div>
+                </div>
+                
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>👥 Vendedores Activos</h2>
+                        <button class="btn btn-primary btn-small" onclick="if(window.forceSync) forceSync()">🔄 Sincronizar</button>
+                    </div>
+                    <div id="admin-vendors-summary">
+                        <div class="loading-spinner">Cargando datos...</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>📈 Gastos por Categoría</h2>
                     <div class="chart-container">
                         <canvas id="global-chart"></canvas>
                     </div>
                 </div>
+                
+                <div style="margin-top: 1rem; padding: 1rem; background: #f0fdf4; border-radius: 8px; border: 1px solid #86efac;">
+                    <p style="margin: 0; color: #166534; font-size: 0.875rem;">
+                        <strong>💡 Sincronización:</strong> Los datos se actualizan automáticamente. Usa el botón 🔄 para forzar sincronización manual.
+                    </p>
+                </div>
             </div>
-        </main>
-    </div>
-
     <!-- Main App (Vendedor) -->
     <div id="app" class="screen hidden">
         <header class="app-header">
