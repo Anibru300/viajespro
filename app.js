@@ -308,60 +308,6 @@ async function login() {
     }
 }
 
-// ===== CARGAR VENDEDORES =====
-// Variable para controlar el tiempo entre recargas (evita bucles infinitos)
-let lastVendorsLoad = 0;
-const VENDORS_LOAD_COOLDOWN = 3000; // 3 segundos mínimo entre recargas
-
-async function loadVendorsList() {
-    const now = Date.now();
-    if (now - lastVendorsLoad < VENDORS_LOAD_COOLDOWN) {
-        debug('Ignorando carga de vendedores (cooldown activo)');
-        return;
-    }
-    lastVendorsLoad = now;
-    
-    debug('Cargando lista de vendedores...');
-    
-    try {
-        const vendors = await db.getAll('vendedores');
-        debug('Vendedores encontrados:', vendors.length);
-        
-        const container = document.getElementById('vendors-list');
-        if (!container) {
-            console.error('No se encontró container vendors-list');
-            return;
-        }
-        
-        if (vendors.length === 0) {
-            container.innerHTML = '<div class="empty-state"><p>No hay vendedores registrados</p></div>';
-            return;
-        }
-        
-        container.innerHTML = vendors.map(v => `
-            <div class="vendor-card" data-username="${v.username}">
-                <div class="vendor-info">
-                    <h4>${v.name}</h4>
-                    <p>
-                        <span class="vendor-status ${v.status}"></span>
-                        @${v.username} • ${v.zone}
-                    </p>
-                </div>
-                <div class="vendor-actions">
-                    <button class="btn btn-small btn-primary" onclick="editVendor('${v.username}')">Editar</button>
-                    <button class="btn btn-small btn-secondary" onclick="deleteVendor('${v.username}')">Eliminar</button>
-                </div>
-            </div>
-        `).join('');
-        
-        debug('Lista renderizada');
-        
-    } catch (error) {
-        debug('Error cargando vendedores:', error);
-        showToast('Error al cargar vendedores: ' + error.message, 'error');
-    }
-}
-
 async function loginAdmin() {
     debug('Login admin...');
     
@@ -477,7 +423,18 @@ async function registerVendor() {
 }
 
 // ===== CARGAR VENDEDORES =====
+// Variable para controlar el tiempo entre recargas (evita bucles infinitos)
+let lastVendorsLoad = 0;
+const VENDORS_LOAD_COOLDOWN = 3000; // 3 segundos mínimo entre recargas
+
 async function loadVendorsList() {
+    const now = Date.now();
+    if (now - lastVendorsLoad < VENDORS_LOAD_COOLDOWN) {
+        debug('Ignorando carga de vendedores (cooldown activo)');
+        return;
+    }
+    lastVendorsLoad = now;
+    
     debug('Cargando lista de vendedores...');
     
     try {
