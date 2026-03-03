@@ -1,141 +1,178 @@
 /**
- * 3P VIAJESPRO - UX Improvements
+ * 3P VIAJESPRO - UX Improvements JavaScript
+ * Mejoras de experiencia de usuario y utilidades
  */
 
-const UX_CONFIG = {
-    TOAST_DURATION: 4000,
-    LOADING_MIN_TIME: 500
-};
+// ===== UTILIDADES DE UI =====
 
-const LoadingSystem = {
-    overlay: null,
-    
-    init() {
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'loading-overlay';
-        this.overlay.innerHTML = `
-            <div class="loading-spinner">
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-            </div>
-            <p class="loading-text">Cargando...</p>
-        `;
-        document.body.appendChild(this.overlay);
-    },
-    
-    show(message = 'Cargando...') {
-        this.overlay.querySelector('.loading-text').textContent = message;
-        this.overlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    },
-    
-    hide() {
-        this.overlay.classList.remove('active');
-        document.body.style.overflow = '';
-    },
-    
-    async withLoading(asyncFn, message = 'Cargando...') {
-        this.show(message);
-        try {
-            const result = await asyncFn();
-            await new Promise(r => setTimeout(r, 500));
-            return result;
-        } finally {
-            this.hide();
-        }
+/**
+ * Muestra un toast notification
+ * @param {string} message - Mensaje a mostrar
+ * @param {string} type - Tipo: 'success', 'error', 'info'
+ * @param {number} duration - Duraci&oacute;n en ms
+ */
+function showToast(message, type = 'info', duration = 3000) {
+    // Remover toast anterior si existe
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
     }
-};
-
-const ToastSystem = {
-    container: null,
     
-    init() {
-        this.container = document.createElement('div');
-        this.container.className = 'toast-container';
-        document.body.appendChild(this.container);
-    },
+    // Crear nuevo toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
     
-    show(message, type = 'info') {
-        const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.innerHTML = `
-            <span class="toast-icon">${icons[type]}</span>
-            <span class="toast-message">${message}</span>
-            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-            <div class="toast-progress"></div>
-        `;
-        
-        this.container.appendChild(toast);
-        setTimeout(() => toast.classList.add('show'), 10);
-        setTimeout(() => {
-            toast.classList.add('hiding');
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    },
-    
-    success(message) { this.show(message, 'success'); },
-    error(message) { this.show(message, 'error'); },
-    warning(message) { this.show(message, 'warning'); },
-    info(message) { this.show(message, 'info'); }
-};
-
-const ConfirmSystem = {
-    async confirm(options) {
-        const { title = '¿Estás seguro?', message = '', confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning' } = options;
-        
-        return new Promise((resolve) => {
-            const modal = document.createElement('div');
-            modal.className = 'confirm-modal';
-            modal.innerHTML = `
-                <div class="confirm-content">
-                    <div class="confirm-icon confirm-${type}">⚠️</div>
-                    <h3 class="confirm-title">${title}</h3>
-                    <p class="confirm-message">${message}</p>
-                    <div class="confirm-actions">
-                        <button class="btn-confirm-cancel">${cancelText}</button>
-                        <button class="btn-confirm-confirm confirm-${type}">${confirmText}</button>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-            setTimeout(() => modal.classList.add('active'), 10);
-            
-            modal.querySelector('.btn-confirm-confirm').onclick = () => {
-                modal.classList.remove('active');
-                setTimeout(() => { modal.remove(); resolve(true); }, 200);
-            };
-            
-            modal.querySelector('.btn-confirm-cancel').onclick = () => {
-                modal.classList.remove('active');
-                setTimeout(() => { modal.remove(); resolve(false); }, 200);
-            };
-            
-            modal.onclick = (e) => {
-                if (e.target === modal) {
-                    modal.querySelector('.btn-confirm-cancel').click();
-                }
-            };
-        });
-    }
-};
-
-function initUX() {
-    LoadingSystem.init();
-    ToastSystem.init();
-    
-    // Exponer funciones globalmente
-    window.showToast = (message, type = 'info') => {
-        ToastSystem.show(message, type);
-    };
-    
-    window.ToastSystem = ToastSystem;
-    window.LoadingSystem = LoadingSystem;
-    window.ConfirmSystem = ConfirmSystem;
-    
-    console.log('✅ UX Improvements initialized');
+    // Auto-remover despu&eacute;s de la duraci&oacute;n
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
 }
 
-document.addEventListener('DOMContentLoaded', initUX);
+/**
+ * Muestra un indicador de carga en un elemento
+ * @param {HTMLElement} element - Elemento donde mostrar el loader
+ * @param {boolean} show - true para mostrar, false para ocultar
+ */
+function toggleLoading(element, show = true) {
+    if (show) {
+        element.classList.add('loading');
+        element.dataset.originalText = element.textContent;
+        element.textContent = '';
+    } else {
+        element.classList.remove('loading');
+        if (element.dataset.originalText) {
+            element.textContent = element.dataset.originalText;
+        }
+    }
+}
+
+/**
+ * Valida un campo de formulario visualmente
+ * @param {HTMLElement} input - Input a validar
+ * @param {boolean} isValid - Si es v&aacute;lido o no
+ * @param {string} message - Mensaje de error (opcional)
+ */
+function validateField(input, isValid, message = '') {
+    input.classList.remove('is-valid', 'is-invalid');
+    input.classList.add(isValid ? 'is-valid' : 'is-invalid');
+    
+    // Remover mensaje de error anterior
+    const existingError = input.parentElement.querySelector('.field-error');
+    if (existingError) {
+        existingError.remove();
+    }
+    
+    // Agregar mensaje de error si no es v&aacute;lido
+    if (!isValid && message) {
+        const error = document.createElement('span');
+        error.className = 'field-error';
+        error.style.cssText = 'color: var(--color-secondary); font-size: 0.8rem; margin-top: 0.25rem; display: block;';
+        error.textContent = message;
+        input.parentElement.appendChild(error);
+    }
+}
+
+// ===== MEJORAS DE ACCESIBILIDAD =====
+
+/**
+ * Hace que los botones sean accesibles con teclado
+ */
+function enhanceKeyboardAccessibility() {
+    document.querySelectorAll('button, [onclick]').forEach(el => {
+        if (!el.hasAttribute('tabindex')) {
+            el.setAttribute('tabindex', '0');
+        }
+        
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
+            }
+        });
+    });
+}
+
+/**
+ * Anuncia mensajes a lectores de pantalla
+ * @param {string} message - Mensaje a anunciar
+ */
+function announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('role', 'status');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.className = 'sr-only';
+    announcement.style.cssText = 'position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;';
+    announcement.textContent = message;
+    
+    document.body.appendChild(announcement);
+    setTimeout(() => announcement.remove(), 1000);
+}
+
+// ===== MEJORAS DE FORMULARIOS =====
+
+/**
+ * Formatea un input de moneda
+ * @param {HTMLInputElement} input - Input a formatear
+ */
+function formatCurrencyInput(input) {
+    input.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^\d.]/g, '');
+        
+        // Asegurar solo un punto decimal
+        const parts = value.split('.');
+        if (parts.length > 2) {
+            value = parts[0] + '.' + parts.slice(1).join('');
+        }
+        
+        // Limitar decimales a 2
+        if (parts[1] && parts[1].length > 2) {
+            value = parts[0] + '.' + parts[1].substring(0, 2);
+        }
+        
+        e.target.value = value;
+    });
+}
+
+/**
+ * Convierte un input a may&uacute;sculas autom&aacute;ticamente
+ * @param {HTMLInputElement} input - Input a convertir
+ */
+function autoUppercase(input) {
+    input.addEventListener('input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
+    });
+}
+
+// ===== INICIALIZACI&Oacute;N =====
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('UX Improvements loaded');
+    
+    // Mejorar accesibilidad
+    enhanceKeyboardAccessibility();
+    
+    // Formatear inputs de moneda
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+        if (input.id.includes('monto')) {
+            formatCurrencyInput(input);
+        }
+    });
+    
+    // Auto-uppercase para campos de texto espec&iacute;ficos
+    document.querySelectorAll('input[type="text"]').forEach(input => {
+        if (input.id.includes('destino') || input.id.includes('lugar')) {
+            autoUppercase(input);
+        }
+    });
+});
+
+// Exponer funciones globalmente
+window.showToast = showToast;
+window.toggleLoading = toggleLoading;
+window.validateField = validateField;
+window.announceToScreenReader = announceToScreenReader;
