@@ -1,9 +1,8 @@
 /**
  * 3P VIAJESPRO - Main Application
- * Sistema completo de control de gastos
  */
 
-// === FUNCIONES HELPER PARA FECHAS (TIMEZONE-SAFE) ===
+// === FUNCIONES HELPER PARA FECHAS ===
 function crearFechaLocal(dateString) {
     if (!dateString) return null;
     const [year, month, day] = dateString.split('-').map(Number);
@@ -28,7 +27,6 @@ function getFechaHoraActualInput() {
     const minutes = String(ahora.getMinutes()).padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
-// === FIN FUNCIONES HELPER ===
 
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
@@ -102,7 +100,7 @@ async function login() {
     const remember = document.getElementById('remember-me').checked;
     
     if (!username || !password) {
-        showLoginError('Ingresa usuario y contraseña');
+        alert('Ingresa usuario y contraseña');
         return;
     }
     
@@ -110,12 +108,12 @@ async function login() {
         const vendor = await db.get('vendedores', username);
         
         if (!vendor || vendor.password !== password) {
-            showLoginError('Usuario o contraseña incorrectos');
+            alert('Usuario o contraseña incorrectos');
             return;
         }
         
         if (vendor.status === 'inactive') {
-            showLoginError('Usuario inactivo. Contacta al administrador');
+            alert('Usuario inactivo. Contacta al administrador');
             return;
         }
         
@@ -134,12 +132,13 @@ async function login() {
         
     } catch (error) {
         console.error('Login error:', error);
-        showLoginError('Error al iniciar sesión');
+        alert('Error al iniciar sesión');
     }
 }
 
 function showLoginError(message) {
-    document.getElementById('login-error').textContent = message;
+    const errorEl = document.getElementById('login-error');
+    if (errorEl) errorEl.textContent = message;
 }
 
 async function loginAdmin() {
@@ -150,16 +149,19 @@ async function loginAdmin() {
         state.currentUser = { username, type: 'admin' };
         showAdminPanel();
     } else {
-        document.getElementById('admin-login-error').textContent = 'Credenciales incorrectas';
+        const errorEl = document.getElementById('admin-login-error');
+        if (errorEl) errorEl.textContent = 'Credenciales incorrectas';
     }
 }
 
 function logout() {
-    localStorage.removeItem('viajespro_session');
-    state.currentUser = null;
-    state.currentVendor = null;
-    state.currentViaje = null;
-    location.reload();
+    if (confirm('¿Cerrar sesión?')) {
+        localStorage.removeItem('viajespro_session');
+        state.currentUser = null;
+        state.currentVendor = null;
+        state.currentViaje = null;
+        location.reload();
+    }
 }
 
 // ===== ADMIN PANEL =====
@@ -180,19 +182,19 @@ async function registerVendor() {
     const zone = document.getElementById('new-vendor-zone').value;
     
     if (!name || !username || !password) {
-        showToast('Nombre, usuario y contraseña son obligatorios', 'error');
+        alert('Nombre, usuario y contraseña son obligatorios');
         return;
     }
     
     if (!/^[a-z0-9.]+$/.test(username)) {
-        showToast('Usuario solo puede contener letras minúsculas, números y puntos', 'error');
+        alert('Usuario solo puede contener letras minúsculas, números y puntos');
         return;
     }
     
     try {
         const existing = await db.get('vendedores', username);
         if (existing) {
-            showToast('Este nombre de usuario ya existe', 'error');
+            alert('Este nombre de usuario ya existe');
             return;
         }
         
@@ -210,7 +212,7 @@ async function registerVendor() {
         
         await db.add('vendedores', vendor);
         
-        showToast('Vendedor registrado exitosamente', 'success');
+        alert('✅ Vendedor registrado exitosamente');
         
         document.getElementById('new-vendor-name').value = '';
         document.getElementById('new-vendor-username').value = '';
@@ -221,7 +223,7 @@ async function registerVendor() {
         
     } catch (error) {
         console.error('Error registering vendor:', error);
-        showToast('Error al registrar vendedor', 'error');
+        alert('Error al registrar vendedor: ' + error.message);
     }
 }
 
@@ -259,12 +261,12 @@ async function toggleVendorStatus(username, currentStatus) {
         vendor.updatedAt = new Date().toISOString();
         
         await db.update('vendedores', vendor);
-        showToast(`Vendedor ${vendor.status === 'active' ? 'activado' : 'desactivado'}`, 'success');
+        alert(`Vendedor ${vendor.status === 'active' ? 'activado' : 'desactivado'}`);
         loadVendorsList();
         
     } catch (error) {
         console.error('Error toggling vendor status:', error);
-        showToast('Error al cambiar estado', 'error');
+        alert('Error al cambiar estado');
     }
 }
 
@@ -275,7 +277,8 @@ function showMainApp() {
     document.getElementById('admin-panel').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     
-    document.getElementById('current-user-name').textContent = state.currentVendor?.name || 'Vendedor';
+    const userNameEl = document.getElementById('current-user-name');
+    if (userNameEl) userNameEl.textContent = state.currentVendor?.name || 'Vendedor';
     
     loadViajes();
     updateFolioGasto();
@@ -291,7 +294,8 @@ function showSection(sectionName) {
         btn.classList.remove('active');
     });
     
-    document.getElementById(`${sectionName}-section`).classList.add('active');
+    const sectionEl = document.getElementById(`${sectionName}-section`);
+    if (sectionEl) sectionEl.classList.add('active');
     
     if (event && event.target) {
         event.target.closest('.nav-btn').classList.add('active');
@@ -360,7 +364,7 @@ async function loadViajes() {
         
     } catch (error) {
         console.error('Error loading viajes:', error);
-        showToast('Error al cargar viajes', 'error');
+        alert('Error al cargar viajes');
     }
 }
 
@@ -371,9 +375,13 @@ function updateViajeSelects(viajes) {
     
     const defaultOption = '<option value="">Selecciona un viaje...</option>';
     
-    document.getElementById('viaje-select').innerHTML = defaultOption + options;
-    document.getElementById('captura-viaje-select').innerHTML = defaultOption + options;
-    document.getElementById('reporte-viaje-select').innerHTML = '<option value="todos">Todos los viajes</option>' + options;
+    const viajeSelect = document.getElementById('viaje-select');
+    const capturaSelect = document.getElementById('captura-viaje-select');
+    const reporteSelect = document.getElementById('reporte-viaje-select');
+    
+    if (viajeSelect) viajeSelect.innerHTML = defaultOption + options;
+    if (capturaSelect) capturaSelect.innerHTML = defaultOption + options;
+    if (reporteSelect) reporteSelect.innerHTML = '<option value="todos">Todos los viajes</option>' + options;
 }
 
 async function crearViaje() {
@@ -383,7 +391,7 @@ async function crearViaje() {
     const fechaFin = document.getElementById('viaje-fecha-fin').value;
     
     if (!destino || !fechaInicio) {
-        showToast('Destino y fecha de inicio son obligatorios', 'error');
+        alert('Destino y fecha de inicio son obligatorios');
         return;
     }
     
@@ -401,7 +409,7 @@ async function crearViaje() {
     try {
         await db.add('viajes', viaje);
         closeModal('nuevo-viaje');
-        showToast('Viaje creado exitosamente', 'success');
+        alert('✅ Viaje creado exitosamente');
         
         document.getElementById('viaje-destino').value = '';
         document.getElementById('viaje-proposito').value = '';
@@ -412,14 +420,15 @@ async function crearViaje() {
         
     } catch (error) {
         console.error('Error creating viaje:', error);
-        showToast('Error al crear viaje', 'error');
+        alert('Error al crear viaje');
     }
 }
 
 function selectViaje(viajeId) {
     state.currentViaje = viajeId;
     showSection('gastos');
-    document.getElementById('viaje-select').value = viajeId;
+    const viajeSelect = document.getElementById('viaje-select');
+    if (viajeSelect) viajeSelect.value = viajeId;
     loadGastos(viajeId);
 }
 
@@ -433,13 +442,17 @@ async function loadGastosSection() {
     if (viajeId) {
         await loadGastos(viajeId);
     } else {
-        document.getElementById('gastos-list').innerHTML = `
-            <div class="empty-state">
-                <span class="icon-large">💰</span>
-                <p>Selecciona un viaje para ver sus gastos</p>
-            </div>
-        `;
-        document.getElementById('resumen-gastos').style.display = 'none';
+        const gastosList = document.getElementById('gastos-list');
+        if (gastosList) {
+            gastosList.innerHTML = `
+                <div class="empty-state">
+                    <span class="icon-large">💰</span>
+                    <p>Selecciona un viaje para ver sus gastos</p>
+                </div>
+            `;
+        }
+        const resumenGastos = document.getElementById('resumen-gastos');
+        if (resumenGastos) resumenGastos.style.display = 'none';
     }
 }
 
@@ -459,7 +472,7 @@ async function loadGastos(viajeId) {
                     </button>
                 </div>
             `;
-            resumenContainer.style.display = 'none';
+            if (resumenContainer) resumenContainer.style.display = 'none';
             return;
         }
         
@@ -502,43 +515,46 @@ async function loadGastos(viajeId) {
             `;
         }).join('');
         
-        resumenContainer.style.display = 'block';
+        if (resumenContainer) resumenContainer.style.display = 'block';
         const resumen = await db.getResumenGastos(viajeId);
         
-        document.getElementById('totales-grid').innerHTML = `
-            <div class="total-item">
-                <span class="label">Gasolina</span>
-                <span class="value">$${resumen.gasolina.toFixed(2)}</span>
-            </div>
-            <div class="total-item">
-                <span class="label">Comida</span>
-                <span class="value">$${resumen.comida.toFixed(2)}</span>
-            </div>
-            <div class="total-item">
-                <span class="label">Hotel</span>
-                <span class="value">$${resumen.hotel.toFixed(2)}</span>
-            </div>
-            <div class="total-item">
-                <span class="label">Transporte</span>
-                <span class="value">$${resumen.transporte.toFixed(2)}</span>
-            </div>
-            <div class="total-item">
-                <span class="label">Casetas</span>
-                <span class="value">$${resumen.casetas.toFixed(2)}</span>
-            </div>
-            <div class="total-item">
-                <span class="label">Otros</span>
-                <span class="value">$${resumen.otros.toFixed(2)}</span>
-            </div>
-            <div class="total-item" style="grid-column: span 2; background: linear-gradient(135deg, #E53935 0%, #C62828 100%); color: white;">
-                <span class="label" style="color: rgba(255,255,255,0.9);">TOTAL GENERAL</span>
-                <span class="value total" style="color: white; font-size: 1.5rem;">$${resumen.total.toFixed(2)}</span>
-            </div>
-        `;
+        const totalesGrid = document.getElementById('totales-grid');
+        if (totalesGrid) {
+            totalesGrid.innerHTML = `
+                <div class="total-item">
+                    <span class="label">Gasolina</span>
+                    <span class="value">$${resumen.gasolina.toFixed(2)}</span>
+                </div>
+                <div class="total-item">
+                    <span class="label">Comida</span>
+                    <span class="value">$${resumen.comida.toFixed(2)}</span>
+                </div>
+                <div class="total-item">
+                    <span class="label">Hotel</span>
+                    <span class="value">$${resumen.hotel.toFixed(2)}</span>
+                </div>
+                <div class="total-item">
+                    <span class="label">Transporte</span>
+                    <span class="value">$${resumen.transporte.toFixed(2)}</span>
+                </div>
+                <div class="total-item">
+                    <span class="label">Casetas</span>
+                    <span class="value">$${resumen.casetas.toFixed(2)}</span>
+                </div>
+                <div class="total-item">
+                    <span class="label">Otros</span>
+                    <span class="value">$${resumen.otros.toFixed(2)}</span>
+                </div>
+                <div class="total-item" style="grid-column: span 2; background: linear-gradient(135deg, #E53935 0%, #C62828 100%); color: white;">
+                    <span class="label" style="color: rgba(255,255,255,0.9);">TOTAL GENERAL</span>
+                    <span class="value total" style="color: white; font-size: 1.5rem;">$${resumen.total.toFixed(2)}</span>
+                </div>
+            `;
+        }
         
     } catch (error) {
         console.error('Error loading gastos:', error);
-        showToast('Error al cargar gastos', 'error');
+        alert('Error al cargar gastos');
     }
 }
 
@@ -551,14 +567,16 @@ async function verDetalleGasto(gastoId) {
             const fotos = await Promise.all(gasto.fotos.map(fotoId => db.get('fotos', fotoId)));
             const fotosContainer = document.getElementById('fotos-detalle');
             
-            fotosContainer.innerHTML = fotos.map((foto, idx) => `
-                <div class="foto-item">
-                    <img src="${foto.imagen}" alt="Foto ${idx + 1}">
-                    <div class="foto-label">${foto.tipo.toUpperCase()}</div>
-                </div>
-            `).join('');
-            
-            openModal('fotos');
+            if (fotosContainer) {
+                fotosContainer.innerHTML = fotos.map((foto, idx) => `
+                    <div class="foto-item">
+                        <img src="${foto.imagen}" alt="Foto ${idx + 1}">
+                        <div class="foto-label">${foto.tipo.toUpperCase()}</div>
+                    </div>
+                `).join('');
+                
+                openModal('fotos');
+            }
         }
         
     } catch (error) {
@@ -573,19 +591,26 @@ function loadCapturaSection() {
     updateFotosPreview();
     updatePhotoCounts();
     
-    document.getElementById('fecha-gasto').value = getFechaHoraActualInput();
+    const fechaGasto = document.getElementById('fecha-gasto');
+    if (fechaGasto) fechaGasto.value = getFechaHoraActualInput();
     
     if (state.currentViaje) {
-        document.getElementById('captura-viaje-select').value = state.currentViaje;
+        const capturaSelect = document.getElementById('captura-viaje-select');
+        if (capturaSelect) capturaSelect.value = state.currentViaje;
     }
     
-    document.getElementById('gps-coords').textContent = 'Sin ubicación';
-    document.getElementById('btn-ver-mapa').style.display = 'none';
+    const gpsCoords = document.getElementById('gps-coords');
+    const btnVerMapa = document.getElementById('btn-ver-mapa');
+    if (gpsCoords) gpsCoords.textContent = 'Sin ubicación';
+    if (btnVerMapa) btnVerMapa.style.display = 'none';
 }
 
 function updateFolioGasto() {
-    const folio = 'G-' + Date.now().toString().slice(-8);
-    document.getElementById('gasto-folio').value = folio;
+    const folioEl = document.getElementById('gasto-folio');
+    if (folioEl) {
+        const folio = 'G-' + Date.now().toString().slice(-8);
+        folioEl.value = folio;
+    }
 }
 
 function selectTipoGasto(btn) {
@@ -594,7 +619,7 @@ function selectTipoGasto(btn) {
 }
 
 async function getGPSLocation() {
-    showToast('Obteniendo ubicación...', 'success');
+    alert('Obteniendo ubicación...');
     
     try {
         const position = await new Promise((resolve, reject) => {
@@ -611,15 +636,19 @@ async function getGPSLocation() {
             accuracy: position.coords.accuracy
         };
         
-        document.getElementById('gps-coords').textContent = 
-            `${state.tempLocation.lat.toFixed(6)}, ${state.tempLocation.lng.toFixed(6)}`;
-        document.getElementById('btn-ver-mapa').style.display = 'inline-block';
+        const gpsCoords = document.getElementById('gps-coords');
+        const btnVerMapa = document.getElementById('btn-ver-mapa');
         
-        showToast('Ubicación obtenida con éxito', 'success');
+        if (gpsCoords) {
+            gpsCoords.textContent = `${state.tempLocation.lat.toFixed(6)}, ${state.tempLocation.lng.toFixed(6)}`;
+        }
+        if (btnVerMapa) btnVerMapa.style.display = 'inline-block';
+        
+        alert('✅ Ubicación obtenida con éxito');
         
     } catch (error) {
         console.error('GPS error:', error);
-        showToast('No se pudo obtener la ubicación. Verifica permisos.', 'error');
+        alert('No se pudo obtener la ubicación. Verifica permisos.');
     }
 }
 
@@ -629,11 +658,16 @@ function openMap() {
     const { lat, lng } = state.tempLocation;
     const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
     
-    document.getElementById('mapa-iframe').src = mapsUrl;
-    document.getElementById('mapa-info').innerHTML = `
-        <strong>Coordenadas:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
-        <a href="${mapsUrl}" target="_blank">Abrir en Google Maps</a>
-    `;
+    const mapaIframe = document.getElementById('mapa-iframe');
+    const mapaInfo = document.getElementById('mapa-info');
+    
+    if (mapaIframe) mapaIframe.src = mapsUrl;
+    if (mapaInfo) {
+        mapaInfo.innerHTML = `
+            <strong>Coordenadas:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+            <a href="${mapsUrl}" target="_blank">Abrir en Google Maps</a>
+        `;
+    }
     
     openModal('mapa');
 }
@@ -642,7 +676,8 @@ let currentPhotoType = '';
 
 function capturePhoto(tipo) {
     currentPhotoType = tipo;
-    document.getElementById('camera-input').click();
+    const cameraInput = document.getElementById('camera-input');
+    if (cameraInput) cameraInput.click();
 }
 
 async function handlePhotoCapture(e) {
@@ -650,7 +685,7 @@ async function handlePhotoCapture(e) {
     if (!file) return;
     
     try {
-        showToast('Procesando foto...', 'success');
+        alert('Procesando foto...');
         
         const base64 = await fileToBase64(file);
         const compressedBase64 = await compressImage(base64, 1200);
@@ -666,11 +701,11 @@ async function handlePhotoCapture(e) {
         updateFotosPreview();
         updatePhotoCounts();
         
-        showToast('Foto agregada', 'success');
+        alert('✅ Foto agregada');
         
     } catch (error) {
         console.error('Error processing photo:', error);
-        showToast('Error al procesar foto', 'error');
+        alert('Error al procesar foto');
     }
     
     e.target.value = '';
@@ -710,6 +745,7 @@ function compressImage(base64, maxWidth) {
 
 function updateFotosPreview() {
     const container = document.getElementById('preview-fotos');
+    if (!container) return;
     
     if (state.tempFotos.length === 0) {
         container.innerHTML = '';
@@ -733,10 +769,15 @@ function updatePhotoCounts() {
         if (counts.hasOwnProperty(f.tipo)) counts[f.tipo]++;
     });
     
-    document.getElementById('count-factura').textContent = counts.factura;
-    document.getElementById('count-nota_remision').textContent = counts.nota_remision;
-    document.getElementById('count-ticket').textContent = counts.ticket;
-    document.getElementById('count-otro').textContent = counts.otro;
+    const countFactura = document.getElementById('count-factura');
+    const countNota = document.getElementById('count-nota_remision');
+    const countTicket = document.getElementById('count-ticket');
+    const countOtro = document.getElementById('count-otro');
+    
+    if (countFactura) countFactura.textContent = counts.factura;
+    if (countNota) countNota.textContent = counts.nota_remision;
+    if (countTicket) countTicket.textContent = counts.ticket;
+    if (countOtro) countOtro.textContent = counts.otro;
 }
 
 function removeFoto(index) {
@@ -755,17 +796,17 @@ async function guardarGasto() {
     const folio = document.getElementById('gasto-folio').value;
     
     if (!viajeId) {
-        showToast('Selecciona un viaje', 'error');
+        alert('Selecciona un viaje');
         return;
     }
     
     if (!tipoBtn) {
-        showToast('Selecciona el tipo de gasto', 'error');
+        alert('Selecciona el tipo de gasto');
         return;
     }
     
     if (!monto || parseFloat(monto) <= 0) {
-        showToast('Ingresa un monto válido', 'error');
+        alert('Ingresa un monto válido');
         return;
     }
     
@@ -807,31 +848,39 @@ async function guardarGasto() {
         updatePhotoCounts();
         updateFolioGasto();
         
-        document.getElementById('gps-coords').textContent = 'Sin ubicación';
-        document.getElementById('btn-ver-mapa').style.display = 'none';
+        const gpsCoords = document.getElementById('gps-coords');
+        const btnVerMapa = document.getElementById('btn-ver-mapa');
+        if (gpsCoords) gpsCoords.textContent = 'Sin ubicación';
+        if (btnVerMapa) btnVerMapa.style.display = 'none';
         
-        showToast(`Gasto ${folio} guardado exitosamente`, 'success');
+        alert(`✅ Gasto ${folio} guardado exitosamente`);
         state.currentViaje = viajeId;
         
     } catch (error) {
         console.error('Error saving gasto:', error);
-        showToast('Error al guardar gasto', 'error');
+        alert('Error al guardar gasto');
     }
 }
 
 // ===== REPORTES =====
 function loadReportesSection() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('fecha-fin').value = today;
+    const fechaFin = document.getElementById('fecha-fin');
+    if (fechaFin) fechaFin.value = today;
     
     const inicioMes = new Date();
     inicioMes.setDate(1);
-    document.getElementById('fecha-inicio').value = inicioMes.toISOString().split('T')[0];
+    const fechaInicio = document.getElementById('fecha-inicio');
+    if (fechaInicio) fechaInicio.value = inicioMes.toISOString().split('T')[0];
     
     if (state.lastReport) {
-        document.getElementById('last-report-info').textContent = 
-            `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
-        document.getElementById('btn-compartir').disabled = false;
+        const lastReportInfo = document.getElementById('last-report-info');
+        const btnCompartir = document.getElementById('btn-compartir');
+        
+        if (lastReportInfo) {
+            lastReportInfo.textContent = `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
+        }
+        if (btnCompartir) btnCompartir.disabled = false;
     }
 }
 
@@ -841,12 +890,12 @@ async function generarReporteZIP() {
     const fechaFin = document.getElementById('fecha-fin').value;
     
     if (!fechaInicio || !fechaFin) {
-        showToast('Selecciona el rango de fechas', 'error');
+        alert('Selecciona el rango de fechas');
         return;
     }
     
     try {
-        showToast('Generando reporte profesional...', 'success');
+        alert('Generando reporte...');
         
         const data = await db.exportAllData(viajeId === 'todos' ? null : viajeId);
         
@@ -861,7 +910,7 @@ async function generarReporteZIP() {
         });
         
         if (gastos.length === 0) {
-            showToast('No hay gastos en el período seleccionado', 'error');
+            alert('No hay gastos en el período seleccionado');
             return;
         }
         
@@ -1013,21 +1062,25 @@ async function generarReporteZIP() {
             gastos: gastos.length
         };
         
-        document.getElementById('last-report-info').textContent = 
-            `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
-        document.getElementById('btn-compartir').disabled = false;
+        const lastReportInfo = document.getElementById('last-report-info');
+        const btnCompartir = document.getElementById('btn-compartir');
         
-        showToast('Reporte generado exitosamente', 'success');
+        if (lastReportInfo) {
+            lastReportInfo.textContent = `Último: ${state.lastReport.fecha} - ${state.lastReport.viajes} viajes, ${state.lastReport.gastos} gastos`;
+        }
+        if (btnCompartir) btnCompartir.disabled = false;
+        
+        alert('✅ Reporte generado exitosamente');
         
     } catch (error) {
         console.error('Error generating report:', error);
-        showToast('Error al generar reporte', 'error');
+        alert('Error al generar reporte');
     }
 }
 
 async function compartirUltimoReporte() {
     if (!state.lastReport) {
-        showToast('No hay reportes generados', 'error');
+        alert('No hay reportes generados');
         return;
     }
     
@@ -1044,40 +1097,18 @@ async function compartirUltimoReporte() {
 
 // ===== UTILIDADES =====
 function openModal(modalId) {
-    document.getElementById(`modal-${modalId}`).classList.add('active');
+    const modal = document.getElementById(`modal-${modalId}`);
+    if (modal) modal.classList.add('active');
 }
 
 function closeModal(modalId) {
-    document.getElementById(`modal-${modalId}`).classList.remove('active');
+    const modal = document.getElementById(`modal-${modalId}`);
+    if (modal) modal.classList.remove('active');
 }
 
 function updateConnectionStatus(online = navigator.onLine) {
     state.isOnline = online;
     if (!online) {
-        showToast('Modo offline - Los datos se guardarán localmente', 'warning');
-    }
-}
-
-function showToast(message, type = 'info') {
-    if (window.ToastSystem) {
-        ToastSystem.show(message, type);
-    } else {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: ${type === 'error' ? '#E53935' : type === 'success' ? '#2E7D32' : '#1565C0'};
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            z-index: 10000;
-            font-weight: 500;
-        `;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        alert('Modo offline - Los datos se guardarán localmente');
     }
 }
