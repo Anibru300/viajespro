@@ -1,9 +1,9 @@
 /**
- * 3P VIAJESPRO - Database Module
- * IndexedDB funcional 100%
+ * 3P VIAJESPRO - Database Module v4.0
+ * IndexedDB con migración automática y nuevos campos profesionales
  */
 
-console.log('🚀 db.js cargando...');
+console.log('🚀 db.js v4.0 cargando...');
 
 // Verificar soporte de IndexedDB
 if (!window.indexedDB) {
@@ -13,22 +13,23 @@ if (!window.indexedDB) {
     console.log('✅ IndexedDB disponible');
 }
 
-const DB_NAME = 'ViajesProDB_v3';
-const DB_VERSION = 3;
+const DB_NAME = 'ViajesProDB_v4';
+const DB_VERSION = 4;
 
 const STORES = {
     VENDEDORES: 'vendedores',
     VIAJES: 'viajes',
     GASTOS: 'gastos',
     FOTOS: 'fotos',
-    CONFIG: 'config'
+    CONFIG: 'config',
+    REPORTES: 'reportes' // Nuevo: historial de reportes generados
 };
 
 class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
-        console.log('📦 ViajesProDB creado');
+        console.log('📦 ViajesProDB v4.0 creado');
     }
 
     async init() {
@@ -37,7 +38,7 @@ class ViajesProDB {
             return this.db;
         }
 
-        console.log('🚀 Inicializando DB...');
+        console.log('🚀 Inicializando DB v4.0...');
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -62,10 +63,17 @@ class ViajesProDB {
                 });
             };
 
-            request.onupgradeneeded = (event) => {
-                console.log('⚙️ Creando object stores...');
+            request.onupgradeneeded = async (event) => {
+                console.log('⚙️ Migrando base de datos a v4.0...');
                 const db = event.target.result;
+                const oldVersion = event.oldVersion;
+                
+                // MIGRACIÓN: De v3 a v4
+                if (oldVersion < 4) {
+                    await this.migrateToV4(db, event.target.transaction);
+                }
 
+                // Crear object stores si no existen (para instalaciones nuevas)
                 if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
                     const store = db.createObjectStore(STORES.VENDEDORES, { keyPath: 'id' });
                     store.createIndex('username', 'username', { unique: true });
@@ -74,11 +82,15 @@ class ViajesProDB {
                 if (!db.objectStoreNames.contains(STORES.VIAJES)) {
                     const store = db.createObjectStore(STORES.VIAJES, { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
+                    store.createIndex('cliente', 'cliente', { unique: false }); // Nuevo índice
+                    store.createIndex('fechaInicio', 'fechaInicio', { unique: false });
                 }
 
                 if (!db.objectStoreNames.contains(STORES.GASTOS)) {
                     const store = db.createObjectStore(STORES.GASTOS, { keyPath: 'id' });
                     store.createIndex('viajeId', 'viajeId', { unique: false });
+                    store.createIndex('tipo', 'tipo', { unique: false });
+                    store.createIndex('esFacturable', 'esFacturable', { unique: false }); // Nuevo
                 }
 
                 if (!db.objectStoreNames.contains(STORES.FOTOS)) {
@@ -89,8 +101,87 @@ class ViajesProDB {
                 if (!db.objectStoreNames.contains(STORES.CONFIG)) {
                     db.createObjectStore(STORES.CONFIG, { keyPath: 'key' });
                 }
+
+                if (!db.objectStoreNames.contains(STORES.REPORTES)) {
+                    const store = db.createObjectStore(STORES.REPORTES, { keyPath: 'id' });
+                    store.createIndex('vendedorId', 'vendedorId', { unique: false });
+                    store.createIndex('fechaGenerado', 'fechaGenerado', { unique: false });
+                }
             };
         });
+    }
+
+    // MIGRACIÓN V3 → V4
+    async migrateToV4(db, transaction) {
+        console.log('🔄 Iniciando migración v3 → v4...');
+        
+        try {
+            // 1. Migrar Viajes existentes
+            if (db.objectStoreNames.contains(STORES.VIAJES)) {
+                const viajesStore = transaction.objectStore(STORES.VIAJES);
+                const viajes = await viajesStore.getAll();
+                
+                for (const viaje of viajes) {
+                    // Agregar campos nuevos con valores por defecto
+                    const viajeActualizado = {
+                        ...viaje,
+                        cliente: viaje.cliente || 'NO ESPECIFICADO',
+                        lugarVisita: viaje.lugarVisita || viaje.destino || 'NO ESPECIFICADO',
+                        objetivo: viaje.objetivo || viaje.proposito || '',
+                        responsable: viaje.responsable || viaje.vendedorId || 'SIN RESPONSABLE',
+                        zona: viaje.zona || 'Centro',
+                        updatedAt: new Date().toISOString(),
+                        version: 4
+                    };
+                    
+                    // Renombrar proposito a objetivo si existe
+                    if (viajeActualizado.proposito && !viajeActualizado.objetivo) {
+                        viajeActualizado.objetivo = viajeActualizado.proposito;
+                        delete viajeActualizado.proposito;
+                    }
+                    
+                    await viajesStore.put(viajeActualizado);
+                }
+                console.log(`✅ Migrados ${viajes.length} viajes`);
+            }
+
+            // 2. Migrar Gastos existentes
+            if (db.objectStoreNames.contains(STORES.GASTOS)) {
+                const gastosStore = transaction.objectStore(STORES.GASTOS);
+                const gastos = await gastosStore.getAll();
+                
+                for (const gasto of gastos) {
+                    const gastoActualizado = {
+                        ...gasto,
+                        folioFactura: gasto.folioFactura || '',
+                        razonSocial: gasto.razonSocial || '',
+                        comentarios: gasto.comentarios || '',
+                        esFacturable: gasto.esFacturable !== undefined ? gasto.esFacturable : true,
+                        editable: true, // Los existentes son editables
+                        fotos: Array.isArray(gasto.fotos) ? gasto.fotos : (gasto.fotos ? [gasto.fotos] : []),
+                        updatedAt: new Date().toISOString(),
+                        version: 4
+                    };
+                    
+                    await gastosStore.put(gastoActualizado);
+                }
+                console.log(`✅ Migrados ${gastos.length} gastos`);
+            }
+
+            // 3. Guardar versión de migración en config
+            const configStore = transaction.objectStore(STORES.CONFIG);
+            await configStore.put({
+                key: 'db_version',
+                value: 4,
+                migratedAt: new Date().toISOString()
+            });
+
+            console.log('✅ Migración v4 completada exitosamente');
+            
+        } catch (error) {
+            console.error('❌ Error en migración:', error);
+            throw error;
+        }
     }
 
     async seedData() {
@@ -143,7 +234,8 @@ class ViajesProDB {
                 const dataToAdd = {
                     ...data,
                     createdAt: data.createdAt || new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
+                    updatedAt: new Date().toISOString(),
+                    version: 4
                 };
                 
                 const request = store.add(dataToAdd);
@@ -222,7 +314,8 @@ class ViajesProDB {
                 
                 const dataToPut = {
                     ...data,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: new Date().toISOString(),
+                    version: 4
                 };
                 
                 const request = store.put(dataToPut);
@@ -277,14 +370,24 @@ class ViajesProDB {
         return await this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
     }
 
+    async getViajesByCliente(cliente) {
+        return await this.queryByIndex(STORES.VIAJES, 'cliente', cliente);
+    }
+
     async getGastosByViaje(viajeId) {
         return await this.queryByIndex(STORES.GASTOS, 'viajeId', viajeId);
+    }
+
+    async getGastosFacturables(viajeId) {
+        const gastos = await this.getGastosByViaje(viajeId);
+        return gastos.filter(g => g.esFacturable !== false);
     }
 
     async getResumenGastos(viajeId) {
         const gastos = await this.getGastosByViaje(viajeId);
         const resumen = {
-            gasolina: 0, comida: 0, hotel: 0, transporte: 0, casetas: 0, otros: 0, total: 0
+            gasolina: 0, comida: 0, hotel: 0, transporte: 0, casetas: 0, otros: 0, total: 0,
+            facturable: 0, noFacturable: 0
         };
 
         gastos.forEach(gasto => {
@@ -293,6 +396,12 @@ class ViajesProDB {
                 resumen[gasto.tipo] += monto;
             }
             resumen.total += monto;
+            
+            if (gasto.esFacturable !== false) {
+                resumen.facturable += monto;
+            } else {
+                resumen.noFacturable += monto;
+            }
         });
 
         return resumen;
@@ -301,25 +410,32 @@ class ViajesProDB {
     async exportAllData(viajeId = null) {
         const data = {
             vendedores: await this.getAll(STORES.VENDEDORES),
-            viajes: await this.getAll(STORES.VIAJES),
+            viajes: [],
             gastos: [],
-            fotos: []
+            fotos: [],
+            reportes: await this.getAll(STORES.REPORTES)
         };
 
         if (viajeId) {
-            data.viajes = data.viajes.filter(v => v.id === viajeId);
+            const viaje = await this.get(STORES.VIAJES, viajeId);
+            if (viaje) data.viajes = [viaje];
             data.gastos = await this.getGastosByViaje(viajeId);
         } else {
+            data.viajes = await this.getAll(STORES.VIAJES);
             data.gastos = await this.getAll(STORES.GASTOS);
         }
 
+        // Recolectar todas las fotos referenciadas
+        const fotoIds = new Set();
         for (const gasto of data.gastos) {
-            if (gasto.fotos && gasto.fotos.length > 0) {
-                for (const fotoId of gasto.fotos) {
-                    const foto = await this.get(STORES.FOTOS, fotoId);
-                    if (foto) data.fotos.push(foto);
-                }
+            if (gasto.fotos && Array.isArray(gasto.fotos)) {
+                gasto.fotos.forEach(fotoId => fotoIds.add(fotoId));
             }
+        }
+
+        for (const fotoId of fotoIds) {
+            const foto = await this.get(STORES.FOTOS, fotoId);
+            if (foto) data.fotos.push(foto);
         }
 
         return data;
@@ -374,9 +490,9 @@ const db = new ViajesProDB();
 
 // Inicializar automáticamente
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando ViajesProDB...');
+    console.log('🚀 Inicializando ViajesProDB v4.0...');
     db.init().then(() => {
-        console.log('✅ 3P Database ready');
+        console.log('✅ 3P Database v4.0 ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
         console.error('❌ Database initialization failed:', err);
@@ -386,4 +502,4 @@ document.addEventListener('DOMContentLoaded', () => {
 window.ViajesProDB = ViajesProDB;
 window.db = db;
 
-console.log('✅ db.js cargado completamente');
+console.log('✅ db.js v4.0 cargado completamente');
