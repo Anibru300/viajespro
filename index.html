@@ -8,19 +8,20 @@
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32x32.png">
     
     <!-- Chart.js para reportes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./ux-improvements.css">
 </head>
 <body>
     <!-- Splash Screen -->
     <div id="splash-screen" class="splash-screen">
         <div class="splash-content">
-            <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
+            <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
             <p class="splash-text">Cargando...</p>
         </div>
@@ -30,7 +31,7 @@
     <div id="login-screen" class="screen">
         <div class="login-container">
             <div class="login-header">
-                <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>ViajesPro</h1>
                 <p class="login-subtitle">Sistema de Control de Gastos</p>
             </div>
@@ -73,7 +74,7 @@
     <div id="admin-login-screen" class="screen hidden">
         <div class="login-container">
             <div class="login-header">
-                <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Panel Admin</h1>
             </div>
             
@@ -100,7 +101,7 @@
     <div id="admin-panel" class="screen hidden">
         <header class="app-header">
             <div class="header-brand">
-                <img src="./logo-3p-header.png" alt="3P" class="header-logo">
+                <img src="./assets/images/logo-3p-header.png" alt="3P" class="header-logo">
                 <h1>Panel de Administración</h1>
             </div>
             <button class="btn btn-icon" onclick="logout()" title="Cerrar sesión">🚪</button>
@@ -188,7 +189,7 @@
     <div id="app" class="screen hidden">
         <header class="app-header">
             <div class="header-brand">
-                <img src="./logo-3p-header.png" alt="3P" class="header-logo">
+                <img src="./assets/images/logo-3p-header.png" alt="3P" class="header-logo">
                 <div class="header-info">
                     <h1 id="welcome-text">Hola</h1>
                     <span id="current-user-name" class="user-name"></span>
@@ -502,5 +503,6 @@
     <!-- Scripts -->
     <script src="./db.js"></script>
     <script src="./app.js"></script>
+    <script src="./ux-improvements.js"></script>
 </body>
 </html>
