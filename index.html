@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="theme-color" content="#6B2C91">
     <title>3P S.A. DE C.V. - Control de Gastos</title>
     
@@ -28,7 +28,7 @@
                      loading="eager">
                 <h1 class="company-name">3P S.A. DE C.V.</h1>
                 <p class="slogan">Control de Gastos de Viaje</p>
-                <!-- Línea eliminada: Zona Veracruz -->
+                <!-- Zona Veracruz eliminada -->
             </div>
             
             <div class="login-form">
@@ -103,7 +103,7 @@
                     <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan Pérez García">
                 </div>
                 <div class="form-group">
-                    <label>Usuario (sin espacios):</label>
+                    <label>Usuario (sin espacios, solo minúsculas, números y puntos):</label>
                     <input type="text" id="new-vendor-username" class="form-control" placeholder="Ej: juan.perez">
                 </div>
                 <div class="form-group">
@@ -124,6 +124,7 @@
                 <button class="btn-success btn-large" onclick="registerVendor()">
                     ✅ Registrar Vendedor
                 </button>
+                <div id="register-error" style="color: red; margin-top: 10px; text-align: center;"></div>
             </div>
             
             <div class="admin-section">
