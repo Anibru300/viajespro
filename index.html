@@ -8,13 +8,11 @@
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32x32.png">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
     
     <!-- Chart.js para reportes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- html2canvas para exportar gráficos -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <link rel="stylesheet" href="./styles.css">
 </head>
@@ -22,7 +20,7 @@
     <!-- Splash Screen -->
     <div id="splash-screen" class="splash-screen">
         <div class="splash-content">
-            <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
+            <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
             <p class="splash-text">Cargando...</p>
         </div>
@@ -32,7 +30,7 @@
     <div id="login-screen" class="screen">
         <div class="login-container">
             <div class="login-header">
-                <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>ViajesPro</h1>
                 <p class="login-subtitle">Sistema de Control de Gastos</p>
             </div>
@@ -75,7 +73,7 @@
     <div id="admin-login-screen" class="screen hidden">
         <div class="login-container">
             <div class="login-header">
-                <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <img src="./logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Panel Admin</h1>
             </div>
             
@@ -102,7 +100,7 @@
     <div id="admin-panel" class="screen hidden">
         <header class="app-header">
             <div class="header-brand">
-                <img src="./assets/logo-3p-header.png" alt="3P" class="header-logo">
+                <img src="./logo-3p-header.png" alt="3P" class="header-logo">
                 <h1>Panel de Administración</h1>
             </div>
             <button class="btn btn-icon" onclick="logout()" title="Cerrar sesión">🚪</button>
@@ -111,7 +109,6 @@
         <nav class="admin-nav">
             <button class="nav-tab active" onclick="showAdminTab('vendedores')">👥 Vendedores</button>
             <button class="nav-tab" onclick="showAdminTab('reportes')">📊 Reportes Globales</button>
-            <button class="nav-tab" onclick="showAdminTab('config')">⚙️ Configuración</button>
         </nav>
         
         <main class="app-content">
@@ -178,25 +175,9 @@
             <div id="admin-tab-reportes" class="admin-tab hidden">
                 <div class="card">
                     <h2>📊 Reportes Globales</h2>
-                    <div class="stats-grid" id="admin-stats">
-                        <!-- Stats se generan dinámicamente -->
-                    </div>
+                    <div class="stats-grid" id="admin-stats"></div>
                     <div class="chart-container">
                         <canvas id="global-chart"></canvas>
-                    </div>
-                    <div class="actions-bar">
-                        <button class="btn btn-secondary" onclick="exportGlobalReport('pdf')">📄 Exportar PDF</button>
-                        <button class="btn btn-secondary" onclick="exportGlobalReport('excel')">📊 Exportar Excel</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tab Config -->
-            <div id="admin-tab-config" class="admin-tab hidden">
-                <div class="card">
-                    <h2>⚙️ Configuración del Sistema</h2>
-                    <div class="config-options">
-                        <button class="btn btn-danger" onclick="clearAllData()">🗑️ Limpiar Toda la Base de Datos</button>
                     </div>
                 </div>
             </div>
@@ -207,7 +188,7 @@
     <div id="app" class="screen hidden">
         <header class="app-header">
             <div class="header-brand">
-                <img src="./assets/logo-3p-header.png" alt="3P" class="header-logo">
+                <img src="./logo-3p-header.png" alt="3P" class="header-logo">
                 <div class="header-info">
                     <h1 id="welcome-text">Hola</h1>
                     <span id="current-user-name" class="user-name"></span>
@@ -352,9 +333,7 @@
                     </select>
                 </div>
                 
-                <div class="gastos-resumen" id="gastos-resumen">
-                    <!-- Resumen dinámico -->
-                </div>
+                <div class="gastos-resumen" id="gastos-resumen"></div>
                 
                 <div id="gastos-list" class="gastos-list">
                     <div class="empty-state">
@@ -403,7 +382,6 @@
                     <div class="actions-bar">
                         <button class="btn btn-secondary" onclick="exportReport('pdf')">📄 Descargar PDF</button>
                         <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar Excel</button>
-                        <button class="btn btn-secondary" onclick="shareReport()">📤 Compartir</button>
                     </div>
                 </div>
             </section>
@@ -514,9 +492,7 @@
                 <h3>🧾 Detalle del Gasto</h3>
                 <button class="btn btn-icon" onclick="closeModal('detalle-gasto')">✕</button>
             </div>
-            <div id="detalle-gasto-content">
-                <!-- Contenido dinámico -->
-            </div>
+            <div id="detalle-gasto-content"></div>
         </div>
     </div>
 
