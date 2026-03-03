@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Corregido)
+ * 3P VIAJESPRO - Main Application v5.0 (Corregido y Mejorado)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -73,7 +73,7 @@ function getMexicoDateTimeLocal() {
 }
 
 function debug(msg, data) {
-    console.log(`[DEBUG] ${msg}`, data || '');
+    console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
 // ===== INICIALIZACIÓN =====
@@ -424,7 +424,7 @@ async function registerVendor() {
 
 // ===== CARGAR VENDEDORES =====
 let lastVendorsLoad = 0;
-const VENDORS_LOAD_COOLDOWN = 2000; // 2 segundos
+const VENDORS_LOAD_COOLDOWN = 2000;
 
 async function loadVendorsList() {
     const now = Date.now();
@@ -728,7 +728,14 @@ function resetCapturaForm() {
     document.getElementById('razon-social').value = '';
     document.getElementById('comentarios-gasto').value = '';
     document.getElementById('es-facturable').checked = true;
-    toggleComentarioRequerido();
+    
+    const comentariosEl = document.getElementById('comentarios-gasto');
+    if (comentariosEl) {
+        comentariosEl.placeholder = 'Información adicional...';
+        comentariosEl.style.backgroundColor = '';
+        comentariosEl.style.borderColor = '';
+    }
+    
     document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
     
     const preview = document.getElementById('photo-preview');
@@ -758,11 +765,15 @@ async function guardarGasto() {
     // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
-        document.getElementById('comentarios-gasto').focus();
-        document.getElementById('comentarios-gasto').style.borderColor = '#dc2626';
+        const comentariosEl = document.getElementById('comentarios-gasto');
+        if (comentariosEl) {
+            comentariosEl.focus();
+            comentariosEl.style.borderColor = '#dc2626';
+        }
         return;
     } else {
-        document.getElementById('comentarios-gasto').style.borderColor = '';
+        const comentariosEl = document.getElementById('comentarios-gasto');
+        if (comentariosEl) comentariosEl.style.borderColor = '';
     }
     
     if (!viajeId) {
@@ -831,17 +842,14 @@ async function guardarGasto() {
 
 function toggleComentarioRequerido() {
     const esFacturable = document.getElementById('es-facturable').checked;
-    const label = document.getElementById('comentario-requerido');
     const textarea = document.getElementById('comentarios-gasto');
     
     if (!esFacturable) {
-        if (label) label.style.display = 'inline';
         if (textarea) {
             textarea.placeholder = 'EXPLICA POR QUÉ NO ES FACTURABLE (obligatorio)...';
             textarea.style.backgroundColor = '#fef2f2';
         }
     } else {
-        if (label) label.style.display = 'none';
         if (textarea) {
             textarea.placeholder = 'Información adicional...';
             textarea.style.backgroundColor = '';
@@ -1381,23 +1389,9 @@ async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
         
-        if (typeof window.dbFirebase !== 'undefined') {
-            const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js");
-            
-            const [gastosSnap, viajesSnap, vendedoresSnap] = await Promise.all([
-                getDocs(collection(window.dbFirebase, 'gastos')),
-                getDocs(collection(window.dbFirebase, 'viajes')),
-                getDocs(collection(window.dbFirebase, 'vendedores'))
-            ]);
-            
-            allGastos = gastosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            allViajes = viajesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            allVendors = vendedoresSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } else {
-            allGastos = await db.getAll('gastos');
-            allViajes = await db.getAll('viajes');
-            allVendors = await db.getAll('vendedores');
-        }
+        allGastos = await db.getAll('gastos');
+        allViajes = await db.getAll('viajes');
+        allVendors = await db.getAll('vendedores');
         
         const stats = {
             totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
@@ -1466,21 +1460,17 @@ async function loadGlobalReport() {
                 container.innerHTML = '<p>No hay vendedores activos</p>';
             } else {
                 container.innerHTML = vendedoresArray.map(([id, v]) => `
-                    <div class="vendor-summary-card" style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="vendor-summary-card">
+                        <div class="vendor-summary-header">
                             <div>
-                                <h4 style="margin: 0; color: #1f2937;">${v.nombre}</h4>
-                                <p style="margin: 0.25rem 0; color: #6b7280; font-size: 0.875rem;">
+                                <h4>${v.nombre}</h4>
+                                <p class="vendor-summary-meta">
                                     📍 ${v.zona} | 🚗 ${v.viajes} viajes | 🧾 ${v.gastos} gastos
                                 </p>
                             </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 1.25rem; font-weight: bold; color: #dc2626;">
-                                    ${formatMoney(v.total)}
-                                </div>
-                                <div style="font-size: 0.75rem; color: #059669;">
-                                    📄 ${formatMoney(v.totalFacturable)} fact.
-                                </div>
+                            <div class="vendor-summary-amounts">
+                                <div class="vendor-total">${formatMoney(v.total)}</div>
+                                <div class="vendor-facturable">📄 ${formatMoney(v.totalFacturable)} fact.</div>
                             </div>
                         </div>
                     </div>
@@ -1619,12 +1609,8 @@ function formatMoney(amount) {
 function formatDate(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
-    const localDate = new Date(year, month, day);
-    
-    return localDate.toLocaleDateString('es-MX', {
+    return date.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
         day: '2-digit',
         month: 'short',
         year: 'numeric'
@@ -1635,6 +1621,7 @@ function formatDateTime(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
         day: '2-digit',
         month: 'short',
         year: 'numeric',
