@@ -1,5 +1,6 @@
 /**
  * 3P VIAJESPRO - Main Application
+ * Versión con gestión completa de vendedores (editar/eliminar) y mejoras móviles
  */
 
 // === FUNCIONES HELPER PARA FECHAS ===
@@ -242,10 +243,12 @@ async function loadVendorsList() {
                 <div class="vendor-info">
                     <h4>${v.name}</h4>
                     <p>@${v.username} • Zona: ${v.zone} • ${v.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+                    <p><small>Creado: ${new Date(v.createdAt).toLocaleDateString()}</small></p>
                 </div>
-                <button class="btn-secondary btn-small" onclick="toggleVendorStatus('${v.username}', '${v.status}')">
-                    ${v.status === 'active' ? 'Desactivar' : 'Activar'}
-                </button>
+                <div class="vendor-actions" style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn-small btn-primary" onclick="editVendor('${v.username}')">✏️ Editar</button>
+                    <button class="btn-small btn-secondary" onclick="deleteVendor('${v.username}')">🗑️ Eliminar</button>
+                </div>
             </div>
         `).join('');
         
@@ -254,16 +257,112 @@ async function loadVendorsList() {
     }
 }
 
+// ===== ADMIN: Editar y Eliminar Vendedores =====
+async function editVendor(username) {
+    try {
+        const vendor = await db.get('vendedores', username);
+        if (!vendor) {
+            alert('Vendedor no encontrado');
+            return;
+        }
+        document.getElementById('edit-vendor-id').value = vendor.id;
+        document.getElementById('edit-vendor-name').value = vendor.name;
+        document.getElementById('edit-vendor-username').value = vendor.username;
+        document.getElementById('edit-vendor-password').value = ''; // dejar vacío
+        document.getElementById('edit-vendor-email').value = vendor.email || '';
+        document.getElementById('edit-vendor-zone').value = vendor.zone;
+        document.getElementById('edit-vendor-status').value = vendor.status;
+        
+        openModal('editar-vendedor');
+    } catch (error) {
+        console.error('Error al cargar vendedor para editar:', error);
+        alert('Error al cargar datos');
+    }
+}
+
+async function saveVendorChanges() {
+    const id = document.getElementById('edit-vendor-id').value;
+    const name = document.getElementById('edit-vendor-name').value.trim();
+    const username = document.getElementById('edit-vendor-username').value; // readonly
+    const password = document.getElementById('edit-vendor-password').value;
+    const email = document.getElementById('edit-vendor-email').value.trim();
+    const zone = document.getElementById('edit-vendor-zone').value;
+    const status = document.getElementById('edit-vendor-status').value;
+
+    if (!name || !username) {
+        alert('Nombre y usuario son obligatorios');
+        return;
+    }
+
+    try {
+        const vendor = await db.get('vendedores', id);
+        if (!vendor) {
+            alert('Vendedor no encontrado');
+            return;
+        }
+        vendor.name = name;
+        if (password) {
+            vendor.password = password; // actualizar solo si se proporciona
+        }
+        vendor.email = email;
+        vendor.zone = zone;
+        vendor.status = status;
+        vendor.updatedAt = new Date().toISOString();
+
+        await db.update('vendedores', vendor);
+        closeModal('editar-vendedor');
+        alert('✅ Vendedor actualizado');
+        loadVendorsList(); // recargar lista
+    } catch (error) {
+        console.error('Error al guardar cambios:', error);
+        alert('Error al guardar');
+    }
+}
+
+async function deleteVendor(username) {
+    if (!confirm(`¿Estás seguro de eliminar al vendedor ${username}? Esta acción no se puede deshacer.`)) {
+        return;
+    }
+    try {
+        // Verificar si tiene viajes asociados
+        const viajes = await db.getViajesByVendedor(username);
+        if (viajes.length > 0) {
+            if (!confirm('El vendedor tiene viajes registrados. ¿Eliminar también todos sus viajes y gastos?')) {
+                return;
+            }
+            // Eliminar viajes y gastos asociados
+            for (const viaje of viajes) {
+                const gastos = await db.getGastosByViaje(viaje.id);
+                for (const gasto of gastos) {
+                    // Eliminar fotos asociadas
+                    if (gasto.fotos && gasto.fotos.length > 0) {
+                        for (const fotoId of gasto.fotos) {
+                            await db.delete('fotos', fotoId, false);
+                        }
+                    }
+                    await db.delete('gastos', gasto.id, false);
+                }
+                await db.delete('viajes', viaje.id, false);
+            }
+        }
+        await db.delete('vendedores', username, false);
+        alert('✅ Vendedor eliminado');
+        loadVendorsList();
+    } catch (error) {
+        console.error('Error al eliminar vendedor:', error);
+        alert('Error al eliminar');
+    }
+}
+
 async function toggleVendorStatus(username, currentStatus) {
+    // Esta función ya no es necesaria porque usamos el modal de edición, pero la dejamos por compatibilidad
     try {
         const vendor = await db.get('vendedores', username);
         vendor.status = currentStatus === 'active' ? 'inactive' : 'active';
         vendor.updatedAt = new Date().toISOString();
-        
         await db.update('vendedores', vendor);
         alert(`Vendedor ${vendor.status === 'active' ? 'activado' : 'desactivado'}`);
         loadVendorsList();
-        
     } catch (error) {
         console.error('Error toggling vendor status:', error);
         alert('Error al cambiar estado');
@@ -297,9 +396,14 @@ function showSection(sectionName) {
     const sectionEl = document.getElementById(`${sectionName}-section`);
     if (sectionEl) sectionEl.classList.add('active');
     
-    if (event && event.target) {
-        event.target.closest('.nav-btn').classList.add('active');
-    }
+    // Marcar el botón activo
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.textContent.includes(sectionName === 'viajes' ? 'Viajes' : 
+                                      sectionName === 'gastos' ? 'Gastos' :
+                                      sectionName === 'captura' ? 'Capturar' : 'Reportes')) {
+            btn.classList.add('active');
+        }
+    });
     
     if (sectionName === 'viajes') loadViajes();
     if (sectionName === 'gastos') loadGastosSection();
