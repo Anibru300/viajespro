@@ -338,6 +338,11 @@ body {
     box-shadow: var(--shadow-lg);
 }
 
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+}
+
 /* Form Elements */
 .form-group {
     margin-bottom: 1.25rem;
