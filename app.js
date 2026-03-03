@@ -423,14 +423,13 @@ async function registerVendor() {
 }
 
 // ===== CARGAR VENDEDORES =====
-// Variable para controlar el tiempo entre recargas (evita bucles infinitos)
 let lastVendorsLoad = 0;
-const VENDORS_LOAD_COOLDOWN = 3000; // 3 segundos mínimo entre recargas
+const VENDORS_LOAD_COOLDOWN = 2000; // 2 segundos
 
 async function loadVendorsList() {
     const now = Date.now();
     if (now - lastVendorsLoad < VENDORS_LOAD_COOLDOWN) {
-        debug('Ignorando carga de vendedores (cooldown activo)');
+        debug('Ignorando carga de vendedores (cooldown)');
         return;
     }
     lastVendorsLoad = now;
