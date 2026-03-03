@@ -1,16 +1,17 @@
 /**
- * 3P VIAJESPRO - Database Module v4.0 con Firebase Sync
+ * 3P VIAJESPRO - Database Module v5.0
+ * Con sincronización Firebase mejorada
  */
 
-console.log('🚀 db.js v4.0 (Firebase Edition) cargando...');
+console.log('🚀 db.js v5.0 cargando...');
 
 if (!window.indexedDB) {
     console.error('❌ Tu navegador no soporta IndexedDB');
     alert('Tu navegador no soporta IndexedDB');
 }
 
-const DB_NAME = 'ViajesProDB_v4';
-const DB_VERSION = 4;
+const DB_NAME = 'ViajesProDB_v5';
+const DB_VERSION = 5;
 
 const STORES = {
     VENDEDORES: 'vendedores',
@@ -25,7 +26,8 @@ class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
-        console.log('📦 ViajesProDB v4.0 Firebase Edition creado');
+        this.firebaseAvailable = false;
+        console.log('📦 ViajesProDB v5.0 creado');
     }
 
     async init() {
@@ -42,22 +44,22 @@ class ViajesProDB {
                 this.db = event.target.result;
                 this.initialized = true;
                 
-                // Verificar si Firebase está disponible
+                // Verificar Firebase
                 if (typeof window.dbFirebase !== 'undefined') {
-                    console.log('🔥 Firebase detectado, configurando sync...');
+                    console.log('🔥 Firebase disponible');
+                    this.firebaseAvailable = true;
+                    
                     if (window.setupRealtimeListeners) {
                         window.setupRealtimeListeners();
                     }
                     
-                    // Sincronizar desde Firebase al iniciar
+                    // Sincronizar al iniciar
                     if (window.syncFromFirebase) {
-                        const syncResult = await window.syncFromFirebase();
-                        if (syncResult) {
-                            console.log('✅ Sincronizado:', syncResult);
-                        }
+                        console.log('⬇️ Iniciando sincronización...');
+                        await window.syncFromFirebase();
                     }
                 } else {
-                    console.log('⚠️ Firebase no disponible, modo offline');
+                    console.log('⚠️ Firebase no disponible');
                 }
                 
                 await this.seedData();
@@ -104,8 +106,8 @@ class ViajesProDB {
     async seedData() {
         try {
             const count = await this.count(STORES.VENDEDORES);
-            if (count === 0 && typeof window.dbFirebase === 'undefined') {
-                console.log('🌱 Creando vendedor de prueba (modo offline)...');
+            if (count === 0 && !this.firebaseAvailable) {
+                console.log('🌱 Modo offline - creando datos de prueba');
                 await this.add(STORES.VENDEDORES, {
                     id: 'juan.perez',
                     name: 'Juan Pérez',
@@ -145,6 +147,7 @@ class ViajesProDB {
             const request = store.add(dataToAdd);
             
             request.onsuccess = async () => {
+                // Sincronizar con Firebase
                 if (window.saveToFirebase) {
                     await window.saveToFirebase(storeName, dataToAdd);
                 }
@@ -237,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     db.init().then(() => {
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
-        console.error('❌ Database initialization failed:', err);
+        console.error('❌ Error:', err);
     });
 });
 
