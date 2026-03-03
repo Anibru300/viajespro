@@ -1,12 +1,12 @@
 /**
- * 3P VIAJESPRO - Main Application v4.0 (Corregido)
+ * 3P VIAJESPRO - Main Application v5.0 (Corregido)
  */
 
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
-    VERSION: '4.0.0',
+    VERSION: '5.0.0',
     APP_NAME: '3P Control de Viáticos Pro'
 };
 
@@ -78,7 +78,7 @@ function debug(msg, data) {
 
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
-    debug('DOM cargado, iniciando v4.0...');
+    debug('DOM cargado, iniciando v5.0...');
     
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initApp() {
-    debug('Iniciando app v4.0...');
+    debug('Iniciando app v5.0...');
     
     if (typeof db === 'undefined') {
         throw new Error('La base de datos no está cargada');
@@ -116,7 +116,7 @@ async function initApp() {
         document.getElementById('viaje-fecha-inicio').value = today;
     }
     if (document.getElementById('fecha-gasto')) {
-        document.getElementById('fecha-gasto').value = new Date().toISOString().slice(0, 16);
+        document.getElementById('fecha-gasto').value = getMexicoDateTimeLocal();
     }
     
     const firstDay = new Date();
@@ -128,7 +128,7 @@ async function initApp() {
         document.getElementById('reporte-fecha-fin').value = today;
     }
     
-    debug('App v4.0 iniciada correctamente');
+    debug('App v5.0 iniciada correctamente');
 }
 
 function setupEventListeners() {
@@ -341,7 +341,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR (CORREGIDO) =====
+// ===== REGISTRO VENDEDOR =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -422,7 +422,7 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES (CORREGIDO) =====
+// ===== CARGAR VENDEDORES =====
 async function loadVendorsList() {
     debug('Cargando lista de vendedores...');
     
@@ -642,7 +642,7 @@ async function crearViaje() {
         presupuesto: presupuesto ? parseFloat(presupuesto) : null,
         estado: 'activo',
         createdAt: new Date().toISOString(),
-        version: 4
+        version: 5
     };
     
     try {
@@ -714,9 +714,11 @@ function resetCapturaForm() {
     document.getElementById('monto-gasto').value = '';
     document.getElementById('lugar-gasto').value = '';
     document.getElementById('folio-factura').value = '';
+    document.getElementById('num-factura').value = '';
     document.getElementById('razon-social').value = '';
     document.getElementById('comentarios-gasto').value = '';
     document.getElementById('es-facturable').checked = true;
+    toggleComentarioRequerido();
     document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
     
     const preview = document.getElementById('photo-preview');
@@ -814,6 +816,26 @@ async function guardarGasto() {
         
     } catch (error) {
         showToast('Error al guardar: ' + error.message, 'error');
+    }
+}
+
+function toggleComentarioRequerido() {
+    const esFacturable = document.getElementById('es-facturable').checked;
+    const label = document.getElementById('comentario-requerido');
+    const textarea = document.getElementById('comentarios-gasto');
+    
+    if (!esFacturable) {
+        if (label) label.style.display = 'inline';
+        if (textarea) {
+            textarea.placeholder = 'EXPLICA POR QUÉ NO ES FACTURABLE (obligatorio)...';
+            textarea.style.backgroundColor = '#fef2f2';
+        }
+    } else {
+        if (label) label.style.display = 'none';
+        if (textarea) {
+            textarea.placeholder = 'Información adicional...';
+            textarea.style.backgroundColor = '';
+        }
     }
 }
 
@@ -925,6 +947,7 @@ async function showDetalleGasto(gastoId) {
                 <p><strong>📍 Lugar:</strong> ${gasto.lugar || 'No especificado'}</p>
                 <p><strong>📅 Fecha:</strong> ${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
                 ${gasto.folioFactura ? `<p><strong>📄 Folio:</strong> ${gasto.folioFactura}</p>` : ''}
+                ${gasto.numFactura ? `<p><strong>📋 Número Factura:</strong> ${gasto.numFactura}</p>` : ''}
                 ${gasto.razonSocial ? `<p><strong>🏢 Razón Social:</strong> ${gasto.razonSocial}</p>` : ''}
                 ${gasto.comentarios ? `<p><strong>💬 Comentarios:</strong> ${gasto.comentarios}</p>` : ''}
                 <p><strong>🚗 Viaje:</strong> ${viaje?.cliente || ''} - ${viaje?.destino || 'Desconocido'}</p>
@@ -969,9 +992,11 @@ async function editarGasto(gastoId) {
         document.getElementById('lugar-gasto').value = gasto.lugar || '';
         document.getElementById('fecha-gasto').value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
         document.getElementById('folio-factura').value = gasto.folioFactura || '';
+        document.getElementById('num-factura').value = gasto.numFactura || '';
         document.getElementById('razon-social').value = gasto.razonSocial || '';
         document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
         document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
+        toggleComentarioRequerido();
         
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
         const tipoCard = document.querySelector(`.tipo-card[data-tipo="${gasto.tipo}"]`);
@@ -1067,14 +1092,13 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por mes CORREGIDO
+        // Agrupar por mes
         const porMes = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
             const year = fecha.getFullYear();
             const month = fecha.getMonth();
             
-            // Crear clave única por año-mes
             const mesKey = `${year}-${String(month + 1).padStart(2, '0')}`;
             const mesLabel = fecha.toLocaleString('es-MX', { 
                 timeZone: 'America/Mexico_City',
@@ -1098,9 +1122,18 @@ async function generarReporte() {
         const labels = mesesOrdenados.map(([_, data]) => data.label);
         const dataValues = mesesOrdenados.map(([_, data]) => data.total);
         
+        // Calcular por tipo para el gráfico de pie
+        const porTipo = {};
+        allGastos.forEach(g => {
+            porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
+        });
+        
+        const total = allGastos.reduce((sum, g) => sum + g.monto, 0);
+        const totalFacturable = allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0);
+        
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de tendencia CORREGIDO
+        // Gráfico de tendencia (línea)
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1150,25 +1183,7 @@ async function generarReporte() {
             }
         });
         
-        // Guardar para exportación
-        state.lastReport = {
-            fechaInicio, fechaFin,
-            total: allGastos.reduce((sum, g) => sum + g.monto, 0),
-            totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0),
-            porTipo: {},
-            porMes: Object.fromEntries(mesesOrdenados.map(([k, v]) => [k, v.total])),
-            gastos: allGastos,
-            responsable: state.currentVendor.name,
-            zona: state.currentVendor.zone
-        };
-        
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error al generar reporte: ' + error.message, 'error');
-    }
-}
-        
-        // Gráficos...
+        // Gráfico de distribución (doughnut)
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -1192,14 +1207,21 @@ async function generarReporte() {
             }
         });
         
+        // Guardar para exportación
         state.lastReport = {
-            fechaInicio, fechaFin, total, totalFacturable,
-            porTipo, porMes, gastos: allGastos,
+            fechaInicio, 
+            fechaFin,
+            total,
+            totalFacturable,
+            porTipo,
+            porMes: Object.fromEntries(mesesOrdenados.map(([k, v]) => [k, v.total])),
+            gastos: allGastos,
             responsable: state.currentVendor.name,
             zona: state.currentVendor.zone
         };
         
     } catch (error) {
+        console.error('Error:', error);
         showToast('Error al generar reporte: ' + error.message, 'error');
     }
 }
@@ -1349,7 +1371,6 @@ async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
         
-        // Obtener datos de Firebase si está disponible
         if (typeof window.dbFirebase !== 'undefined') {
             const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js");
             
@@ -1397,7 +1418,6 @@ async function loadGlobalReport() {
             `;
         }
         
-        // Resumen por vendedor
         const resumenPorVendedor = {};
         allVendors.forEach(v => {
             if (v.status === 'active') {
@@ -1458,7 +1478,6 @@ async function loadGlobalReport() {
             }
         }
         
-        // Gráfico
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
@@ -1499,51 +1518,6 @@ async function loadGlobalReport() {
         
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error cargando datos: ' + error.message, 'error');
-    }
-}
-        
-        // Gráfico global
-        const porTipo = {};
-        allGastos.forEach(g => {
-            porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
-        });
-        
-        const ctx = document.getElementById('global-chart')?.getContext('2d');
-        if (ctx) {
-            if (state.charts.global) state.charts.global.destroy();
-            
-            state.charts.global = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.label || t),
-                    datasets: [{
-                        label: 'Monto por categoría',
-                        data: Object.values(porTipo),
-                        backgroundColor: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.color || '#6b7280'),
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '$' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-    } catch (error) {
-        console.error('Error cargando reporte global:', error);
         showToast('Error cargando datos: ' + error.message, 'error');
     }
 }
@@ -1701,23 +1675,6 @@ function clearPhoto() {
     }
 }
 
-function toggleComentarioRequerido() {
-    const esFacturable = document.getElementById('es-facturable').checked;
-    const label = document.getElementById('comentario-requerido');
-    const textarea = document.getElementById('comentarios-gasto');
-    
-    if (!esFacturable) {
-        label.style.display = 'inline';
-        textarea.placeholder = 'EXPLICA POR QUÉ NO ES FACTURABLE (obligatorio)...';
-        textarea.style.backgroundColor = '#fef2f2';
-    } else {
-        label.style.display = 'none';
-        textarea.placeholder = 'Información adicional...';
-        textarea.style.backgroundColor = '';
-    }
-}
-
-
 // Exponer funciones globalmente
 window.showAdminLogin = showAdminLogin;
 window.backToLogin = backToLogin;
@@ -1738,14 +1695,16 @@ window.crearViaje = crearViaje;
 window.selectViaje = selectViaje;
 window.selectTipoGasto = selectTipoGasto;
 window.guardarGasto = guardarGasto;
+window.toggleComentarioRequerido = toggleComentarioRequerido;
 window.showDetalleGasto = showDetalleGasto;
 window.editarGasto = editarGasto;
 window.eliminarGasto = eliminarGasto;
 window.generarReporte = generarReporte;
 window.exportReport = exportReport;
+window.generarExcelProfesional = generarExcelProfesional;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
 window.removeFoto = removeFoto;
 
-debug('App.js v4.0 cargado completamente');
+debug('App.js v5.0 cargado completamente');
