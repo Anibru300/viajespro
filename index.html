@@ -543,17 +543,19 @@
 
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
-
-    <!-- Scripts -->
+    <!-- Firebase -->
+    <script type="module" src="./firebase-config.js"></script>
+    
+    <!-- App -->
     <script src="./db.js?v=4"></script>
-    <script src="./app.js?v=4"></script>
+    <script type="module" src="./app.js?v=4"></script>
     <script src="./ux-improvements.js?v=4"></script>
     
-    <!-- Registrar Service Worker -->
+    <!-- Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('✅ SW registrado:', reg.scope))
+                .then(reg => console.log('✅ SW registrado'))
                 .catch(err => console.log('❌ SW error:', err));
         }
     </script>
