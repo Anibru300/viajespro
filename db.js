@@ -270,7 +270,6 @@ class ViajesProDB {
     }
 
     async update(storeName, data, doBackup = true) {
-        // update es equivalente a put
         return this.put(storeName, data, doBackup);
     }
 
