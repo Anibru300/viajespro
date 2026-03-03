@@ -143,12 +143,42 @@ class ViajesProDB {
         });
     }
 
+    // Método interno para contar registros sin llamar a this.init()
+    async _count(storeName) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Método interno para hacer put sin llamar a this.init() y con opción de backup
+    async _put(storeName, data, doBackup = false) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const dataToPut = {
+                ...data,
+                updatedAt: new Date().toISOString()
+            };
+            const request = store.put(dataToPut);
+            request.onsuccess = () => {
+                if (doBackup) this.backup.save(storeName, dataToPut);
+                resolve(dataToPut);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
     async checkAndRecoverFromBackup() {
         const stores = [STORES.VENDEDORES, STORES.VIAJES, STORES.GASTOS];
         let totalRecords = 0;
         
         for (const storeName of stores) {
-            const count = (await this.getAll(storeName)).length;
+            // Usamos el método interno _count que no llama a init()
+            const count = await this._count(storeName);
             totalRecords += count;
         }
 
@@ -166,7 +196,8 @@ class ViajesProDB {
                         for (const item of backup[storeName]) {
                             const { _backupAt, ...cleanItem } = item;
                             try {
-                                await this.put(storeName, cleanItem, false);
+                                // Usamos _put interno para no llamar a init() y sin backup para no duplicar
+                                await this._put(storeName, cleanItem, false);
                             } catch (e) {
                                 console.warn('Error recuperando item:', e.message);
                             }
@@ -382,7 +413,13 @@ class ViajesProDB {
             const store = transaction.objectStore(storeName);
             await store.clear();
         }
-        this.backup.getAll = () => null;
+        // Limpiar backups también
+        if (this.backup.isAvailable) {
+            Object.values(STORES).forEach(storeName => {
+                localStorage.removeItem(BACKUP_PREFIX + storeName);
+            });
+            localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
+        }
     }
 }
 
