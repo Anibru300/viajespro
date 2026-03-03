@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#dc2626">
-    <title>3P ViajesPro - Control de Gastos</title>
+    <title>3P - Control de Viáticos</title>
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -16,6 +16,11 @@
     
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./ux-improvements.css">
+    
+    <!-- Prevenir caché -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 <body>
     <!-- Splash Screen -->
@@ -32,8 +37,8 @@
         <div class="login-container">
             <div class="login-header">
                 <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
-                <h1>ViajesPro</h1>
-                <p class="login-subtitle">Sistema de Control de Gastos</p>
+                <h1>Control de Viáticos</h1>
+                <p class="login-subtitle">Sistema de Gestión de Gastos de Viaje</p>
             </div>
             
             <form id="login-form" onsubmit="event.preventDefault(); login();">
@@ -500,9 +505,9 @@
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
 
-    <!-- Scripts -->
-    <script src="./db.js"></script>
-    <script src="./app.js"></script>
-    <script src="./ux-improvements.js"></script>
+    <!-- Scripts con versión para evitar caché -->
+    <script src="./db.js?v=2"></script>
+    <script src="./app.js?v=2"></script>
+    <script src="./ux-improvements.js?v=2"></script>
 </body>
 </html>
