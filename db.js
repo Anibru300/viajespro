@@ -1,12 +1,12 @@
 /**
- * 3P VIAJESPRO - Database Module v4.0
+ * 3P VIAJESPRO - Database Module v4.0 con Firebase Sync
  */
 
-console.log('🚀 db.js v4.0 cargando...');
+console.log('🚀 db.js v4.0 (Firebase Edition) cargando...');
 
 if (!window.indexedDB) {
     console.error('❌ Tu navegador no soporta IndexedDB');
-    alert('Tu navegador no soporta IndexedDB. La aplicación no funcionará correctamente.');
+    alert('Tu navegador no soporta IndexedDB');
 }
 
 const DB_NAME = 'ViajesProDB_v4';
@@ -25,85 +25,78 @@ class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
-        console.log('📦 ViajesProDB v4.0 creado');
+        console.log('📦 ViajesProDB v4.0 Firebase Edition creado');
     }
 
     async init() {
         if (this.initialized && this.db) {
-            console.log('✅ DB ya inicializada');
             return this.db;
         }
-
-        console.log('🚀 Inicializando DB v4.0...');
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             
-            request.onerror = (event) => {
-                console.error('❌ Error abriendo DB:', request.error);
-                reject(request.error);
-            };
+            request.onerror = () => reject(request.error);
             
             request.onsuccess = async (event) => {
-                console.log('✅ DB abierta');
-                this.db = request.result;
+                this.db = event.target.result;
                 this.initialized = true;
                 
-                try {
-                    await this.seedData();
-                    console.log('✅ DB lista');
-                    resolve(this.db);
-                } catch (err) {
-                    console.warn('Error en seedData:', err);
-                    resolve(this.db);
+                // Verificar si Firebase está disponible
+                if (typeof window.dbFirebase !== 'undefined') {
+                    console.log('🔥 Firebase detectado, configurando sync...');
+                    if (window.setupRealtimeListeners) {
+                        window.setupRealtimeListeners();
+                    }
+                    
+                    // Sincronizar desde Firebase al iniciar
+                    if (window.syncFromFirebase) {
+                        const syncResult = await window.syncFromFirebase();
+                        if (syncResult) {
+                            console.log('✅ Sincronizado:', syncResult);
+                        }
+                    }
+                } else {
+                    console.log('⚠️ Firebase no disponible, modo offline');
                 }
+                
+                await this.seedData();
+                resolve(this.db);
             };
 
             request.onupgradeneeded = (event) => {
-                console.log('⚙️ Migrando base de datos a v4.0...');
                 const db = event.target.result;
-                const oldVersion = event.oldVersion;
                 
-                // Crear stores
                 if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
                     const store = db.createObjectStore(STORES.VENDEDORES, { keyPath: 'id' });
                     store.createIndex('username', 'username', { unique: true });
-                    console.log('✅ Store vendedores creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.VIAJES)) {
                     const store = db.createObjectStore(STORES.VIAJES, { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
                     store.createIndex('cliente', 'cliente', { unique: false });
-                    console.log('✅ Store viajes creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.GASTOS)) {
                     const store = db.createObjectStore(STORES.GASTOS, { keyPath: 'id' });
                     store.createIndex('viajeId', 'viajeId', { unique: false });
                     store.createIndex('tipo', 'tipo', { unique: false });
-                    console.log('✅ Store gastos creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.FOTOS)) {
                     const store = db.createObjectStore(STORES.FOTOS, { keyPath: 'id' });
                     store.createIndex('gastoId', 'gastoId', { unique: false });
-                    console.log('✅ Store fotos creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.CONFIG)) {
                     db.createObjectStore(STORES.CONFIG, { keyPath: 'key' });
-                    console.log('✅ Store config creado');
                 }
 
                 if (!db.objectStoreNames.contains(STORES.REPORTES)) {
                     const store = db.createObjectStore(STORES.REPORTES, { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
-                    console.log('✅ Store reportes creado');
                 }
-
-                // Nota: La migración de datos se hace en onsuccess, no aquí
-                // porque onupgradeneeded no permite operaciones async complejas
             };
         });
     }
@@ -111,10 +104,8 @@ class ViajesProDB {
     async seedData() {
         try {
             const count = await this.count(STORES.VENDEDORES);
-            console.log('📊 Vendedores existentes:', count);
-            
-            if (count === 0) {
-                console.log('🌱 Creando vendedor de prueba...');
+            if (count === 0 && typeof window.dbFirebase === 'undefined') {
+                console.log('🌱 Creando vendedor de prueba (modo offline)...');
                 await this.add(STORES.VENDEDORES, {
                     id: 'juan.perez',
                     name: 'Juan Pérez',
@@ -125,197 +116,110 @@ class ViajesProDB {
                     status: 'active',
                     createdAt: new Date().toISOString()
                 });
-                console.log('✅ Vendedor de prueba creado (juan.perez / 123456)');
             }
         } catch (e) {
             console.warn('⚠️ Error en seedData:', e);
         }
     }
 
-    // ===== OPERACIONES CRUD =====
-
     count(storeName) {
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.count();
-                
-                request.onsuccess = () => {
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => {
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
-    add(storeName, data) {
-        console.log(`➕ Agregando a ${storeName}:`, data.id || 'sin-id');
+    async add(storeName, data) {
+        const dataToAdd = {
+            ...data,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
         
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const dataToAdd = {
-                    ...data,
-                    createdAt: data.createdAt || new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    version: 4
-                };
-                
-                const request = store.add(dataToAdd);
-                
-                request.onsuccess = () => {
-                    console.log(`✅ Guardado en ${storeName}:`, data.id);
-                    resolve(dataToAdd);
-                };
-                
-                request.onerror = () => {
-                    console.error(`❌ Error guardando en ${storeName}:`, request.error);
-                    reject(request.error);
-                };
-            } catch (e) {
-                console.error(`❌ Error en add ${storeName}:`, e);
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.add(dataToAdd);
+            
+            request.onsuccess = async () => {
+                if (window.saveToFirebase) {
+                    await window.saveToFirebase(storeName, dataToAdd);
+                }
+                resolve(dataToAdd);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
     get(storeName, id) {
-        console.log(`🔍 Buscando en ${storeName}:`, id);
-        
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.get(id);
-                
-                request.onsuccess = () => {
-                    console.log(`🔍 Resultado ${storeName}:`, request.result ? 'ENCONTRADO' : 'NO ENCONTRADO');
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => {
-                    console.error(`❌ Error buscando en ${storeName}:`, request.error);
-                    reject(request.error);
-                };
-            } catch (e) {
-                console.error(`❌ Error en get ${storeName}:`, e);
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
     getAll(storeName) {
-        console.log(`📋 Obteniendo todos de ${storeName}`);
-        
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const request = store.getAll();
-                
-                request.onsuccess = () => {
-                    console.log(`📋 Encontrados en ${storeName}:`, request.result.length);
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => {
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
     }
 
-    update(storeName, data) {
-        console.log(`📝 Actualizando en ${storeName}:`, data.id);
+    async update(storeName, data) {
+        const dataToUpdate = {
+            ...data,
+            updatedAt: new Date().toISOString()
+        };
         
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                
-                const dataToPut = {
-                    ...data,
-                    updatedAt: new Date().toISOString(),
-                    version: 4
-                };
-                
-                const request = store.put(dataToPut);
-                
-                request.onsuccess = () => {
-                    console.log(`✅ Actualizado en ${storeName}:`, data.id);
-                    resolve(dataToPut);
-                };
-                
-                request.onerror = () => {
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.put(dataToUpdate);
+            
+            request.onsuccess = async () => {
+                if (window.saveToFirebase) {
+                    await window.saveToFirebase(storeName, dataToUpdate);
+                }
+                resolve(dataToUpdate);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
-    delete(storeName, id) {
-        console.log(`🗑️ Eliminando de ${storeName}:`, id);
-        
+    async delete(storeName, id) {
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readwrite');
-                const store = transaction.objectStore(storeName);
-                const request = store.delete(id);
-                
-                request.onsuccess = () => {
-                    console.log(`✅ Eliminado de ${storeName}:`, id);
-                    resolve(id);
-                };
-                
-                request.onerror = () => {
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.delete(id);
+            
+            request.onsuccess = async () => {
+                if (window.deleteFromFirebase) {
+                    await window.deleteFromFirebase(storeName, id);
+                }
+                resolve(id);
+            };
+            request.onerror = () => reject(request.error);
         });
     }
 
     queryByIndex(storeName, indexName, value) {
-        console.log(`🔍 Query ${storeName} por ${indexName}:`, value);
-        
         return new Promise((resolve, reject) => {
-            try {
-                const transaction = this.db.transaction([storeName], 'readonly');
-                const store = transaction.objectStore(storeName);
-                const index = store.index(indexName);
-                const request = index.getAll(value);
-                
-                request.onsuccess = () => {
-                    resolve(request.result);
-                };
-                
-                request.onerror = () => {
-                    reject(request.error);
-                };
-            } catch (e) {
-                reject(e);
-            }
+            const tx = this.db.transaction([storeName], 'readonly');
+            const store = tx.objectStore(storeName);
+            const index = store.index(indexName);
+            const request = index.getAll(value);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
         });
-    }
-
-    // ===== MÉTODOS ESPECÍFICOS =====
-
-    getVendedorByUsername(username) {
-        return this.queryByIndex(STORES.VENDEDORES, 'username', username)
-            .then(results => results[0] || null);
     }
 
     getViajesByVendedor(vendedorId) {
@@ -327,21 +231,14 @@ class ViajesProDB {
     }
 }
 
-// Crear instancia global
 const db = new ViajesProDB();
 
-// Inicializar automáticamente
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando ViajesProDB v4.0...');
     db.init().then(() => {
-        console.log('✅ 3P Database v4.0 ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
         console.error('❌ Database initialization failed:', err);
     });
 });
 
-window.ViajesProDB = ViajesProDB;
 window.db = db;
-
-console.log('✅ db.js v4.0 cargado completamente');
