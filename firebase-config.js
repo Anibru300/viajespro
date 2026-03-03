@@ -20,7 +20,6 @@ const dbFirebase = getFirestore(app);
 
 console.log('🔥 Firebase inicializado');
 
-// Sincronizar desde Firebase a IndexedDB
 async function syncFromFirebase() {
     console.log('⬇️ Descargando datos...');
     
@@ -59,7 +58,6 @@ async function syncFromFirebase() {
     }
 }
 
-// Listeners en tiempo real
 function setupRealtimeListeners() {
     onSnapshot(collection(dbFirebase, 'vendedores'), () => {
         if (document.getElementById('vendors-list')) loadVendorsList();
@@ -74,7 +72,6 @@ function setupRealtimeListeners() {
     });
 }
 
-// Guardar en Firebase
 async function saveToFirebase(collectionName, data) {
     try {
         await setDoc(doc(dbFirebase, collectionName, data.id), data);
@@ -84,7 +81,6 @@ async function saveToFirebase(collectionName, data) {
     }
 }
 
-// Eliminar de Firebase
 async function deleteFromFirebase(collectionName, id) {
     try {
         await deleteDoc(doc(dbFirebase, collectionName, id));
