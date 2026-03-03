@@ -1198,3 +1198,76 @@ body {
         border: 1px solid var(--gray-300);
     }
 }
+/* ===== V5 ADDITIONS ===== */
+
+/* Textarea de comentarios - FIJO, no redimensionable */
+#comentarios-gasto {
+    width: 100%;
+    min-height: 80px;
+    max-height: 120px;
+    height: 80px;
+    resize: none !important;
+    overflow-y: auto;
+    font-family: inherit;
+    padding: 0.75rem;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+#comentarios-gasto:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Indicador de campo requerido */
+#comentario-requerido {
+    color: #dc2626;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+/* Botón de sincronización manual */
+.sync-btn {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    color: white;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sync-btn:hover {
+    transform: scale(1.1);
+}
+
+.sync-btn.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Vendor summary card para admin */
+.vendor-summary-card {
+    transition: all 0.2s;
+}
+
+.vendor-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
