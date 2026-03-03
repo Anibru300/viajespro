@@ -1,7 +1,6 @@
 /**
- * 3P VIAJESPRO - Database Module v3.1
- * IndexedDB con sistema de respaldo robusto y recuperación de datos
- * Corregido: deadlock en inicialización y mejorado para móviles
+ * 3P VIAJESPRO - Database Module v3.2
+ * IndexedDB con sistema de respaldo robusto, recuperación de datos y seed inicial
  */
 
 const DB_NAME = 'ViajesProDB_v3';
@@ -93,6 +92,7 @@ class ViajesProDB {
             try {
                 await this.openDatabase();
                 await this.checkAndRecoverFromBackup();
+                await this.seedInitialData(); // <-- Nuevo: sembrar datos iniciales si no hay
                 console.log('✅ Database initialized');
                 resolve(this.db);
             } catch (error) {
@@ -201,6 +201,30 @@ class ViajesProDB {
                     }
                 }
             }
+        }
+    }
+
+    // Nuevo: sembrar datos iniciales si la base de datos está vacía
+    async seedInitialData() {
+        try {
+            const vendedores = await this.getAll(STORES.VENDEDORES);
+            if (vendedores.length === 0) {
+                console.log('🌱 Sembrando datos iniciales...');
+                const vendorEjemplo = {
+                    id: 'juan.perez',
+                    name: 'Juan Pérez',
+                    username: 'juan.perez',
+                    password: '123456',
+                    email: 'juan@ejemplo.com',
+                    zone: 'Centro',
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                };
+                await this.add(STORES.VENDEDORES, vendorEjemplo, false);
+                console.log('✅ Vendedor de prueba creado (usuario: juan.perez / contraseña: 123456)');
+            }
+        } catch (e) {
+            console.warn('Error al sembrar datos iniciales:', e);
         }
     }
 
@@ -392,7 +416,6 @@ class ViajesProDB {
             const store = transaction.objectStore(storeName);
             await store.clear();
         }
-        // Limpiar backups
         for (const storeName of stores) {
             localStorage.removeItem(BACKUP_PREFIX + storeName);
         }
@@ -408,7 +431,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
         console.error('❌ Database initialization failed:', err);
-        // Mostrar un mensaje amigable al usuario
         alert('Error al inicializar la base de datos. Por favor, recarga la página o contacta al administrador.');
     });
 });
