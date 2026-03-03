@@ -1,6 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v4.0 (Professional Edition)
- * Con exportación Excel profesional, edición de gastos y campos corporativos
+ * 3P VIAJESPRO - Main Application v4.0 (Corregido)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -8,13 +7,7 @@ const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
     VERSION: '4.0.0',
-    APP_NAME: '3P Control de Viáticos Pro',
-    EMPRESA: {
-        nombre: '3P SA DE CV',
-        rfc: '3P-XXXXXX-XXX',
-        direccion: 'Dirección corporativa',
-        logo: './assets/images/logo-3p-login.png'
-    }
+    APP_NAME: '3P Control de Viáticos Pro'
 };
 
 // ===== ESTADO GLOBAL =====
@@ -22,18 +15,14 @@ const state = {
     currentUser: null,
     currentVendor: null,
     currentViaje: null,
-    currentGasto: null, // Para edición
+    currentGasto: null,
     tempFotos: [],
-    tempLocation: null,
     isOnline: navigator.onLine,
     charts: {},
-    filters: {
-        viajes: 'all',
-        gastos: ''
-    }
+    filters: { viajes: 'all', gastos: '' }
 };
 
-// ===== ICONOS POR TIPO DE GASTO =====
+// ===== ICONOS =====
 const TIPOS_GASTO = {
     gasolina: { icon: '⛽', color: '#dc2626', label: 'Gasolina' },
     comida: { icon: '🍔', color: '#f59e0b', label: 'Comida' },
@@ -43,7 +32,6 @@ const TIPOS_GASTO = {
     otros: { icon: '📦', color: '#6b7280', label: 'Otros' }
 };
 
-// Función de log para depuración
 function debug(msg, data) {
     console.log(`[DEBUG] ${msg}`, data || '');
 }
@@ -52,7 +40,6 @@ function debug(msg, data) {
 document.addEventListener('DOMContentLoaded', async () => {
     debug('DOM cargado, iniciando v4.0...');
     
-    // Mostrar splash screen
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if (splash) {
@@ -72,60 +59,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initApp() {
     debug('Iniciando app v4.0...');
     
-    try {
-        if (typeof db === 'undefined') {
-            throw new Error('La base de datos no está cargada');
-        }
-        
-        debug('Inicializando DB...');
-        await db.init();
-        debug('DB inicializada correctamente');
-        
-        checkSession();
-        setupEventListeners();
-        updateConnectionStatus();
-        
-        // Establecer fechas por defecto
-        const today = new Date().toISOString().split('T')[0];
-        const fechaInicio = document.getElementById('viaje-fecha-inicio');
-        const fechaGasto = document.getElementById('fecha-gasto');
-        
-        if (fechaInicio) fechaInicio.value = today;
-        if (fechaGasto) fechaGasto.value = new Date().toISOString().slice(0, 16);
-        
-        // Configurar fechas de reporte
-        const reporteInicio = document.getElementById('reporte-fecha-inicio');
-        const reporteFin = document.getElementById('reporte-fecha-fin');
-        
-        if (reporteInicio) {
-            const firstDay = new Date();
-            firstDay.setDate(1);
-            reporteInicio.value = firstDay.toISOString().split('T')[0];
-        }
-        if (reporteFin) reporteFin.value = today;
-        
-        debug('App v4.0 iniciada correctamente');
-        
-    } catch (error) {
-        debug('Error en initApp:', error);
-        throw error;
+    if (typeof db === 'undefined') {
+        throw new Error('La base de datos no está cargada');
     }
+    
+    await db.init();
+    debug('DB inicializada correctamente');
+    
+    checkSession();
+    setupEventListeners();
+    updateConnectionStatus();
+    
+    // Fechas por defecto
+    const today = new Date().toISOString().split('T')[0];
+    if (document.getElementById('viaje-fecha-inicio')) {
+        document.getElementById('viaje-fecha-inicio').value = today;
+    }
+    if (document.getElementById('fecha-gasto')) {
+        document.getElementById('fecha-gasto').value = new Date().toISOString().slice(0, 16);
+    }
+    
+    const firstDay = new Date();
+    firstDay.setDate(1);
+    if (document.getElementById('reporte-fecha-inicio')) {
+        document.getElementById('reporte-fecha-inicio').value = firstDay.toISOString().split('T')[0];
+    }
+    if (document.getElementById('reporte-fecha-fin')) {
+        document.getElementById('reporte-fecha-fin').value = today;
+    }
+    
+    debug('App v4.0 iniciada correctamente');
 }
 
 function setupEventListeners() {
     debug('Configurando event listeners...');
     
-    // Online/Offline
     window.addEventListener('online', () => updateConnectionStatus(true));
     window.addEventListener('offline', () => updateConnectionStatus(false));
     
-    // Camera input
     const cameraInput = document.getElementById('camera-input');
     if (cameraInput) {
         cameraInput.addEventListener('change', handlePhotoCapture);
     }
     
-    // Cerrar modales al hacer click fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -133,11 +109,9 @@ function setupEventListeners() {
             }
         });
     });
-    
-    debug('Event listeners configurados');
 }
 
-// ===== NAVEGACIÓN Y UI =====
+// ===== NAVEGACIÓN =====
 function showScreen(screenId) {
     debug('Cambiando a pantalla:', screenId);
     document.querySelectorAll('.screen').forEach(screen => {
@@ -146,15 +120,12 @@ function showScreen(screenId) {
     const screen = document.getElementById(screenId);
     if (screen) {
         screen.classList.remove('hidden');
-    } else {
-        debug('ERROR: No se encontró pantalla:', screenId);
     }
 }
 
 function showSection(sectionName) {
     debug('Mostrando sección:', sectionName);
     
-    // Actualizar navegación
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.section === sectionName) {
@@ -162,7 +133,6 @@ function showSection(sectionName) {
         }
     });
     
-    // Mostrar sección
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
     });
@@ -171,7 +141,6 @@ function showSection(sectionName) {
     if (sectionEl) {
         sectionEl.classList.add('active');
         
-        // Cargar datos específicos
         if (sectionName === 'viajes') loadViajes();
         if (sectionName === 'gastos') {
             loadViajesSelect();
@@ -188,8 +157,6 @@ function showSection(sectionName) {
 }
 
 function showAdminTab(tabName) {
-    debug('Mostrando tab admin:', tabName);
-    
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.classList.remove('active');
     });
@@ -236,17 +203,14 @@ function checkSession() {
 }
 
 function showLoginScreen() {
-    debug('Mostrando login');
     showScreen('login-screen');
 }
 
 function showAdminLogin() {
-    debug('Mostrando admin login');
     showScreen('admin-login-screen');
 }
 
 function backToLogin() {
-    debug('Volviendo a login');
     showLoginScreen();
 }
 
@@ -258,8 +222,6 @@ async function login() {
     const remember = document.getElementById('remember-me').checked;
     const btn = document.querySelector('#login-form .btn-primary');
     
-    debug('Usuario:', username);
-    
     if (!username || !password) {
         showToast('Ingresa usuario y contraseña', 'warning');
         return;
@@ -268,9 +230,9 @@ async function login() {
     setLoading(btn, true);
     
     try {
-        debug('Buscando vendedor en DB...');
+        debug('Buscando vendedor:', username);
         const vendor = await db.get('vendedores', username);
-        debug('Vendedor encontrado:', vendor);
+        debug('Vendedor encontrado:', vendor ? 'SÍ' : 'NO');
         
         if (!vendor || vendor.password !== password) {
             showToast('Usuario o contraseña incorrectos', 'error');
@@ -279,7 +241,7 @@ async function login() {
         }
         
         if (vendor.status === 'inactive') {
-            showToast('Usuario inactivo. Contacta al administrador', 'warning');
+            showToast('Usuario inactivo', 'warning');
             setLoading(btn, false);
             return;
         }
@@ -311,14 +273,13 @@ async function loginAdmin() {
     
     const username = document.getElementById('admin-username').value;
     const password = document.getElementById('admin-password').value;
-    const errorEl = document.getElementById('admin-login-error');
     
     if (username === CONFIG.ADMIN_USER && password === CONFIG.ADMIN_PASS) {
         state.currentUser = { username, type: 'admin' };
         showToast('Bienvenido, Administrador', 'success');
         showAdminPanel();
     } else {
-        errorEl.textContent = 'Credenciales incorrectas';
+        document.getElementById('admin-login-error').textContent = 'Credenciales incorrectas';
         showToast('Credenciales incorrectas', 'error');
     }
 }
@@ -333,57 +294,54 @@ function logout() {
     }
 }
 
-// ===== ADMIN PANEL =====
+// ===== ADMIN =====
 function showAdminPanel() {
     debug('Mostrando panel admin');
     showScreen('admin-panel');
     loadVendorsList();
 }
 
-// ===== REGISTER VENDOR =====
+// ===== REGISTRO VENDEDOR (CORREGIDO) =====
 async function registerVendor() {
-    debug('=== INICIANDO REGISTRO DE VENDEDOR ===');
+    debug('=== REGISTRO DE VENDEDOR ===');
+    
+    const nameInput = document.getElementById('new-vendor-name');
+    const usernameInput = document.getElementById('new-vendor-username');
+    const passwordInput = document.getElementById('new-vendor-password');
+    const emailInput = document.getElementById('new-vendor-email');
+    const zoneInput = document.getElementById('new-vendor-zone');
+    const errorDiv = document.getElementById('register-error');
+    
+    if (!nameInput || !usernameInput || !passwordInput) {
+        console.error('No se encontraron campos del formulario');
+        return;
+    }
+    
+    const name = nameInput.value.trim();
+    const username = usernameInput.value.trim().toLowerCase();
+    const password = passwordInput.value;
+    const email = emailInput ? emailInput.value.trim() : '';
+    const zone = zoneInput ? zoneInput.value : 'Centro';
+    
+    if (errorDiv) errorDiv.textContent = '';
+    
+    if (!name || !username || !password) {
+        const msg = 'Nombre, usuario y contraseña son obligatorios';
+        if (errorDiv) errorDiv.textContent = msg;
+        showToast(msg, 'warning');
+        return;
+    }
+    
+    if (!/^[a-z0-9.]+$/.test(username)) {
+        const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
+        if (errorDiv) errorDiv.textContent = msg;
+        showToast(msg, 'warning');
+        return;
+    }
     
     try {
-        const nameInput = document.getElementById('new-vendor-name');
-        const usernameInput = document.getElementById('new-vendor-username');
-        const passwordInput = document.getElementById('new-vendor-password');
-        const emailInput = document.getElementById('new-vendor-email');
-        const zoneInput = document.getElementById('new-vendor-zone');
-        const errorDiv = document.getElementById('register-error');
-        
-        if (!nameInput || !usernameInput || !passwordInput) {
-            throw new Error('No se encontraron los campos del formulario');
-        }
-        
-        const name = nameInput.value.trim();
-        const username = usernameInput.value.trim().toLowerCase();
-        const password = passwordInput.value;
-        const email = emailInput ? emailInput.value.trim() : '';
-        const zone = zoneInput ? zoneInput.value : 'Centro';
-        
-        if (errorDiv) errorDiv.textContent = '';
-        
-        if (!name || !username || !password) {
-            const msg = 'Nombre, usuario y contraseña son obligatorios';
-            if (errorDiv) errorDiv.textContent = msg;
-            showToast(msg, 'warning');
-            return;
-        }
-        
-        if (!/^[a-z0-9.]+$/.test(username)) {
-            const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
-            if (errorDiv) errorDiv.textContent = msg;
-            showToast(msg, 'warning');
-            return;
-        }
-        
-        let existing;
-        try {
-            existing = await db.get('vendedores', username);
-        } catch (dbError) {
-            throw new Error('Error al consultar la base de datos: ' + dbError.message);
-        }
+        debug('Verificando si existe:', username);
+        const existing = await db.get('vendedores', username);
         
         if (existing) {
             const msg = 'Este nombre de usuario ya existe';
@@ -404,11 +362,8 @@ async function registerVendor() {
             createdBy: 'admin'
         };
         
-        try {
-            await db.add('vendedores', vendor);
-        } catch (addError) {
-            throw new Error('Error al guardar: ' + addError.message);
-        }
+        debug('Guardando vendedor:', vendor);
+        await db.add('vendedores', vendor);
         
         showToast('✅ Vendedor registrado exitosamente', 'success');
         
@@ -420,18 +375,26 @@ async function registerVendor() {
         await loadVendorsList();
         
     } catch (error) {
-        const errorDiv = document.getElementById('register-error');
+        debug('Error al registrar:', error);
         const msg = 'Error al registrar: ' + error.message;
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'error');
     }
 }
 
+// ===== CARGAR VENDEDORES (CORREGIDO) =====
 async function loadVendorsList() {
+    debug('Cargando lista de vendedores...');
+    
     try {
         const vendors = await db.getAll('vendedores');
+        debug('Vendedores encontrados:', vendors.length);
+        
         const container = document.getElementById('vendors-list');
-        if (!container) return;
+        if (!container) {
+            console.error('No se encontró container vendors-list');
+            return;
+        }
         
         if (vendors.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>No hay vendedores registrados</p></div>';
@@ -454,8 +417,11 @@ async function loadVendorsList() {
             </div>
         `).join('');
         
+        debug('Lista renderizada');
+        
     } catch (error) {
-        showToast('Error al cargar vendedores', 'error');
+        debug('Error cargando vendedores:', error);
+        showToast('Error al cargar vendedores: ' + error.message, 'error');
     }
 }
 
@@ -514,19 +480,18 @@ async function saveVendorChanges() {
         vendor.email = email;
         vendor.zone = zone;
         vendor.status = status;
-        vendor.updatedAt = new Date().toISOString();
 
         await db.update('vendedores', vendor);
         closeModal('editar-vendedor');
         showToast('✅ Vendedor actualizado', 'success');
         loadVendorsList();
     } catch (error) {
-        showToast('Error al guardar', 'error');
+        showToast('Error al guardar: ' + error.message, 'error');
     }
 }
 
 async function deleteVendor(username) {
-    if (!confirm(`¿Eliminar al vendedor ${username}?\n\nEsta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Eliminar al vendedor ${username}?`)) return;
     
     try {
         await db.delete('vendedores', username);
@@ -550,7 +515,7 @@ function showMainApp() {
     loadViajes();
 }
 
-// ===== VIAJES MEJORADOS V4.0 =====
+// ===== VIAJES =====
 async function loadViajes() {
     if (!state.currentVendor) return;
     
@@ -571,7 +536,7 @@ async function loadViajes() {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">🚗</div>
-                    <p>${filter === 'all' ? 'No tienes viajes registrados' : 'No hay viajes en este estado'}</p>
+                    <p>No tienes viajes registrados</p>
                     <button class="btn btn-link" onclick="openModal('nuevo-viaje')">Crear primer viaje</button>
                 </div>
             `;
@@ -581,8 +546,7 @@ async function loadViajes() {
         const viajesConStats = await Promise.all(viajes.map(async v => {
             const gastos = await db.getGastosByViaje(v.id);
             const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
-            const facturable = gastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
-            return { ...v, gastosCount: gastos.length, totalGastos: total, totalFacturable: facturable };
+            return { ...v, gastosCount: gastos.length, totalGastos: total };
         }));
         
         container.innerHTML = viajesConStats.map(v => `
@@ -591,43 +555,26 @@ async function loadViajes() {
                     <div>
                         <div class="viaje-title">${v.destino}</div>
                         <div class="viaje-cliente">👤 ${v.cliente || 'Sin cliente'}</div>
-                        <div class="viaje-proposito">${v.objetivo || v.proposito || 'Sin objetivo especificado'}</div>
                     </div>
                     <span class="viaje-badge ${v.estado}">${v.estado}</span>
                 </div>
                 <div class="viaje-meta">
                     <span>📅 ${formatDate(v.fechaInicio)}</span>
-                    ${v.fechaFin ? `<span>🏁 ${formatDate(v.fechaFin)}</span>` : ''}
                     <span>📍 ${v.lugarVisita || v.destino}</span>
                 </div>
                 <div class="viaje-stats">
-                    <div class="viaje-stat">
-                        <span>🧾</span>
-                        <span>${v.gastosCount} gastos</span>
-                    </div>
-                    <div class="viaje-stat">
-                        <span>💰</span>
-                        <span>${formatMoney(v.totalGastos)}</span>
-                    </div>
-                    ${v.totalFacturable > 0 ? `
-                    <div class="viaje-stat facturable">
-                        <span>📄</span>
-                        <span>${formatMoney(v.totalFacturable)} fact.</span>
-                    </div>
-                    ` : ''}
+                    <span>🧾 ${v.gastosCount} gastos</span>
+                    <span>💰 ${formatMoney(v.totalGastos)}</span>
                 </div>
             </div>
         `).join('');
         
     } catch (error) {
-        showToast('Error al cargar viajes', 'error');
+        showToast('Error al cargar viajes: ' + error.message, 'error');
     }
 }
 
-// ===== CREAR VIAJE V4.0 CON NUEVOS CAMPOS =====
 async function crearViaje() {
-    debug('Creando viaje v4.0...');
-    
     const cliente = document.getElementById('viaje-cliente').value.trim();
     const destino = document.getElementById('viaje-destino').value.trim();
     const lugarVisita = document.getElementById('viaje-lugar-visita').value.trim();
@@ -636,19 +583,10 @@ async function crearViaje() {
     const fechaFinInput = document.getElementById('viaje-fecha-fin').value;
     const presupuesto = document.getElementById('viaje-presupuesto').value;
     
-    if (!cliente) {
-        showToast('El cliente es obligatorio', 'warning');
+    if (!cliente || !destino || !fechaInicioInput) {
+        showToast('Cliente, destino y fecha de inicio son obligatorios', 'warning');
         return;
     }
-    
-    if (!destino || !fechaInicioInput) {
-        showToast('Destino y fecha de inicio son obligatorios', 'warning');
-        return;
-    }
-    
-    // Ajustar fecha para evitar problema de zona horaria
-    const fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
-    const fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
@@ -659,8 +597,8 @@ async function crearViaje() {
         objetivo: objetivo,
         responsable: state.currentVendor.name,
         zona: state.currentVendor.zone || 'Centro',
-        fechaInicio: fechaInicio,
-        fechaFin: fechaFin,
+        fechaInicio: new Date(fechaInicioInput + 'T12:00:00').toISOString(),
+        fechaFin: fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null,
         presupuesto: presupuesto ? parseFloat(presupuesto) : null,
         estado: 'activo',
         createdAt: new Date().toISOString(),
@@ -672,7 +610,6 @@ async function crearViaje() {
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
         
-        // Limpiar formulario
         document.getElementById('viaje-cliente').value = '';
         document.getElementById('viaje-destino').value = '';
         document.getElementById('viaje-lugar-visita').value = '';
@@ -682,7 +619,7 @@ async function crearViaje() {
         
         loadViajes();
     } catch (error) {
-        showToast('Error al crear viaje', 'error');
+        showToast('Error al crear viaje: ' + error.message, 'error');
     }
 }
 
@@ -694,7 +631,7 @@ function selectViaje(viajeId) {
     loadGastosList();
 }
 
-// ===== GASTOS MEJORADOS V4.0 =====
+// ===== GASTOS =====
 async function loadViajesSelect() {
     if (!state.currentVendor) return;
     
@@ -714,7 +651,7 @@ async function loadViajesSelect() {
                 '<option value="">Todos los viajes</option>';
             
             select.innerHTML = defaultOption + activos.map(v => 
-                `<option value="${v.id}">${v.cliente} - ${v.destino} (${formatDate(v.fechaInicio)})</option>`
+                `<option value="${v.id}">${v.cliente} - ${v.destino}</option>`
             ).join('');
             
             if (currentValue) select.value = currentValue;
@@ -750,7 +687,6 @@ function resetCapturaForm() {
         `;
     }
     
-    // Cambiar texto del botón
     const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
     if (btnGuardar) btnGuardar.textContent = '💾 GUARDAR GASTO';
 }
@@ -801,23 +737,21 @@ async function guardarGasto() {
     
     try {
         if (esEdicion) {
-            // Actualizar gasto existente
             const gastoActualizado = {
                 ...state.currentGasto,
                 ...gastoData,
                 id: state.currentGasto.id
             };
             await db.update('gastos', gastoActualizado);
-            showToast('✅ Gasto actualizado exitosamente', 'success');
+            showToast('✅ Gasto actualizado', 'success');
         } else {
-            // Crear nuevo gasto
             const nuevoGasto = {
                 ...gastoData,
                 id: 'GASTO_' + Date.now(),
                 createdAt: new Date().toISOString()
             };
             await db.add('gastos', nuevoGasto);
-            showToast('✅ Gasto guardado exitosamente', 'success');
+            showToast('✅ Gasto guardado', 'success');
         }
         
         resetCapturaForm();
@@ -848,14 +782,10 @@ async function loadGastosList() {
         
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
         
-        const resumen = { total: 0, facturable: 0, noFacturable: 0, porTipo: {} };
+        const resumen = { total: 0, facturable: 0, porTipo: {} };
         gastos.forEach(g => {
             resumen.total += g.monto;
-            if (g.esFacturable !== false) {
-                resumen.facturable += g.monto;
-            } else {
-                resumen.noFacturable += g.monto;
-            }
+            if (g.esFacturable !== false) resumen.facturable += g.monto;
             resumen.porTipo[g.tipo] = (resumen.porTipo[g.tipo] || 0) + g.monto;
         });
         
@@ -867,17 +797,13 @@ async function loadGastosList() {
                 resumenEl.style.display = 'block';
                 resumenEl.innerHTML = `
                     <div class="resumen-total">
-                        <span class="label">Total Gastado</span>
+                        <span class="label">Total</span>
                         <span class="amount">${formatMoney(resumen.total)}</span>
                     </div>
                     <div class="resumen-grid">
                         <div class="resumen-item">
                             <span class="label">📄 Facturable</span>
                             <span class="amount">${formatMoney(resumen.facturable)}</span>
-                        </div>
-                        <div class="resumen-item">
-                            <span class="label">🚫 No Facturable</span>
-                            <span class="amount">${formatMoney(resumen.noFacturable)}</span>
                         </div>
                         ${Object.entries(resumen.porTipo).map(([tipo, monto]) => `
                             <div class="resumen-item">
@@ -913,7 +839,6 @@ async function loadGastosList() {
                         <h4>${TIPOS_GASTO[g.tipo]?.label || g.tipo} ${g.esFacturable === false ? '🚫' : '📄'}</h4>
                         <p>${g.lugar || 'Sin lugar'} • ${formatDate(g.fecha || g.createdAt)}</p>
                         ${g.folioFactura ? `<p style="color: var(--success); font-size: 0.7rem;">📄 Folio: ${g.folioFactura}</p>` : ''}
-                        ${g.viajeDestino ? `<p style="color: var(--primary); font-size: 0.7rem;">🚗 ${g.viajeCliente || ''} - ${g.viajeDestino}</p>` : ''}
                     </div>
                 </div>
                 <div class="gasto-amount">${formatMoney(g.monto)}</div>
@@ -921,7 +846,7 @@ async function loadGastosList() {
         `).join('');
         
     } catch (error) {
-        showToast('Error al cargar gastos', 'error');
+        showToast('Error al cargar gastos: ' + error.message, 'error');
     }
 }
 
@@ -931,7 +856,7 @@ async function showDetalleGasto(gastoId) {
         if (!gasto) return;
         
         const viaje = await db.get('viajes', gasto.viajeId);
-        state.currentGasto = gasto; // Guardar para posible edición
+        state.currentGasto = gasto;
         
         const content = document.getElementById('detalle-gasto-content');
         content.innerHTML = `
@@ -939,40 +864,18 @@ async function showDetalleGasto(gastoId) {
                 <div style="font-size: 3rem; margin-bottom: 0.5rem;">${TIPOS_GASTO[gasto.tipo]?.icon || '📦'}</div>
                 <h2 style="color: var(--primary); font-size: 2rem; margin-bottom: 0.5rem;">${formatMoney(gasto.monto)}</h2>
                 <p style="color: var(--gray-500);">${TIPOS_GASTO[gasto.tipo]?.label || gasto.tipo}</p>
-                ${gasto.esFacturable === false ? '<span style="background: #fee2e2; color: #dc2626; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">NO FACTURABLE</span>' : '<span style="background: #d1fae5; color: #059669; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">FACTURABLE</span>'}
+                ${gasto.esFacturable === false ? 
+                    '<span style="background: #fee2e2; color: #dc2626; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">NO FACTURABLE</span>' : 
+                    '<span style="background: #d1fae5; color: #059669; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">FACTURABLE</span>'}
             </div>
             
             <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-lg); margin-bottom: 1rem;">
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">📍 Lugar:</span>
-                    <p style="font-weight: 600;">${gasto.lugar || 'No especificado'}</p>
-                </div>
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">📅 Fecha:</span>
-                    <p style="font-weight: 600;">${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
-                </div>
-                ${gasto.folioFactura ? `
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">📄 Folio Factura:</span>
-                    <p style="font-weight: 600;">${gasto.folioFactura}</p>
-                </div>
-                ` : ''}
-                ${gasto.razonSocial ? `
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">🏢 Razón Social:</span>
-                    <p style="font-weight: 600;">${gasto.razonSocial}</p>
-                </div>
-                ` : ''}
-                ${gasto.comentarios ? `
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">💬 Comentarios:</span>
-                    <p style="font-weight: 600;">${gasto.comentarios}</p>
-                </div>
-                ` : ''}
-                <div>
-                    <span style="color: var(--gray-500); font-size: 0.875rem;">🚗 Viaje:</span>
-                    <p style="font-weight: 600;">${viaje?.cliente || ''} - ${viaje?.destino || 'Desconocido'}</p>
-                </div>
+                <p><strong>📍 Lugar:</strong> ${gasto.lugar || 'No especificado'}</p>
+                <p><strong>📅 Fecha:</strong> ${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
+                ${gasto.folioFactura ? `<p><strong>📄 Folio:</strong> ${gasto.folioFactura}</p>` : ''}
+                ${gasto.razonSocial ? `<p><strong>🏢 Razón Social:</strong> ${gasto.razonSocial}</p>` : ''}
+                ${gasto.comentarios ? `<p><strong>💬 Comentarios:</strong> ${gasto.comentarios}</p>` : ''}
+                <p><strong>🚗 Viaje:</strong> ${viaje?.cliente || ''} - ${viaje?.destino || 'Desconocido'}</p>
             </div>
             
             ${gasto.fotos && gasto.fotos.length > 0 ? `
@@ -1006,13 +909,9 @@ async function editarGasto(gastoId) {
             return;
         }
         
-        // Cerrar modal de detalle
         closeModal('detalle-gasto');
-        
-        // Cambiar a sección de captura
         showSection('captura');
         
-        // Cargar datos en el formulario
         document.getElementById('captura-viaje-select').value = gasto.viajeId;
         document.getElementById('monto-gasto').value = gasto.monto;
         document.getElementById('lugar-gasto').value = gasto.lugar || '';
@@ -1022,12 +921,10 @@ async function editarGasto(gastoId) {
         document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
         document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
         
-        // Seleccionar tipo
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
         const tipoCard = document.querySelector(`.tipo-card[data-tipo="${gasto.tipo}"]`);
         if (tipoCard) tipoCard.classList.add('selected');
         
-        // Cargar fotos existentes
         state.tempFotos = gasto.fotos || [];
         if (state.tempFotos.length > 0) {
             const preview = document.getElementById('photo-preview');
@@ -1044,14 +941,10 @@ async function editarGasto(gastoId) {
             `;
         }
         
-        // Cambiar texto del botón
         const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
         if (btnGuardar) btnGuardar.textContent = '💾 ACTUALIZAR GASTO';
         
-        // Guardar referencia al gasto actual
         state.currentGasto = gasto;
-        
-        showToast('Modo edición activado. Modifica los datos y guarda.', 'info');
         
     } catch (error) {
         showToast('Error al cargar gasto para edición', 'error');
@@ -1060,7 +953,6 @@ async function editarGasto(gastoId) {
 
 function removeFoto(index) {
     state.tempFotos.splice(index, 1);
-    // Actualizar preview
     const preview = document.getElementById('photo-preview');
     if (state.tempFotos.length === 0) {
         preview.innerHTML = `
@@ -1095,7 +987,7 @@ async function eliminarGasto(gastoId) {
     }
 }
 
-// ===== REPORTES Y EXPORTACIÓN EXCEL PROFESIONAL =====
+// ===== REPORTES =====
 async function generarReporte() {
     const fechaInicio = document.getElementById('reporte-fecha-inicio').value;
     const fechaFin = document.getElementById('reporte-fecha-fin').value;
@@ -1108,19 +1000,14 @@ async function generarReporte() {
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         let allGastos = [];
-        let viajesMap = {};
         
         for (const viaje of viajes) {
-            viajesMap[viaje.id] = viaje;
             const gastos = await db.getGastosByViaje(viaje.id);
             const gastosFiltrados = gastos.filter(g => {
                 const fecha = new Date(g.fecha || g.createdAt);
                 return fecha >= new Date(fechaInicio) && fecha <= new Date(fechaFin + 'T23:59:59');
             });
-            allGastos = allGastos.concat(gastosFiltrados.map(g => ({
-                ...g,
-                viaje: viaje
-            })));
+            allGastos = allGastos.concat(gastosFiltrados.map(g => ({...g, viaje})));
         }
         
         if (allGastos.length === 0) {
@@ -1128,7 +1015,6 @@ async function generarReporte() {
             return;
         }
         
-        // Calcular estadísticas
         const porTipo = {};
         const porMes = {};
         let total = 0;
@@ -1143,10 +1029,9 @@ async function generarReporte() {
             porMes[mes] = (porMes[mes] || 0) + g.monto;
         });
         
-        // Mostrar resultados
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de distribución
+        // Gráficos...
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -1165,85 +1050,23 @@ async function generarReporte() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { padding: 15, font: { size: 11 } }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = formatMoney(context.raw);
-                                const percentage = ((context.raw / total) * 100).toFixed(1);
-                                return `${label}: ${value} (${percentage}%)`;
-                            }
-                        }
-                    }
+                    legend: { position: 'bottom' }
                 }
             }
         });
         
-        // Gráfico de tendencia
-        const ctx2 = document.getElementById('trend-chart').getContext('2d');
-        if (state.charts.line) state.charts.line.destroy();
-        
-        const mesesOrdenados = Object.keys(porMes).sort((a, b) => {
-            const dateA = new Date(a);
-            const dateB = new Date(b);
-            return dateA - dateB;
-        });
-        
-        state.charts.line = new Chart(ctx2, {
-            type: 'line',
-            data: {
-                labels: mesesOrdenados,
-                datasets: [{
-                    label: 'Gastos por mes',
-                    data: mesesOrdenados.map(m => porMes[m]),
-                    borderColor: '#dc2626',
-                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#dc2626'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Guardar datos para exportación
         state.lastReport = {
-            fechaInicio,
-            fechaFin,
-            total,
-            totalFacturable,
-            porTipo,
-            porMes,
-            gastos: allGastos,
+            fechaInicio, fechaFin, total, totalFacturable,
+            porTipo, porMes, gastos: allGastos,
             responsable: state.currentVendor.name,
             zona: state.currentVendor.zone
         };
         
     } catch (error) {
-        showToast('Error al generar reporte', 'error');
+        showToast('Error al generar reporte: ' + error.message, 'error');
     }
 }
 
-// ===== EXPORTACIÓN EXCEL PROFESIONAL 3P =====
 function exportReport(format) {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -1254,18 +1077,14 @@ function exportReport(format) {
         generarExcelProfesional();
     } else if (format === 'pdf') {
         window.print();
-        showToast('Reporte preparado para imprimir', 'success');
     }
 }
 
 function generarExcelProfesional() {
     const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
-    
-    // Generar número de reporte único
     const numReporte = `3P-VIA-${Date.now().toString().slice(-6)}`;
     const fechaGeneracion = new Date().toLocaleDateString('es-MX');
     
-    // Crear HTML para Excel (formato profesional)
     let html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
@@ -1274,7 +1093,6 @@ function generarExcelProfesional() {
             body { font-family: Arial, sans-serif; }
             .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
             .header h1 { margin: 0; font-size: 24px; }
-            .header h2 { margin: 5px 0 0 0; font-size: 16px; font-weight: normal; }
             .info-section { background-color: #f3f4f6; padding: 15px; margin: 10px 0; }
             .info-row { display: flex; justify-content: space-between; margin: 5px 0; }
             .label { font-weight: bold; color: #374151; }
@@ -1285,7 +1103,6 @@ function generarExcelProfesional() {
             .total-row { background-color: #fee2e2 !important; font-weight: bold; }
             .facturable { color: #059669; }
             .no-facturable { color: #dc2626; }
-            .footer { margin-top: 20px; text-align: center; color: #6b7280; font-size: 12px; }
         </style>
     </head>
     <body>
@@ -1326,7 +1143,6 @@ function generarExcelProfesional() {
             <tbody>
     `;
     
-    // Agregar filas de datos
     gastos.forEach(g => {
         const esFacturable = g.esFacturable !== false;
         html += `
@@ -1346,7 +1162,6 @@ function generarExcelProfesional() {
         `;
     });
     
-    // Fila de totales
     html += `
             <tr class="total-row">
                 <td colspan="6" style="text-align: right;">TOTALES:</td>
@@ -1366,7 +1181,7 @@ function generarExcelProfesional() {
         </tbody>
         </table>
         
-        <div class="footer">
+        <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 12px;">
             <p>Documento generado por 3P ViajesPro v${CONFIG.VERSION}</p>
             <p>Este reporte es un documento oficial de 3P SA DE CV</p>
         </div>
@@ -1374,35 +1189,13 @@ function generarExcelProfesional() {
     </html>
     `;
     
-    // Crear blob y descargar
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_3P_Viaticos_${responsable.replace(/\\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`;
+    link.download = `Reporte_3P_Viaticos_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`;
     link.click();
     
     showToast('📊 Reporte Excel profesional descargado', 'success');
-    
-    // Guardar en historial de reportes
-    guardarReporteEnHistorial({
-        id: 'REPORTE_' + Date.now(),
-        vendedorId: state.currentVendor.username,
-        numReporte: numReporte,
-        fechaInicio,
-        fechaFin,
-        total,
-        totalFacturable,
-        cantidadGastos: gastos.length,
-        fechaGenerado: new Date().toISOString()
-    });
-}
-
-async function guardarReporteEnHistorial(reporteData) {
-    try {
-        await db.add('reportes', reporteData);
-    } catch (e) {
-        console.warn('No se pudo guardar en historial:', e);
-    }
 }
 
 async function loadGlobalReport() {
@@ -1413,10 +1206,9 @@ async function loadGlobalReport() {
         
         const stats = {
             totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
+            totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0),
             totalViajes: allViajes.length,
-            totalVendedores: allVendors.length,
-            promedioPorViaje: allViajes.length ? allGastos.reduce((sum, g) => sum + g.monto, 0) / allViajes.length : 0,
-            totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0)
+            totalVendedores: allVendors.length
         };
         
         const statsContainer = document.getElementById('admin-stats');
@@ -1549,7 +1341,6 @@ function updateConnectionStatus(online = navigator.onLine) {
     if (indicator) {
         indicator.textContent = online ? '●' : '○';
         indicator.className = `status-indicator ${online ? 'online' : 'offline'}`;
-        indicator.title = online ? 'En línea' : 'Sin conexión';
     }
 }
 
@@ -1569,12 +1360,10 @@ function formatMoney(amount) {
 
 function formatDate(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth();
     const day = date.getUTCDate();
-    
     const localDate = new Date(year, month, day);
     
     return localDate.toLocaleDateString('es-MX', {
@@ -1624,8 +1413,6 @@ function handlePhotoCapture(event) {
         }
     };
     reader.readAsDataURL(file);
-    
-    // Limpiar input para permitir seleccionar la misma foto de nuevo
     event.target.value = '';
 }
 
@@ -1638,11 +1425,9 @@ function clearPhoto() {
             <span class="upload-text">Toca para capturar foto</span>
         `;
     }
-    const input = document.getElementById('camera-input');
-    if (input) input.value = '';
 }
 
-// Exponer funciones necesarias globalmente
+// Exponer funciones globalmente
 window.showAdminLogin = showAdminLogin;
 window.backToLogin = backToLogin;
 window.login = login;
