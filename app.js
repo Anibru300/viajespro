@@ -1,6 +1,6 @@
 /**
  * 3P VIAJESPRO - Main Application
- * Versión con gestión completa de vendedores (editar/eliminar) y mejoras móviles
+ * Versión corregida con manejo de errores y mejoras en registro de vendedores
  */
 
 // === FUNCIONES HELPER PARA FECHAS ===
@@ -60,12 +60,16 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkSession() {
     const savedSession = localStorage.getItem('viajespro_session');
     if (savedSession) {
-        const session = JSON.parse(savedSession);
-        if (session.remember && session.user) {
-            state.currentUser = session.user;
-            state.currentVendor = session.vendor;
-            showMainApp();
-            return;
+        try {
+            const session = JSON.parse(savedSession);
+            if (session.remember && session.user) {
+                state.currentUser = session.user;
+                state.currentVendor = session.vendor;
+                showMainApp();
+                return;
+            }
+        } catch (e) {
+            localStorage.removeItem('viajespro_session');
         }
     }
     showLoginScreen();
@@ -106,6 +110,8 @@ async function login() {
     }
     
     try {
+        // Asegurar que la base de datos esté inicializada
+        await db.init();
         const vendor = await db.get('vendedores', username);
         
         if (!vendor || vendor.password !== password) {
@@ -133,7 +139,7 @@ async function login() {
         
     } catch (error) {
         console.error('Login error:', error);
-        alert('Error al iniciar sesión');
+        alert('Error al iniciar sesión: ' + error.message);
     }
 }
 
@@ -181,6 +187,10 @@ async function registerVendor() {
     const password = document.getElementById('new-vendor-password').value;
     const email = document.getElementById('new-vendor-email').value.trim();
     const zone = document.getElementById('new-vendor-zone').value;
+    const errorDiv = document.getElementById('register-error');
+    
+    // Limpiar mensaje de error anterior
+    if (errorDiv) errorDiv.textContent = '';
     
     if (!name || !username || !password) {
         alert('Nombre, usuario y contraseña son obligatorios');
@@ -193,6 +203,10 @@ async function registerVendor() {
     }
     
     try {
+        // Verificar que la base de datos esté lista
+        await db.init();
+        
+        // Verificar si el usuario ya existe
         const existing = await db.get('vendedores', username);
         if (existing) {
             alert('Este nombre de usuario ya existe');
@@ -200,7 +214,7 @@ async function registerVendor() {
         }
         
         const vendor = {
-            id: username,
+            id: username,  // Usamos el username como ID
             name: name,
             username: username,
             password: password,
@@ -215,21 +229,28 @@ async function registerVendor() {
         
         alert('✅ Vendedor registrado exitosamente');
         
+        // Limpiar formulario
         document.getElementById('new-vendor-name').value = '';
         document.getElementById('new-vendor-username').value = '';
         document.getElementById('new-vendor-password').value = '';
         document.getElementById('new-vendor-email').value = '';
         
-        loadVendorsList();
+        // Recargar lista
+        await loadVendorsList();
         
     } catch (error) {
         console.error('Error registering vendor:', error);
-        alert('Error al registrar vendedor: ' + error.message);
+        if (errorDiv) {
+            errorDiv.textContent = 'Error al registrar: ' + error.message;
+        } else {
+            alert('Error al registrar vendedor: ' + error.message);
+        }
     }
 }
 
 async function loadVendorsList() {
     try {
+        await db.init(); // Asegurar DB lista
         const vendors = await db.getAll('vendedores');
         const container = document.getElementById('vendors-list');
         
@@ -257,7 +278,6 @@ async function loadVendorsList() {
     }
 }
 
-// ===== ADMIN: Editar y Eliminar Vendedores =====
 async function editVendor(username) {
     try {
         const vendor = await db.get('vendedores', username);
@@ -354,21 +374,6 @@ async function deleteVendor(username) {
     }
 }
 
-async function toggleVendorStatus(username, currentStatus) {
-    // Esta función ya no es necesaria porque usamos el modal de edición, pero la dejamos por compatibilidad
-    try {
-        const vendor = await db.get('vendedores', username);
-        vendor.status = currentStatus === 'active' ? 'inactive' : 'active';
-        vendor.updatedAt = new Date().toISOString();
-        await db.update('vendedores', vendor);
-        alert(`Vendedor ${vendor.status === 'active' ? 'activado' : 'desactivado'}`);
-        loadVendorsList();
-    } catch (error) {
-        console.error('Error toggling vendor status:', error);
-        alert('Error al cambiar estado');
-    }
-}
-
 // ===== MAIN APP =====
 function showMainApp() {
     document.getElementById('login-screen').style.display = 'none';
@@ -396,14 +401,9 @@ function showSection(sectionName) {
     const sectionEl = document.getElementById(`${sectionName}-section`);
     if (sectionEl) sectionEl.classList.add('active');
     
-    // Marcar el botón activo
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        if (btn.textContent.includes(sectionName === 'viajes' ? 'Viajes' : 
-                                      sectionName === 'gastos' ? 'Gastos' :
-                                      sectionName === 'captura' ? 'Capturar' : 'Reportes')) {
-            btn.classList.add('active');
-        }
-    });
+    if (event && event.target) {
+        event.target.closest('.nav-btn').classList.add('active');
+    }
     
     if (sectionName === 'viajes') loadViajes();
     if (sectionName === 'gastos') loadGastosSection();
