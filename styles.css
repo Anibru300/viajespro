@@ -1,4 +1,4 @@
-/* 3P VIAJESPRO - Modern Styles */
+/* 3P VIAJESPRO - Modern Styles v5.0 */
 
 :root {
     --primary: #dc2626;
@@ -161,6 +161,29 @@ body {
 .login-subtitle {
     color: var(--gray-500);
     font-size: 0.875rem;
+}
+
+.version-badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+/* Login Footer */
+.login-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.sync-btn-text {
+    color: #059669 !important;
 }
 
 /* Inputs */
@@ -357,7 +380,8 @@ body {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 0.75rem 1rem;
     border: 2px solid var(--gray-200);
@@ -365,10 +389,12 @@ body {
     font-size: 1rem;
     transition: all 0.2s;
     background: white;
+    font-family: inherit;
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-light);
@@ -665,10 +691,9 @@ body {
     margin-bottom: 0.25rem;
 }
 
-.viaje-proposito {
+.viaje-cliente {
     font-size: 0.875rem;
     color: var(--gray-600);
-    margin-bottom: 0.75rem;
 }
 
 .viaje-meta {
@@ -676,6 +701,17 @@ body {
     gap: 1rem;
     font-size: 0.75rem;
     color: var(--gray-500);
+    margin-top: 0.5rem;
+}
+
+.viaje-stats {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-100);
+    font-size: 0.875rem;
+    color: var(--gray-600);
 }
 
 .viaje-badge {
@@ -694,22 +730,6 @@ body {
 .viaje-badge.completado {
     background: #d1fae5;
     color: var(--success);
-}
-
-.viaje-stats {
-    display: flex;
-    gap: 1rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--gray-100);
-    font-size: 0.875rem;
-}
-
-.viaje-stat {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    color: var(--gray-600);
 }
 
 /* Filters */
@@ -1148,6 +1168,75 @@ body {
     animation: fadeIn 0.3s ease;
 }
 
+/* Sync Info Box */
+.sync-info-box {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f0fdf4;
+    border-radius: 8px;
+    border: 1px solid #86efac;
+}
+
+.sync-info-box p {
+    margin: 0;
+    color: #166534;
+    font-size: 0.875rem;
+}
+
+/* Vendor Summary Card */
+.vendor-summary-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s;
+}
+
+.vendor-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.vendor-summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.vendor-summary-header h4 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.vendor-summary-meta {
+    margin: 0.25rem 0 0 0;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.vendor-summary-amounts {
+    text-align: right;
+}
+
+.vendor-total {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #dc2626;
+}
+
+.vendor-facturable {
+    font-size: 0.75rem;
+    color: #059669;
+}
+
+/* Textarea */
+.form-group textarea {
+    min-height: 80px;
+    max-height: 120px;
+    resize: vertical;
+}
+
 /* Responsive */
 @media (min-width: 640px) {
     .tipo-grid {
@@ -1197,77 +1286,4 @@ body {
         box-shadow: none;
         border: 1px solid var(--gray-300);
     }
-}
-/* ===== V5 ADDITIONS ===== */
-
-/* Textarea de comentarios - FIJO, no redimensionable */
-#comentarios-gasto {
-    width: 100%;
-    min-height: 80px;
-    max-height: 120px;
-    height: 80px;
-    resize: none !important;
-    overflow-y: auto;
-    font-family: inherit;
-    padding: 0.75rem;
-    border: 2px solid var(--gray-200);
-    border-radius: var(--radius-lg);
-    font-size: 1rem;
-    transition: all 0.2s;
-}
-
-#comentarios-gasto:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-light);
-}
-
-/* Indicador de campo requerido */
-#comentario-requerido {
-    color: #dc2626;
-    font-size: 0.75rem;
-    font-weight: bold;
-}
-
-/* Botón de sincronización manual */
-.sync-btn {
-    position: fixed;
-    bottom: 100px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: #1e3a5f;
-    color: white;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sync-btn:hover {
-    transform: scale(1.1);
-}
-
-.sync-btn.spinning {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* Vendor summary card para admin */
-.vendor-summary-card {
-    transition: all 0.2s;
-}
-
-.vendor-summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
