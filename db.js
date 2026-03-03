@@ -1,39 +1,25 @@
 /**
- * 3P VIAJESPRO - Database Module v5.1
+ * 3P VIAJESPRO - Database Module v5.2 (MODO OFFLINE)
  */
 
-console.log('🚀 db.js v5.1 cargando...');
+console.log('🚀 db.js v5.2 cargando (modo offline)...');
 
 if (!window.indexedDB) {
-    console.error('❌ Tu navegador no soporta IndexedDB');
     alert('Tu navegador no soporta IndexedDB');
 }
 
 const DB_NAME = 'ViajesProDB_v5';
 const DB_VERSION = 5;
 
-const STORES = {
-    VENDEDORES: 'vendedores',
-    VIAJES: 'viajes',
-    GASTOS: 'gastos',
-    FOTOS: 'fotos',
-    CONFIG: 'config',
-    REPORTES: 'reportes'
-};
-
 class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
-        this.firebaseAvailable = false;
-        this.syncInProgress = false;
-        console.log('📦 ViajesProDB v5.1 creado');
+        console.log('📦 ViajesProDB v5.2 creado (offline)');
     }
 
     async init() {
-        if (this.initialized && this.db) {
-            return this.db;
-        }
+        if (this.initialized) return this.db;
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -43,26 +29,7 @@ class ViajesProDB {
             request.onsuccess = async (event) => {
                 this.db = event.target.result;
                 this.initialized = true;
-                
-                // Verificar Firebase UNA SOLA VEZ
-                if (typeof window.dbFirebase !== 'undefined' && !this.firebaseAvailable) {
-                    console.log('🔥 Firebase disponible');
-                    this.firebaseAvailable = true;
-                    
-                    if (window.setupRealtimeListeners) {
-                        window.setupRealtimeListeners();
-                    }
-                    
-                    // Sincronizar al iniciar (solo una vez)
-                    if (window.syncFromFirebase && !this.syncInProgress) {
-                        this.syncInProgress = true;
-                        console.log('⬇️ Iniciando sincronización...');
-                        setTimeout(async () => {
-                            await window.syncFromFirebase();
-                            this.syncInProgress = false;
-                        }, 1000);
-                    }
-                }
+                console.log('✅ IndexedDB lista (modo offline)');
                 
                 await this.seedData();
                 resolve(this.db);
@@ -71,90 +38,55 @@ class ViajesProDB {
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 
-                if (!db.objectStoreNames.contains(STORES.VENDEDORES)) {
-                    const store = db.createObjectStore(STORES.VENDEDORES, { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('vendedores')) {
+                    const store = db.createObjectStore('vendedores', { keyPath: 'id' });
                     store.createIndex('username', 'username', { unique: true });
                 }
-
-                if (!db.objectStoreNames.contains(STORES.VIAJES)) {
-                    const store = db.createObjectStore(STORES.VIAJES, { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('viajes')) {
+                    const store = db.createObjectStore('viajes', { keyPath: 'id' });
                     store.createIndex('vendedorId', 'vendedorId', { unique: false });
-                    store.createIndex('cliente', 'cliente', { unique: false });
                 }
-
-                if (!db.objectStoreNames.contains(STORES.GASTOS)) {
-                    const store = db.createObjectStore(STORES.GASTOS, { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('gastos')) {
+                    const store = db.createObjectStore('gastos', { keyPath: 'id' });
                     store.createIndex('viajeId', 'viajeId', { unique: false });
-                    store.createIndex('tipo', 'tipo', { unique: false });
                 }
-
-                if (!db.objectStoreNames.contains(STORES.FOTOS)) {
-                    const store = db.createObjectStore(STORES.FOTOS, { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('fotos')) {
+                    const store = db.createObjectStore('fotos', { keyPath: 'id' });
                     store.createIndex('gastoId', 'gastoId', { unique: false });
                 }
-
-                if (!db.objectStoreNames.contains(STORES.CONFIG)) {
-                    db.createObjectStore(STORES.CONFIG, { keyPath: 'key' });
-                }
-
-                if (!db.objectStoreNames.contains(STORES.REPORTES)) {
-                    const store = db.createObjectStore(STORES.REPORTES, { keyPath: 'id' });
-                    store.createIndex('vendedorId', 'vendedorId', { unique: false });
+                if (!db.objectStoreNames.contains('config')) {
+                    db.createObjectStore('config', { keyPath: 'key' });
                 }
             };
         });
     }
 
     async seedData() {
-        try {
-            const count = await this.count(STORES.VENDEDORES);
-            if (count === 0 && !this.firebaseAvailable) {
-                console.log('🌱 Modo offline - creando datos de prueba');
-                await this.addSilent(STORES.VENDEDORES, {
-                    id: 'juan.perez',
-                    name: 'Juan Pérez',
-                    username: 'juan.perez',
-                    password: '123456',
-                    email: 'juan@ejemplo.com',
-                    zone: 'Centro',
-                    status: 'active',
-                    createdAt: new Date().toISOString()
-                });
-            }
-        } catch (e) {
-            console.warn('⚠️ Error en seedData:', e);
+        const count = await this.count('vendedores');
+        if (count === 0) {
+            console.log('🌱 Creando datos de prueba...');
+            await this.add('vendedores', {
+                id: 'admin',
+                name: 'Administrador',
+                username: 'admin',
+                password: 'admin123',
+                email: 'admin@3p.com',
+                zone: 'Centro',
+                status: 'active',
+                createdAt: new Date().toISOString()
+            });
         }
     }
 
     count(storeName) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readonly');
-            const store = tx.objectStore(storeName);
-            const request = store.count();
+            const request = tx.objectStore(storeName).count();
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
     }
 
-    // Método SILENCIOSO - no sincroniza con Firebase
-    async addSilent(storeName, data) {
-        const dataToAdd = {
-            ...data,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.add(dataToAdd);
-            
-            request.onsuccess = () => resolve(dataToAdd);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Método NORMAL - sincroniza con Firebase
     async add(storeName, data) {
         const dataToAdd = {
             ...data,
@@ -164,13 +96,9 @@ class ViajesProDB {
         
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.add(dataToAdd);
-            
-            request.onsuccess = async () => {
-                if (window.saveToFirebase) {
-                    await window.saveToFirebase(storeName, dataToAdd);
-                }
+            const request = tx.objectStore(storeName).add(dataToAdd);
+            request.onsuccess = () => {
+                console.log(`💾 Guardado en IndexedDB: ${storeName}/${dataToAdd.id}`);
                 resolve(dataToAdd);
             };
             request.onerror = () => reject(request.error);
@@ -180,8 +108,7 @@ class ViajesProDB {
     get(storeName, id) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readonly');
-            const store = tx.objectStore(storeName);
-            const request = store.get(id);
+            const request = tx.objectStore(storeName).get(id);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -190,31 +117,12 @@ class ViajesProDB {
     getAll(storeName) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readonly');
-            const store = tx.objectStore(storeName);
-            const request = store.getAll();
+            const request = tx.objectStore(storeName).getAll();
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
     }
 
-    // Método SILENCIOSO - no sincroniza con Firebase
-    async updateSilent(storeName, data) {
-        const dataToUpdate = {
-            ...data,
-            updatedAt: new Date().toISOString()
-        };
-        
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.put(dataToUpdate);
-            
-            request.onsuccess = () => resolve(dataToUpdate);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // Método NORMAL - sincroniza con Firebase
     async update(storeName, data) {
         const dataToUpdate = {
             ...data,
@@ -223,13 +131,9 @@ class ViajesProDB {
         
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.put(dataToUpdate);
-            
-            request.onsuccess = async () => {
-                if (window.saveToFirebase) {
-                    await window.saveToFirebase(storeName, dataToUpdate);
-                }
+            const request = tx.objectStore(storeName).put(dataToUpdate);
+            request.onsuccess = () => {
+                console.log(`💾 Actualizado en IndexedDB: ${storeName}/${dataToUpdate.id}`);
                 resolve(dataToUpdate);
             };
             request.onerror = () => reject(request.error);
@@ -239,13 +143,9 @@ class ViajesProDB {
     async delete(storeName, id) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readwrite');
-            const store = tx.objectStore(storeName);
-            const request = store.delete(id);
-            
-            request.onsuccess = async () => {
-                if (window.deleteFromFirebase) {
-                    await window.deleteFromFirebase(storeName, id);
-                }
+            const request = tx.objectStore(storeName).delete(id);
+            request.onsuccess = () => {
+                console.log(`🗑️ Eliminado de IndexedDB: ${storeName}/${id}`);
                 resolve(id);
             };
             request.onerror = () => reject(request.error);
@@ -255,8 +155,7 @@ class ViajesProDB {
     queryByIndex(storeName, indexName, value) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction([storeName], 'readonly');
-            const store = tx.objectStore(storeName);
-            const index = store.index(indexName);
+            const index = tx.objectStore(storeName).index(indexName);
             const request = index.getAll(value);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
@@ -264,11 +163,11 @@ class ViajesProDB {
     }
 
     getViajesByVendedor(vendedorId) {
-        return this.queryByIndex(STORES.VIAJES, 'vendedorId', vendedorId);
+        return this.queryByIndex('viajes', 'vendedorId', vendedorId);
     }
 
     getGastosByViaje(viajeId) {
-        return this.queryByIndex(STORES.GASTOS, 'viajeId', viajeId);
+        return this.queryByIndex('gastos', 'viajeId', viajeId);
     }
 }
 
@@ -277,9 +176,7 @@ const db = new ViajesProDB();
 document.addEventListener('DOMContentLoaded', () => {
     db.init().then(() => {
         window.dispatchEvent(new CustomEvent('dbReady'));
-    }).catch(err => {
-        console.error('❌ Error:', err);
-    });
+    }).catch(err => console.error('❌ Error:', err));
 });
 
 window.db = db;
