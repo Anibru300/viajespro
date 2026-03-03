@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - UX Improvements CSS
+ * 3P VIAJESPRO - UX Improvements CSS v5.0
  * Estilos adicionales para mejorar la experiencia de usuario
  */
 
@@ -39,7 +39,7 @@
     width: 20px;
     height: 20px;
     margin: -10px 0 0 -10px;
-    border: 2px solid var(--color-primary);
+    border: 2px solid var(--primary);
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -49,13 +49,13 @@
     to { transform: rotate(360deg); }
 }
 
-/* Estados de validaci&oacute;n */
+/* Estados de validación */
 .is-valid {
-    border-color: var(--color-success) !important;
+    border-color: var(--success) !important;
 }
 
 .is-invalid {
-    border-color: var(--color-secondary) !important;
+    border-color: var(--danger) !important;
     animation: shake 0.3s ease;
 }
 
@@ -92,9 +92,9 @@
 .skeleton {
     background: linear-gradient(
         90deg,
-        var(--color-bg) 25%,
+        var(--gray-100) 25%,
         #e0e0e0 50%,
-        var(--color-bg) 75%
+        var(--gray-100) 75%
     );
     background-size: 200% 100%;
     animation: skeleton-loading 1.5s infinite;
@@ -108,7 +108,7 @@
 
 /* Focus visible para accesibilidad */
 *:focus-visible {
-    outline: 3px solid var(--color-primary);
+    outline: 3px solid var(--primary);
     outline-offset: 2px;
 }
 
@@ -123,7 +123,10 @@
     }
 }
 
-/* Modo oscuro (preparado para futuro) */
-@media (prefers-color-scheme: dark) {
-    /* Los estilos oscuros se pueden agregar aqu&iacute; */
+/* Field error message */
+.field-error {
+    color: var(--danger);
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    display: block;
 }
