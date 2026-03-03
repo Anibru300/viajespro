@@ -7,7 +7,7 @@ const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
     VERSION: '2.0.0',
-    APP_NAME: '3P ViajesPro'
+    APP_NAME: '3P Control de Viáticos'
 };
 
 // ===== ESTADO GLOBAL =====
@@ -330,27 +330,17 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTER VENDOR - VERSIÓN CORREGIDA =====
+// ===== REGISTER VENDOR =====
 async function registerVendor() {
     debug('=== INICIANDO REGISTRO DE VENDEDOR ===');
     
     try {
-        // Obtener elementos
         const nameInput = document.getElementById('new-vendor-name');
         const usernameInput = document.getElementById('new-vendor-username');
         const passwordInput = document.getElementById('new-vendor-password');
         const emailInput = document.getElementById('new-vendor-email');
         const zoneInput = document.getElementById('new-vendor-zone');
         const errorDiv = document.getElementById('register-error');
-        
-        debug('Elementos del DOM:', {
-            nameInput: !!nameInput,
-            usernameInput: !!usernameInput,
-            passwordInput: !!passwordInput,
-            emailInput: !!emailInput,
-            zoneInput: !!zoneInput,
-            errorDiv: !!errorDiv
-        });
         
         if (!nameInput || !usernameInput || !passwordInput) {
             throw new Error('No se encontraron los campos del formulario');
@@ -362,14 +352,10 @@ async function registerVendor() {
         const email = emailInput ? emailInput.value.trim() : '';
         const zone = zoneInput ? zoneInput.value : 'Centro';
         
-        debug('Valores:', { name, username, email, zone, passwordLength: password?.length });
-        
         if (errorDiv) errorDiv.textContent = '';
         
-        // Validaciones
         if (!name || !username || !password) {
             const msg = 'Nombre, usuario y contraseña son obligatorios';
-            debug('VALIDACIÓN FALLIDA:', msg);
             if (errorDiv) errorDiv.textContent = msg;
             showToast(msg, 'warning');
             return;
@@ -377,33 +363,25 @@ async function registerVendor() {
         
         if (!/^[a-z0-9.]+$/.test(username)) {
             const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
-            debug('VALIDACIÓN FALLIDA:', msg);
             if (errorDiv) errorDiv.textContent = msg;
             showToast(msg, 'warning');
             return;
         }
         
-        // Verificar si existe - CON MANEJO DE ERRORES EXPLÍCITO
-        debug('Verificando si el usuario existe...');
-        
         let existing;
         try {
             existing = await db.get('vendedores', username);
-            debug('Resultado de búsqueda:', existing);
         } catch (dbError) {
-            debug('ERROR en db.get():', dbError);
             throw new Error('Error al consultar la base de datos: ' + dbError.message);
         }
         
         if (existing) {
             const msg = 'Este nombre de usuario ya existe';
-            debug('VALIDACIÓN FALLIDA:', msg);
             if (errorDiv) errorDiv.textContent = msg;
             showToast(msg, 'warning');
             return;
         }
         
-        // Crear vendedor
         const vendor = {
             id: username,
             name: name,
@@ -416,19 +394,14 @@ async function registerVendor() {
             createdBy: 'admin'
         };
         
-        debug('Guardando vendedor:', vendor);
-        
         try {
             await db.add('vendedores', vendor);
-            debug('Vendedor guardado exitosamente');
         } catch (addError) {
-            debug('ERROR en db.add():', addError);
             throw new Error('Error al guardar: ' + addError.message);
         }
         
         showToast('✅ Vendedor registrado exitosamente', 'success');
         
-        // Limpiar formulario
         nameInput.value = '';
         usernameInput.value = '';
         passwordInput.value = '';
@@ -437,31 +410,18 @@ async function registerVendor() {
         await loadVendorsList();
         
     } catch (error) {
-        debug('ERROR EN REGISTRO:', error);
-        console.error('Error completo:', error);
-        
         const errorDiv = document.getElementById('register-error');
         const msg = 'Error al registrar: ' + error.message;
-        
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'error');
     }
-    
-    debug('=== FIN REGISTRO ===');
 }
 
 async function loadVendorsList() {
-    debug('Cargando lista de vendedores...');
-    
     try {
         const vendors = await db.getAll('vendedores');
-        debug('Vendedores encontrados:', vendors.length);
-        
         const container = document.getElementById('vendors-list');
-        if (!container) {
-            debug('ERROR: No se encontró contenedor vendors-list');
-            return;
-        }
+        if (!container) return;
         
         if (vendors.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>No hay vendedores registrados</p></div>';
@@ -485,7 +445,6 @@ async function loadVendorsList() {
         `).join('');
         
     } catch (error) {
-        debug('Error cargando vendedores:', error);
         showToast('Error al cargar vendedores', 'error');
     }
 }
@@ -499,8 +458,6 @@ function filterVendors() {
 }
 
 async function editVendor(username) {
-    debug('Editando vendedor:', username);
-    
     try {
         const vendor = await db.get('vendedores', username);
         if (!vendor) {
@@ -518,14 +475,11 @@ async function editVendor(username) {
         
         openModal('editar-vendedor');
     } catch (error) {
-        debug('Error editando vendedor:', error);
         showToast('Error al cargar datos', 'error');
     }
 }
 
 async function saveVendorChanges() {
-    debug('Guardando cambios de vendedor...');
-    
     const id = document.getElementById('edit-vendor-id').value;
     const name = document.getElementById('edit-vendor-name').value.trim();
     const password = document.getElementById('edit-vendor-password').value;
@@ -557,7 +511,6 @@ async function saveVendorChanges() {
         showToast('✅ Vendedor actualizado', 'success');
         loadVendorsList();
     } catch (error) {
-        debug('Error guardando cambios:', error);
         showToast('Error al guardar', 'error');
     }
 }
@@ -570,14 +523,12 @@ async function deleteVendor(username) {
         showToast('✅ Vendedor eliminado', 'success');
         loadVendorsList();
     } catch (error) {
-        debug('Error eliminando vendedor:', error);
         showToast('Error al eliminar', 'error');
     }
 }
 
 // ===== MAIN APP =====
 function showMainApp() {
-    debug('Mostrando app principal');
     showScreen('app');
     
     const userNameEl = document.getElementById('current-user-name');
@@ -591,12 +542,7 @@ function showMainApp() {
 
 // ===== VIAJES =====
 async function loadViajes() {
-    debug('Cargando viajes...');
-    
-    if (!state.currentVendor) {
-        debug('ERROR: No hay vendedor actual');
-        return;
-    }
+    if (!state.currentVendor) return;
     
     try {
         const filter = document.getElementById('filter-viaje-status')?.value || 'all';
@@ -655,24 +601,29 @@ async function loadViajes() {
         `).join('');
         
     } catch (error) {
-        debug('Error cargando viajes:', error);
         showToast('Error al cargar viajes', 'error');
     }
 }
 
+// ===== CREAR VIAJE CON CORRECCIÓN DE FECHA =====
 async function crearViaje() {
     debug('Creando viaje...');
     
     const destino = document.getElementById('viaje-destino').value.trim();
     const proposito = document.getElementById('viaje-proposito').value.trim();
-    const fechaInicio = document.getElementById('viaje-fecha-inicio').value;
-    const fechaFin = document.getElementById('viaje-fecha-fin').value;
+    const fechaInicioInput = document.getElementById('viaje-fecha-inicio').value;
+    const fechaFinInput = document.getElementById('viaje-fecha-fin').value;
     const presupuesto = document.getElementById('viaje-presupuesto').value;
     
-    if (!destino || !fechaInicio) {
+    if (!destino || !fechaInicioInput) {
         showToast('Destino y fecha de inicio son obligatorios', 'warning');
         return;
     }
+    
+    // CORRECCIÓN: Ajustar fecha para evitar problema de zona horaria
+    // Creamos la fecha a las 12:00 del mediodía para evitar el cambio de día
+    const fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
+    const fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
@@ -680,7 +631,7 @@ async function crearViaje() {
         destino: destino,
         proposito: proposito,
         fechaInicio: fechaInicio,
-        fechaFin: fechaFin || null,
+        fechaFin: fechaFin,
         presupuesto: presupuesto ? parseFloat(presupuesto) : null,
         estado: 'activo',
         createdAt: new Date().toISOString()
@@ -698,13 +649,11 @@ async function crearViaje() {
         
         loadViajes();
     } catch (error) {
-        debug('Error creando viaje:', error);
         showToast('Error al crear viaje', 'error');
     }
 }
 
 function selectViaje(viajeId) {
-    debug('Seleccionando viaje:', viajeId);
     state.currentViaje = viajeId;
     showSection('gastos');
     const select = document.getElementById('gastos-viaje-select');
@@ -714,8 +663,6 @@ function selectViaje(viajeId) {
 
 // ===== GASTOS =====
 async function loadViajesSelect() {
-    debug('Cargando select de viajes...');
-    
     if (!state.currentVendor) return;
     
     try {
@@ -751,8 +698,6 @@ function selectTipoGasto(btn) {
 }
 
 async function guardarGasto() {
-    debug('Guardando gasto...');
-    
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoCard = document.querySelector('.tipo-card.selected');
     const monto = document.getElementById('monto-gasto').value;
@@ -809,14 +754,11 @@ async function guardarGasto() {
         }
         
     } catch (error) {
-        debug('Error guardando gasto:', error);
         showToast('Error al guardar gasto', 'error');
     }
 }
 
 async function loadGastosList() {
-    debug('Cargando gastos...');
-    
     try {
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
         let gastos = [];
@@ -892,14 +834,11 @@ async function loadGastosList() {
         `).join('');
         
     } catch (error) {
-        debug('Error cargando gastos:', error);
         showToast('Error al cargar gastos', 'error');
     }
 }
 
 async function showDetalleGasto(gastoId) {
-    debug('Mostrando detalle gasto:', gastoId);
-    
     try {
         const gasto = await db.get('gastos', gastoId);
         if (!gasto) return;
@@ -964,8 +903,6 @@ async function eliminarGasto(gastoId) {
 
 // ===== REPORTES =====
 async function generarReporte() {
-    debug('Generando reporte...');
-    
     const fechaInicio = document.getElementById('reporte-fecha-inicio').value;
     const fechaFin = document.getElementById('reporte-fecha-fin').value;
     
@@ -1006,7 +943,6 @@ async function generarReporte() {
         
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de pastel
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -1043,7 +979,6 @@ async function generarReporte() {
             }
         });
         
-        // Gráfico de tendencia
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1095,14 +1030,11 @@ async function generarReporte() {
         };
         
     } catch (error) {
-        debug('Error generando reporte:', error);
         showToast('Error al generar reporte', 'error');
     }
 }
 
 async function loadGlobalReport() {
-    debug('Cargando reporte global...');
-    
     try {
         const allGastos = await db.getAll('gastos');
         const allViajes = await db.getAll('viajes');
@@ -1230,7 +1162,7 @@ function closeModal(modalId) {
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) {
-        alert(message); // Fallback si no existe el contenedor
+        alert(message);
         return;
     }
     
@@ -1297,8 +1229,16 @@ function formatMoney(amount) {
 
 function formatDate(dateString) {
     if (!dateString) return '-';
+    
+    // CORRECCIÓN: Ajustar fecha para zona horaria
     const date = new Date(dateString);
-    return date.toLocaleDateString('es-MX', {
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const day = date.getUTCDate();
+    
+    const localDate = new Date(year, month, day);
+    
+    return localDate.toLocaleDateString('es-MX', {
         day: '2-digit',
         month: 'short',
         year: 'numeric'
