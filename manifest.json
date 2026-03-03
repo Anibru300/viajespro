@@ -1,22 +1,20 @@
 {
-  "name": "3P S.A. DE C.V. - Control de Gastos de Viaje",
-  "short_name": "3P Gastos Viaje",
-  "description": "Sistema de control de gastos de viaje para empleados de 3P S.A. DE C.V.",
+  "name": "3P ViajesPro",
+  "short_name": "ViajesPro",
+  "description": "Sistema de Control de Gastos de Viaje",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#6B2C91",
-  "orientation": "portrait-primary",
-  "scope": ".",
-  "lang": "es-MX",
+  "background_color": "#dc2626",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "assets/icons/icon-192x192.png",
+      "src": "./assets/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "assets/icons/icon-512x512.png",
+      "src": "./assets/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
