@@ -1166,3 +1166,33 @@ select.form-control {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--color-primary);
 }
+
+/* Ajustes para móviles */
+@media (max-width: 480px) {
+    .login-container {
+        padding: 1.5rem;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .admin-access {
+        margin-top: 1rem;
+        padding-top: 1rem;
+    }
+    .btn-link {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+    .vendor-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .vendor-actions {
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+    }
+    .vendor-actions button {
+        flex: 1;
+    }
+}
