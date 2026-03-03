@@ -66,9 +66,12 @@
                 </button>
             </form>
             
-            <div class="login-footer">
+                        <div class="login-footer" style="display: flex; flex-direction: column; gap: 0.5rem;">
                 <button class="btn btn-link" onclick="showAdminLogin()">
                     🔐 Acceso Administrador
+                </button>
+                <button class="btn btn-link" onclick="if(window.forceSync) forceSync()" style="color: #059669;">
+                    🔄 Sincronizar Datos
                 </button>
             </div>
             
