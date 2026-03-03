@@ -1,6 +1,6 @@
 /**
  * 3P VIAJESPRO - Database Module v3.2
- * IndexedDB con sistema de respaldo robusto, recuperación de datos y seed inicial
+ * IndexedDB con sistema de respaldo robusto, recuperaci&oacute;n de datos y seed inicial
  */
 
 const DB_NAME = 'ViajesProDB_v3';
@@ -92,8 +92,8 @@ class ViajesProDB {
             try {
                 await this.openDatabase();
                 await this.checkAndRecoverFromBackup();
-                await this.seedInitialData(); // <-- Nuevo: sembrar datos iniciales si no hay
-                console.log('✅ Database initialized');
+                await this.seedInitialData();
+                console.log('Database initialized');
                 resolve(this.db);
             } catch (error) {
                 console.error('Database error:', error);
@@ -144,7 +144,6 @@ class ViajesProDB {
         });
     }
 
-    // Método interno para contar registros sin llamar a init()
     async _count(storeName) {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([storeName], 'readonly');
@@ -155,7 +154,6 @@ class ViajesProDB {
         });
     }
 
-    // Método interno para hacer put sin backup ni init()
     async _put(storeName, data) {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([storeName], 'readwrite');
@@ -187,7 +185,7 @@ class ViajesProDB {
             }
 
             if (backupTotal > 0) {
-                console.log(`🔄 Recuperando ${backupTotal} registros desde backup...`);
+                console.log(`Recuperando ${backupTotal} registros desde backup...`);
                 for (const storeName of stores) {
                     if (backup[storeName]) {
                         for (const item of backup[storeName]) {
@@ -204,15 +202,14 @@ class ViajesProDB {
         }
     }
 
-    // Nuevo: sembrar datos iniciales si la base de datos está vacía
     async seedInitialData() {
         try {
             const vendedores = await this.getAll(STORES.VENDEDORES);
             if (vendedores.length === 0) {
-                console.log('🌱 Sembrando datos iniciales...');
+                console.log('Sembrando datos iniciales...');
                 const vendorEjemplo = {
                     id: 'juan.perez',
-                    name: 'Juan Pérez',
+                    name: 'Juan P&eacute;rez',
                     username: 'juan.perez',
                     password: '123456',
                     email: 'juan@ejemplo.com',
@@ -221,7 +218,7 @@ class ViajesProDB {
                     createdAt: new Date().toISOString()
                 };
                 await this.add(STORES.VENDEDORES, vendorEjemplo, false);
-                console.log('✅ Vendedor de prueba creado (usuario: juan.perez / contraseña: 123456)');
+                console.log('Vendedor de prueba creado (usuario: juan.perez / contrase&ntilde;a: 123456)');
             }
         } catch (e) {
             console.warn('Error al sembrar datos iniciales:', e);
@@ -427,11 +424,11 @@ const db = new ViajesProDB();
 
 document.addEventListener('DOMContentLoaded', () => {
     db.init().then(() => {
-        console.log('🚀 3P Database ready');
+        console.log('3P Database ready');
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
-        console.error('❌ Database initialization failed:', err);
-        alert('Error al inicializar la base de datos. Por favor, recarga la página o contacta al administrador.');
+        console.error('Database initialization failed:', err);
+        alert('Error al inicializar la base de datos. Por favor, recarga la p&aacute;gina o contacta al administrador.');
     });
 });
 
