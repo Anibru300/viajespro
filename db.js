@@ -1,6 +1,7 @@
 /**
- * 3P VIAJESPRO - Database Module v3.0
+ * 3P VIAJESPRO - Database Module v3.1
  * IndexedDB con sistema de respaldo robusto y recuperación de datos
+ * Corregido: deadlock en inicialización y mejorado para móviles
  */
 
 const DB_NAME = 'ViajesProDB_v3';
@@ -143,7 +144,7 @@ class ViajesProDB {
         });
     }
 
-    // Método interno para contar registros sin llamar a this.init()
+    // Método interno para contar registros sin llamar a init()
     async _count(storeName) {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([storeName], 'readonly');
@@ -154,20 +155,13 @@ class ViajesProDB {
         });
     }
 
-    // Método interno para hacer put sin llamar a this.init() y con opción de backup
-    async _put(storeName, data, doBackup = false) {
+    // Método interno para hacer put sin backup ni init()
+    async _put(storeName, data) {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([storeName], 'readwrite');
             const store = transaction.objectStore(storeName);
-            const dataToPut = {
-                ...data,
-                updatedAt: new Date().toISOString()
-            };
-            const request = store.put(dataToPut);
-            request.onsuccess = () => {
-                if (doBackup) this.backup.save(storeName, dataToPut);
-                resolve(dataToPut);
-            };
+            const request = store.put(data);
+            request.onsuccess = () => resolve(data);
             request.onerror = () => reject(request.error);
         });
     }
@@ -177,9 +171,12 @@ class ViajesProDB {
         let totalRecords = 0;
         
         for (const storeName of stores) {
-            // Usamos el método interno _count que no llama a init()
-            const count = await this._count(storeName);
-            totalRecords += count;
+            try {
+                const count = await this._count(storeName);
+                totalRecords += count;
+            } catch (e) {
+                console.warn('Error al contar en', storeName, e);
+            }
         }
 
         if (totalRecords === 0) {
@@ -196,8 +193,7 @@ class ViajesProDB {
                         for (const item of backup[storeName]) {
                             const { _backupAt, ...cleanItem } = item;
                             try {
-                                // Usamos _put interno para no llamar a init() y sin backup para no duplicar
-                                await this._put(storeName, cleanItem, false);
+                                await this._put(storeName, cleanItem);
                             } catch (e) {
                                 console.warn('Error recuperando item:', e.message);
                             }
@@ -274,24 +270,8 @@ class ViajesProDB {
     }
 
     async update(storeName, data, doBackup = true) {
-        await this.init();
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([storeName], 'readwrite');
-            const store = transaction.objectStore(storeName);
-            
-            const dataToUpdate = {
-                ...data,
-                updatedAt: new Date().toISOString()
-            };
-            
-            const request = store.put(dataToUpdate);
-            
-            request.onsuccess = () => {
-                if (doBackup) this.backup.save(storeName, dataToUpdate);
-                resolve(dataToUpdate);
-            };
-            request.onerror = () => reject(request.error);
-        });
+        // update es equivalente a put
+        return this.put(storeName, data, doBackup);
     }
 
     async delete(storeName, id, doBackup = true) {
@@ -413,13 +393,11 @@ class ViajesProDB {
             const store = transaction.objectStore(storeName);
             await store.clear();
         }
-        // Limpiar backups también
-        if (this.backup.isAvailable) {
-            Object.values(STORES).forEach(storeName => {
-                localStorage.removeItem(BACKUP_PREFIX + storeName);
-            });
-            localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
+        // Limpiar backups
+        for (const storeName of stores) {
+            localStorage.removeItem(BACKUP_PREFIX + storeName);
         }
+        localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
     }
 }
 
@@ -431,6 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dispatchEvent(new CustomEvent('dbReady'));
     }).catch(err => {
         console.error('❌ Database initialization failed:', err);
+        // Mostrar un mensaje amigable al usuario
+        alert('Error al inicializar la base de datos. Por favor, recarga la página o contacta al administrador.');
     });
 });
 
