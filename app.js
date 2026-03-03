@@ -1091,18 +1091,6 @@ function exportToExcel() {
     showToast('Reporte descargado como CSV', 'success');
 }
 
-function shareReport() {
-    if (navigator.share) {
-        navigator.share({
-            title: 'Reporte de Gastos 3P ViajesPro',
-            text: `Reporte de gastos del período: ${state.lastReport?.fechaInicio} al ${state.lastReport?.fechaFin}`,
-            url: window.location.href
-        }).catch(() => {});
-    } else {
-        showToast('Compartir no disponible en este dispositivo', 'warning');
-    }
-}
-
 // ===== UTILIDADES =====
 function openModal(modalId) {
     const modal = document.getElementById(`modal-${modalId}`);
@@ -1232,21 +1220,6 @@ function clearPhoto() {
     document.getElementById('camera-input').value = '';
 }
 
-async function clearAllData() {
-    if (!confirm('⚠️ ¿ESTÁS SEGURO?\n\nEsto eliminará TODOS los datos de la aplicación incluyendo vendedores, viajes y gastos.\n\nEsta acción no se puede deshacer.')) return;
-    
-    if (!confirm('Confirma nuevamente: ¿Deseas borrar toda la base de datos?')) return;
-    
-    try {
-        await db.clearAll();
-        localStorage.removeItem('viajespro_session');
-        showToast('Base de datos limpiada. Recargando...', 'success');
-        setTimeout(() => location.reload(), 1500);
-    } catch (error) {
-        showToast('Error al limpiar datos', 'error');
-    }
-}
-
 // Exponer funciones necesarias globalmente
 window.showAdminLogin = showAdminLogin;
 window.backToLogin = backToLogin;
@@ -1271,8 +1244,6 @@ window.showDetalleGasto = showDetalleGasto;
 window.eliminarGasto = eliminarGasto;
 window.generarReporte = generarReporte;
 window.exportReport = exportReport;
-window.shareReport = shareReport;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
-window.clearAllData = clearAllData;
