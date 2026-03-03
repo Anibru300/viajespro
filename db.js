@@ -53,10 +53,12 @@ class ViajesProDB {
                         window.setupRealtimeListeners();
                     }
                     
-                    // Sincronizar al iniciar
+                    // Sincronizar al iniciar (con delay para evitar conflictos)
                     if (window.syncFromFirebase) {
-                        console.log('⬇️ Iniciando sincronización...');
-                        await window.syncFromFirebase();
+                        console.log('⬇️ Iniciando sincronización en 2 segundos...');
+                        setTimeout(() => {
+                            window.syncFromFirebase();
+                        }, 2000);
                     }
                 } else {
                     console.log('⚠️ Firebase no disponible');
@@ -108,7 +110,7 @@ class ViajesProDB {
             const count = await this.count(STORES.VENDEDORES);
             if (count === 0 && !this.firebaseAvailable) {
                 console.log('🌱 Modo offline - creando datos de prueba');
-                await this.add(STORES.VENDEDORES, {
+                await this.addSilent(STORES.VENDEDORES, {
                     id: 'juan.perez',
                     name: 'Juan Pérez',
                     username: 'juan.perez',
@@ -134,6 +136,25 @@ class ViajesProDB {
         });
     }
 
+    // Método SILENCIOSO - no sincroniza con Firebase (para evitar bucles)
+    async addSilent(storeName, data) {
+        const dataToAdd = {
+            ...data,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([storeName], 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.add(dataToAdd);
+            
+            request.onsuccess = () => resolve(dataToAdd);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Método NORMAL - sincroniza con Firebase
     async add(storeName, data) {
         const dataToAdd = {
             ...data,
@@ -177,6 +198,24 @@ class ViajesProDB {
         });
     }
 
+    // Método SILENCIOSO - no sincroniza con Firebase
+    async updateSilent(storeName, data) {
+        const dataToUpdate = {
+            ...data,
+            updatedAt: new Date().toISOString()
+        };
+        
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([storeName], 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.put(dataToUpdate);
+            
+            request.onsuccess = () => resolve(dataToUpdate);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Método NORMAL - sincroniza con Firebase
     async update(storeName, data) {
         const dataToUpdate = {
             ...data,
