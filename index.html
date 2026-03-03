@@ -2,509 +2,529 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <meta name="theme-color" content="#6B2C91">
-    <title>3P S.A. DE C.V. - Control de Gastos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#dc2626">
+    <title>3P ViajesPro - Control de Gastos</title>
     
+    <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32x32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32x32.png">
+    
+    <!-- Chart.js para reportes -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- html2canvas para exportar gráficos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
     <link rel="stylesheet" href="./styles.css">
-    <link rel="stylesheet" href="./ux-improvements.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<base target="_blank">
 </head>
 <body>
-    <!-- PANTALLA DE LOGIN -->
-    <div id="login-screen" class="login-screen">
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+            <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
+            <div class="splash-loader"></div>
+            <p class="splash-text">Cargando...</p>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen">
         <div class="login-container">
-            <div class="logo-3p login-logo">
-                <img src="assets/images/logo-3p-login.png" 
-                     alt="3P S.A. DE C.V. - Control de Gastos de Viaje"
-                     class="logo-img logo-login"
-                     width="280"
-                     height="186"
-                     loading="eager">
-                <h1 class="company-name">3P S.A. DE C.V.</h1>
-                <p class="slogan">Control de Gastos de Viaje</p>
+            <div class="login-header">
+                <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <h1>ViajesPro</h1>
+                <p class="login-subtitle">Sistema de Control de Gastos</p>
             </div>
             
-            <div class="login-form">
-                <h2>Iniciar Sesi&oacute;n</h2>
-                <div class="form-group">
-                    <label>Usuario:</label>
-                    <input type="text" id="login-username" class="form-control" placeholder="Ej: juan.perez">
+            <form id="login-form" onsubmit="event.preventDefault(); login();">
+                <div class="input-group">
+                    <span class="input-icon">👤</span>
+                    <input type="text" id="login-username" placeholder="Usuario" autocomplete="username" required>
                 </div>
-                <div class="form-group">
-                    <label>Contrase&ntilde;a:</label>
-                    <input type="password" id="login-password" class="form-control" placeholder="Tu contrase&ntilde;a">
+                
+                <div class="input-group">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password" required>
+                    <button type="button" class="toggle-password" onclick="togglePassword('login-password')">👁️</button>
                 </div>
-                <div class="form-check">
-                    <input type="checkbox" id="remember-me" checked>
-                    <label for="remember-me">Mantener sesi&oacute;n abierta</label>
-                </div>
-                <button class="btn-primary btn-large" onclick="login()">
-                    Ingresar
+                
+                <label class="checkbox-container">
+                    <input type="checkbox" id="remember-me">
+                    <span class="checkmark"></span>
+                    Recordarme en este dispositivo
+                </label>
+                
+                <button type="submit" class="btn btn-primary btn-large">
+                    <span class="btn-text">INICIAR SESIÓN</span>
+                    <span class="btn-loader" style="display: none;">⏳</span>
                 </button>
-                <p class="login-error" id="login-error"></p>
+            </form>
+            
+            <div class="login-footer">
+                <button class="btn btn-link" onclick="showAdminLogin()">
+                    🔐 Acceso Administrador
+                </button>
             </div>
             
-            <div class="admin-access">
-                <button class="btn-link" onclick="showAdminLogin()">
-                    Acceso Administrador
-                </button>
-            </div>
+            <div class="version-info">v2.0.0</div>
         </div>
     </div>
 
-    <!-- PANTALLA ADMIN LOGIN -->
-    <div id="admin-login-screen" class="login-screen" style="display: none;">
+    <!-- Admin Login Screen -->
+    <div id="admin-login-screen" class="screen hidden">
         <div class="login-container">
-            <div class="logo-3p">
-                <h2>Panel Administrador</h2>
+            <div class="login-header">
+                <img src="./assets/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
+                <h1>Panel Admin</h1>
             </div>
             
-            <div class="login-form">
-                <div class="form-group">
-                    <label>Usuario Admin:</label>
-                    <input type="text" id="admin-username" class="form-control" value="admin">
+            <form onsubmit="event.preventDefault(); loginAdmin();">
+                <div class="input-group">
+                    <span class="input-icon">👤</span>
+                    <input type="text" id="admin-username" placeholder="Usuario admin" required>
                 </div>
-                <div class="form-group">
-                    <label>Contrase&ntilde;a:</label>
-                    <input type="password" id="admin-password" class="form-control">
+                
+                <div class="input-group">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="admin-password" placeholder="Contraseña" required>
                 </div>
-                <button class="btn-primary btn-large" onclick="loginAdmin()">
-                    Acceder
-                </button>
-                <button class="btn-secondary" onclick="backToLogin()">
-                    Volver
-                </button>
-                <p class="login-error" id="admin-login-error"></p>
-            </div>
+                
+                <p id="admin-login-error" class="error-message"></p>
+                
+                <button type="submit" class="btn btn-primary btn-large">ENTRAR</button>
+                <button type="button" class="btn btn-secondary btn-large" onclick="backToLogin()">← Volver</button>
+            </form>
         </div>
     </div>
 
-    <!-- PANEL ADMINISTRADOR -->
-    <div id="admin-panel" class="admin-panel" style="display: none;">
-        <header class="app-header admin-header">
-            <div class="header-brand">
-                <span class="header-title">3P Admin - Zona Veracruz</span>
-            </div>
-            <button class="btn-logout" onclick="logout()">Cerrar Sesi&oacute;n</button>
-        </header>
-        
-        <div class="admin-content">
-            <div class="admin-section">
-                <h2>Registrar Nuevo Vendedor</h2>
-                <div class="form-group">
-                    <label>Nombre completo:</label>
-                    <input type="text" id="new-vendor-name" class="form-control" placeholder="Ej: Juan P&eacute;rez Garc&iacute;a">
-                </div>
-                <div class="form-group">
-                    <label>Usuario (sin espacios, solo min&uacute;sculas, n&uacute;meros y puntos):</label>
-                    <input type="text" id="new-vendor-username" class="form-control" placeholder="Ej: juan.perez">
-                </div>
-                <div class="form-group">
-                    <label>Contrase&ntilde;a:</label>
-                    <input type="password" id="new-vendor-password" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>Email (opcional):</label>
-                    <input type="email" id="new-vendor-email" class="form-control" placeholder="ejemplo@correo.com">
-                </div>
-                <div class="form-group">
-                    <label>Zona:</label>
-                    <select id="new-vendor-zone" class="form-control">
-                        <option value="Centro">Centro</option>
-                        <option value="Occidente">Occidente</option>
-                    </select>
-                </div>
-                <button class="btn-success btn-large" onclick="registerVendor()">
-                    Registrar Vendedor
-                </button>
-                <div id="register-error" style="color: red; margin-top: 10px; text-align: center;"></div>
-            </div>
-            
-            <div class="admin-section">
-                <h2>Vendedores Registrados</h2>
-                <div id="vendors-list" class="vendors-list">
-                    <!-- Lista din&aacute;mica -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- APP PRINCIPAL (VENDEDOR) -->
-    <div id="app" style="display: none;">
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="screen hidden">
         <header class="app-header">
             <div class="header-brand">
-                <img src="assets/images/logo-3p-header.png" 
-                     alt="3P S.A. DE C.V."
-                     class="logo-img logo-header"
-                     width="75"
-                     height="50"
-                     loading="lazy">
-                <span class="header-title">Control de Gastos</span>
+                <img src="./assets/logo-3p-header.png" alt="3P" class="header-logo">
+                <h1>Panel de Administración</h1>
             </div>
-            <div class="header-user">
-                <span id="current-user-name">Vendedor</span>
-                <button class="btn-logout-mini" onclick="logout()">Salir</button>
-            </div>
+            <button class="btn btn-icon" onclick="logout()" title="Cerrar sesión">🚪</button>
         </header>
-
-        <nav class="main-nav">
-            <button class="nav-btn active" onclick="showSection('viajes')">
-                <span class="icon">Viajes</span>
-                <span>Mis Viajes</span>
-            </button>
-            <button class="nav-btn" onclick="showSection('gastos')">
-                <span class="icon">Gastos</span>
-                <span>Gastos</span>
-            </button>
-            <button class="nav-btn" onclick="showSection('captura')">
-                <span class="icon">Capturar</span>
-                <span>Capturar</span>
-            </button>
-            <button class="nav-btn" onclick="showSection('reportes')">
-                <span class="icon">Reportes</span>
-                <span>Reportes</span>
-            </button>
+        
+        <nav class="admin-nav">
+            <button class="nav-tab active" onclick="showAdminTab('vendedores')">👥 Vendedores</button>
+            <button class="nav-tab" onclick="showAdminTab('reportes')">📊 Reportes Globales</button>
+            <button class="nav-tab" onclick="showAdminTab('config')">⚙️ Configuración</button>
         </nav>
-
-        <!-- SECCI&Oacute;N: VIAJES -->
-        <section id="viajes-section" class="section active">
-            <div class="section-header">
-                <h2>Mis Viajes</h2>
-                <button class="btn-primary" onclick="openModal('nuevo-viaje')">
-                    Nuevo Viaje
-                </button>
-            </div>
-            <div id="viajes-list" class="cards-container">
-                <div class="empty-state">
-                    <span class="icon-large">Viajes</span>
-                    <p>No tienes viajes registrados</p>
-                    <button class="btn-secondary" onclick="openModal('nuevo-viaje')">
-                        Crear primer viaje
-                    </button>
+        
+        <main class="app-content">
+            <!-- Tab Vendedores -->
+            <div id="admin-tab-vendedores" class="admin-tab active">
+                <div class="card">
+                    <h2>➕ Registrar Nuevo Vendedor</h2>
+                    <form id="register-form" onsubmit="event.preventDefault(); registerVendor();">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Nombre completo *</label>
+                                <input type="text" id="new-vendor-name" placeholder="Ej: Juan Pérez" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Usuario *</label>
+                                <input type="text" id="new-vendor-username" placeholder="juan.perez" pattern="[a-z0-9.]+" required>
+                                <small>Solo minúsculas, números y puntos</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Contraseña *</label>
+                                <input type="password" id="new-vendor-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="new-vendor-email" placeholder="juan@3p.com">
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Zona</label>
+                                <select id="new-vendor-zone">
+                                    <option value="Centro">Centro</option>
+                                    <option value="Norte">Norte</option>
+                                    <option value="Sur">Sur</option>
+                                    <option value="Oriente">Oriente</option>
+                                    <option value="Occidente">Occidente</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <button type="submit" class="btn btn-primary">REGISTRAR VENDEDOR</button>
+                            </div>
+                        </div>
+                        <p id="register-error" class="error-message"></p>
+                    </form>
                 </div>
-            </div>
-        </section>
-
-        <!-- SECCI&Oacute;N: GASTOS -->
-        <section id="gastos-section" class="section">
-            <div class="section-header">
-                <h2>Gastos del Viaje</h2>
-                <select id="viaje-select" class="select-viaje" onchange="loadGastos(this.value)">
-                    <option value="">Selecciona un viaje...</option>
-                </select>
-            </div>
-            <div id="gastos-list" class="cards-container">
-                <div class="empty-state">
-                    <span class="icon-large">Gastos</span>
-                    <p>Selecciona un viaje para ver sus gastos</p>
-                </div>
-            </div>
-            <div class="resumen-gastos" id="resumen-gastos" style="display: none;">
-                <h3>Resumen de Gastos</h3>
-                <div class="totales-grid" id="totales-grid"></div>
-            </div>
-        </section>
-
-        <!-- SECCI&Oacute;N: CAPTURA -->
-        <section id="captura-section" class="section">
-            <div class="section-header">
-                <h2>Captura de Gasto</h2>
-            </div>
-            <div class="capture-form">
-                <div class="form-group">
-                    <label>Viaje:</label>
-                    <select id="captura-viaje-select" class="form-control">
-                        <option value="">Selecciona un viaje...</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Folio de gasto (autom&aacute;tico):</label>
-                    <input type="text" id="gasto-folio" class="form-control" readonly>
-                </div>
-
-                <div class="form-group">
-                    <label>Tipo de gasto:</label>
-                    <div class="tipo-gasto-grid">
-                        <button type="button" class="tipo-btn" data-tipo="gasolina" onclick="selectTipoGasto(this)">
-                            Gasolina
-                        </button>
-                        <button type="button" class="tipo-btn" data-tipo="comida" onclick="selectTipoGasto(this)">
-                            Comida
-                        </button>
-                        <button type="button" class="tipo-btn" data-tipo="hotel" onclick="selectTipoGasto(this)">
-                            Hotel
-                        </button>
-                        <button type="button" class="tipo-btn" data-tipo="transporte" onclick="selectTipoGasto(this)">
-                            Transporte
-                        </button>
-                        <button type="button" class="tipo-btn" data-tipo="casetas" onclick="selectTipoGasto(this)">
-                            Casetas
-                        </button>
-                        <button type="button" class="tipo-btn" data-tipo="otros" onclick="selectTipoGasto(this)">
-                            Otros
-                        </button>
+                
+                <div class="card">
+                    <h2>👥 Vendedores Registrados</h2>
+                    <div class="search-box">
+                        <input type="text" id="search-vendors" placeholder="🔍 Buscar vendedor..." onkeyup="filterVendors()">
+                    </div>
+                    <div id="vendors-list" class="vendors-grid">
+                        <div class="loading-spinner">Cargando...</div>
                     </div>
                 </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Monto ($):</label>
-                        <input type="number" id="monto-gasto" class="form-control" placeholder="0.00" step="0.01">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha y hora:</label>
-                        <input type="datetime-local" id="fecha-gasto" class="form-control">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Lugar/Concepto:</label>
-                    <input type="text" id="lugar-gasto" class="form-control" placeholder="Ej: Pemex Carretera 57">
-                </div>
-
-                <div class="form-group">
-                    <label>Ubicaci&oacute;n GPS:</label>
-                    <div class="gps-container">
-                        <button type="button" class="btn-gps" onclick="getGPSLocation()">
-                            Obtener Ubicaci&oacute;n
-                        </button>
-                        <div id="gps-info" class="gps-info">
-                            <span id="gps-coords">Sin ubicaci&oacute;n</span>
-                            <button type="button" class="btn-map" onclick="openMap()" style="display: none;" id="btn-ver-mapa">
-                                Ver Mapa
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Fotos de evidencia:</label>
-                    <div class="photo-types">
-                        <div class="photo-type">
-                            <button type="button" class="btn-photo" onclick="capturePhoto('factura')">
-                                Factura
-                            </button>
-                            <span class="photo-count" id="count-factura">0</span>
-                        </div>
-                        <div class="photo-type">
-                            <button type="button" class="btn-photo" onclick="capturePhoto('nota_remision')">
-                                Nota Remisi&oacute;n
-                            </button>
-                            <span class="photo-count" id="count-nota_remision">0</span>
-                        </div>
-                        <div class="photo-type">
-                            <button type="button" class="btn-photo" onclick="capturePhoto('ticket')">
-                                Ticket
-                            </button>
-                            <span class="photo-count" id="count-ticket">0</span>
-                        </div>
-                        <div class="photo-type">
-                            <button type="button" class="btn-photo" onclick="capturePhoto('otro')">
-                                Otro
-                            </button>
-                            <span class="photo-count" id="count-otro">0</span>
-                        </div>
-                    </div>
-                    <div id="preview-fotos" class="preview-container"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Notas adicionales:</label>
-                    <textarea id="notas-gasto" class="form-control" rows="2" placeholder="Observaciones importantes..."></textarea>
-                </div>
-
-                <button class="btn-primary btn-large" onclick="guardarGasto()">
-                    Guardar Gasto
-                </button>
-            </div>
-        </section>
-
-        <!-- SECCI&Oacute;N: REPORTES -->
-        <section id="reportes-section" class="section">
-            <div class="section-header">
-                <h2>Reportes para Contabilidad</h2>
             </div>
             
-            <div class="reportes-container">
-                <div class="report-card">
-                    <h3>Generar Reporte Profesional</h3>
-                    <p>Excel formateado + fotos organizadas en ZIP</p>
-                    
+            <!-- Tab Reportes Admin -->
+            <div id="admin-tab-reportes" class="admin-tab hidden">
+                <div class="card">
+                    <h2>📊 Reportes Globales</h2>
+                    <div class="stats-grid" id="admin-stats">
+                        <!-- Stats se generan dinámicamente -->
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="global-chart"></canvas>
+                    </div>
+                    <div class="actions-bar">
+                        <button class="btn btn-secondary" onclick="exportGlobalReport('pdf')">📄 Exportar PDF</button>
+                        <button class="btn btn-secondary" onclick="exportGlobalReport('excel')">📊 Exportar Excel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab Config -->
+            <div id="admin-tab-config" class="admin-tab hidden">
+                <div class="card">
+                    <h2>⚙️ Configuración del Sistema</h2>
+                    <div class="config-options">
+                        <button class="btn btn-danger" onclick="clearAllData()">🗑️ Limpiar Toda la Base de Datos</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Main App (Vendedor) -->
+    <div id="app" class="screen hidden">
+        <header class="app-header">
+            <div class="header-brand">
+                <img src="./assets/logo-3p-header.png" alt="3P" class="header-logo">
+                <div class="header-info">
+                    <h1 id="welcome-text">Hola</h1>
+                    <span id="current-user-name" class="user-name"></span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span id="connection-status" class="status-indicator online">●</span>
+                <button class="btn btn-icon" onclick="logout()" title="Cerrar sesión">🚪</button>
+            </div>
+        </header>
+        
+        <nav class="bottom-nav">
+            <button class="nav-item active" onclick="showSection('viajes')" data-section="viajes">
+                <span class="nav-icon">🚗</span>
+                <span class="nav-label">Viajes</span>
+            </button>
+            <button class="nav-item" onclick="showSection('captura')" data-section="captura">
+                <span class="nav-icon">📸</span>
+                <span class="nav-label">Captura</span>
+            </button>
+            <button class="nav-item" onclick="showSection('gastos')" data-section="gastos">
+                <span class="nav-icon">💰</span>
+                <span class="nav-label">Gastos</span>
+            </button>
+            <button class="nav-item" onclick="showSection('reportes')" data-section="reportes">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Reportes</span>
+            </button>
+        </nav>
+        
+        <main class="app-content with-bottom-nav">
+            <!-- Viajes Section -->
+            <section id="viajes-section" class="section active">
+                <div class="section-header">
+                    <h2>Mis Viajes</h2>
+                    <button class="btn btn-primary btn-fab" onclick="openModal('nuevo-viaje')">+</button>
+                </div>
+                
+                <div class="filters-bar">
+                    <select id="filter-viaje-status" onchange="loadViajes()">
+                        <option value="all">Todos</option>
+                        <option value="activo">Activos</option>
+                        <option value="completado">Completados</option>
+                    </select>
+                </div>
+                
+                <div id="viajes-list" class="cards-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">🚗</div>
+                        <p>No tienes viajes registrados</p>
+                        <button class="btn btn-link" onclick="openModal('nuevo-viaje')">Crear primer viaje</button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Captura Section -->
+            <section id="captura-section" class="section">
+                <div class="section-header">
+                    <h2>Capturar Gasto</h2>
+                </div>
+                
+                <div class="capture-form">
                     <div class="form-group">
-                        <label>Seleccionar Viaje:</label>
-                        <select id="reporte-viaje-select" class="form-control">
-                            <option value="todos">Todos los viajes</option>
+                        <label>Selecciona el viaje *</label>
+                        <select id="captura-viaje-select" required>
+                            <option value="">Elige un viaje activo...</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
-                        <label>Rango de fechas:</label>
-                        <div class="date-range">
-                            <input type="date" id="fecha-inicio" class="form-control">
-                            <span>a</span>
-                            <input type="date" id="fecha-fin" class="form-control">
+                        <label>Tipo de gasto *</label>
+                        <div class="tipo-grid">
+                            <button type="button" class="tipo-card" data-tipo="gasolina" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">⛽</span>
+                                <span class="tipo-label">Gasolina</span>
+                            </button>
+                            <button type="button" class="tipo-card" data-tipo="comida" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">🍔</span>
+                                <span class="tipo-label">Comida</span>
+                            </button>
+                            <button type="button" class="tipo-card" data-tipo="hotel" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">🏨</span>
+                                <span class="tipo-label">Hotel</span>
+                            </button>
+                            <button type="button" class="tipo-card" data-tipo="transporte" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">🚌</span>
+                                <span class="tipo-label">Transporte</span>
+                            </button>
+                            <button type="button" class="tipo-card" data-tipo="casetas" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">🛣️</span>
+                                <span class="tipo-label">Casetas</span>
+                            </button>
+                            <button type="button" class="tipo-card" data-tipo="otros" onclick="selectTipoGasto(this)">
+                                <span class="tipo-icon">📦</span>
+                                <span class="tipo-label">Otros</span>
+                            </button>
                         </div>
                     </div>
                     
-                    <button class="btn-success btn-large" onclick="generarReporteZIP()">
-                        Generar Reporte (ZIP)
-                    </button>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Monto *</label>
+                            <div class="input-prefix">
+                                <span class="prefix">$</span>
+                                <input type="number" id="monto-gasto" placeholder="0.00" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha</label>
+                            <input type="datetime-local" id="fecha-gasto">
+                        </div>
+                    </div>
                     
-                    <div class="report-info">
-                        <small>Incluye: Excel con formato profesional + fotos numeradas por carpeta</small>
+                    <div class="form-group">
+                        <label>Lugar/Concepto</label>
+                        <input type="text" id="lugar-gasto" placeholder="Ej: Gasolinera Pemex, km 45">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Foto del ticket (opcional)</label>
+                        <div class="photo-upload" onclick="document.getElementById('camera-input').click()">
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoCapture(event)">
+                            <div class="upload-placeholder" id="photo-preview">
+                                <span class="upload-icon">📷</span>
+                                <span class="upload-text">Toca para capturar foto</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-large" onclick="guardarGasto()">
+                        💾 GUARDAR GASTO
+                    </button>
+                </div>
+            </section>
+            
+            <!-- Gastos Section -->
+            <section id="gastos-section" class="section">
+                <div class="section-header">
+                    <h2>Mis Gastos</h2>
+                    <select id="gastos-viaje-select" onchange="loadGastosList()">
+                        <option value="">Todos los viajes</option>
+                    </select>
+                </div>
+                
+                <div class="gastos-resumen" id="gastos-resumen">
+                    <!-- Resumen dinámico -->
+                </div>
+                
+                <div id="gastos-list" class="gastos-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">💰</div>
+                        <p>No hay gastos registrados</p>
                     </div>
                 </div>
-
-                <div class="report-card">
-                    <h3>Compartir &Uacute;ltimo Reporte</h3>
-                    <p>Env&iacute;a por WhatsApp o Email</p>
-                    <button class="btn-primary btn-large" onclick="compartirUltimoReporte()" id="btn-compartir" disabled>
-                        Compartir Reporte
-                    </button>
-                    <p class="last-report" id="last-report-info">No hay reportes generados</p>
+            </section>
+            
+            <!-- Reportes Section -->
+            <section id="reportes-section" class="section">
+                <div class="section-header">
+                    <h2>Reportes</h2>
                 </div>
-            </div>
-        </section>
+                
+                <div class="card">
+                    <h3>Resumen por Período</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Desde</label>
+                            <input type="date" id="reporte-fecha-inicio">
+                        </div>
+                        <div class="form-group">
+                            <label>Hasta</label>
+                            <input type="date" id="reporte-fecha-fin">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="generarReporte()">GENERAR REPORTE</button>
+                </div>
+                
+                <div id="reporte-resultado" class="hidden">
+                    <div class="card">
+                        <h3>Distribución de Gastos</h3>
+                        <div class="chart-container small">
+                            <canvas id="gastos-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Tendencia Mensual</h3>
+                        <div class="chart-container">
+                            <canvas id="trend-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="actions-bar">
+                        <button class="btn btn-secondary" onclick="exportReport('pdf')">📄 Descargar PDF</button>
+                        <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar Excel</button>
+                        <button class="btn btn-secondary" onclick="shareReport()">📤 Compartir</button>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
-    <!-- MODAL: Nuevo Viaje -->
+    <!-- Modal: Nuevo Viaje -->
     <div id="modal-nuevo-viaje" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Nuevo Viaje</h3>
-                <button class="close-btn" onclick="closeModal('nuevo-viaje')">&times;</button>
+                <h3>🚗 Nuevo Viaje</h3>
+                <button class="btn btn-icon" onclick="closeModal('nuevo-viaje')">✕</button>
             </div>
-            <div class="modal-body">
+            
+            <form onsubmit="event.preventDefault(); crearViaje();">
                 <div class="form-group">
-                    <label>Destino:</label>
-                    <input type="text" id="viaje-destino" class="form-control" placeholder="Ej: Xalapa, Veracruz">
+                    <label>Destino *</label>
+                    <input type="text" id="viaje-destino" placeholder="Ej: Ciudad de México" required>
                 </div>
+                
                 <div class="form-group">
-                    <label>Prop&oacute;sito del viaje:</label>
-                    <textarea id="viaje-proposito" class="form-control" rows="2" placeholder="Ej: Visita a clientes, entrega de productos..."></textarea>
+                    <label>Propósito del viaje</label>
+                    <input type="text" id="viaje-proposito" placeholder="Ej: Visita a cliente, entrega, etc.">
                 </div>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Fecha inicio:</label>
-                        <input type="date" id="viaje-fecha-inicio" class="form-control">
+                        <label>Fecha inicio *</label>
+                        <input type="date" id="viaje-fecha-inicio" required>
                     </div>
                     <div class="form-group">
-                        <label>Fecha fin (estimada):</label>
-                        <input type="date" id="viaje-fecha-fin" class="form-control">
+                        <label>Fecha fin (opcional)</label>
+                        <input type="date" id="viaje-fecha-fin">
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('nuevo-viaje')">Cancelar</button>
-                <button class="btn-primary" onclick="crearViaje()">Crear Viaje</button>
-            </div>
+                
+                <div class="form-group">
+                    <label>Presupuesto estimado</label>
+                    <div class="input-prefix">
+                        <span class="prefix">$</span>
+                        <input type="number" id="viaje-presupuesto" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-large">CREAR VIAJE</button>
+            </form>
         </div>
     </div>
 
-    <!-- MODAL: Editar Vendedor -->
+    <!-- Modal: Editar Vendedor -->
     <div id="modal-editar-vendedor" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Editar Vendedor</h3>
-                <button class="close-btn" onclick="closeModal('editar-vendedor')">&times;</button>
+                <h3>✏️ Editar Vendedor</h3>
+                <button class="btn btn-icon" onclick="closeModal('editar-vendedor')">✕</button>
             </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit-vendor-id">
+            
+            <input type="hidden" id="edit-vendor-id">
+            
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" id="edit-vendor-name" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Usuario</label>
+                <input type="text" id="edit-vendor-username" readonly class="readonly">
+            </div>
+            
+            <div class="form-group">
+                <label>Nueva contraseña (dejar en blanco para no cambiar)</label>
+                <input type="password" id="edit-vendor-password">
+            </div>
+            
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="edit-vendor-email">
+            </div>
+            
+            <div class="form-row">
                 <div class="form-group">
-                    <label>Nombre completo:</label>
-                    <input type="text" id="edit-vendor-name" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>Usuario:</label>
-                    <input type="text" id="edit-vendor-username" class="form-control" readonly>
-                </div>
-                <div class="form-group">
-                    <label>Contrase&ntilde;a (dejar vac&iacute;o para no cambiar):</label>
-                    <input type="password" id="edit-vendor-password" class="form-control" placeholder="Nueva contrase&ntilde;a">
-                </div>
-                <div class="form-group">
-                    <label>Email:</label>
-                    <input type="email" id="edit-vendor-email" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>Zona:</label>
-                    <select id="edit-vendor-zone" class="form-control">
+                    <label>Zona</label>
+                    <select id="edit-vendor-zone">
                         <option value="Centro">Centro</option>
+                        <option value="Norte">Norte</option>
+                        <option value="Sur">Sur</option>
+                        <option value="Oriente">Oriente</option>
                         <option value="Occidente">Occidente</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Estado:</label>
-                    <select id="edit-vendor-status" class="form-control">
+                    <label>Estado</label>
+                    <select id="edit-vendor-status">
                         <option value="active">Activo</option>
                         <option value="inactive">Inactivo</option>
                     </select>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('editar-vendedor')">Cancelar</button>
-                <button class="btn-primary" onclick="saveVendorChanges()">Guardar Cambios</button>
-            </div>
+            
+            <button class="btn btn-primary btn-large" onclick="saveVendorChanges()">GUARDAR CAMBIOS</button>
         </div>
     </div>
 
-    <!-- MODAL: Ver Mapa -->
-    <div id="modal-mapa" class="modal">
-        <div class="modal-content modal-large">
+    <!-- Modal: Detalle Gasto -->
+    <div id="modal-detalle-gasto" class="modal">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3>Ubicaci&oacute;n del Gasto</h3>
-                <button class="close-btn" onclick="closeModal('mapa')">&times;</button>
+                <h3>🧾 Detalle del Gasto</h3>
+                <button class="btn btn-icon" onclick="closeModal('detalle-gasto')">✕</button>
             </div>
-            <div class="modal-body">
-                <div id="mapa-container" class="mapa-container">
-                    <iframe id="mapa-iframe" width="100%" height="400" frameborder="0" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
-                </div>
-                <div class="mapa-info" id="mapa-info"></div>
+            <div id="detalle-gasto-content">
+                <!-- Contenido dinámico -->
             </div>
         </div>
     </div>
 
-    <!-- MODAL: Ver Fotos -->
-    <div id="modal-fotos" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3>Fotos del Gasto</h3>
-                <button class="close-btn" onclick="closeModal('fotos')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="fotos-detalle" class="fotos-detalle"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Input oculto para c&aacute;mara -->
-    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
 
     <!-- Scripts -->
     <script src="./db.js"></script>
     <script src="./app.js"></script>
-    <script src="./ux-improvements.js"></script>
-    
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then((registration) => {
-                        console.log('SW registered:', registration.scope);
-                    })
-                    .catch((error) => {
-                        console.log('SW registration failed:', error);
-                    });
-            });
-        }
-    </script>
 </body>
 </html>
