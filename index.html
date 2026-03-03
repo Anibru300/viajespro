@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#dc2626">
-    <title>3P - Control de Viáticos</title>
+    <title>3P - Control de Viáticos Pro</title>
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -28,7 +28,7 @@
         <div class="splash-content">
             <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
-            <p class="splash-text">Cargando...</p>
+            <p class="splash-text">Cargando v4.0...</p>
         </div>
     </div>
 
@@ -39,6 +39,7 @@
                 <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Control de Viáticos</h1>
                 <p class="login-subtitle">Sistema de Gestión de Gastos de Viaje</p>
+                <span class="version-badge">v4.0 Pro</span>
             </div>
             
             <form id="login-form" onsubmit="event.preventDefault(); login();">
@@ -71,7 +72,7 @@
                 </button>
             </div>
             
-            <div class="version-info">v2.0.0</div>
+            <div class="version-info">v4.0.0 - Actualizado con Excel Profesional</div>
         </div>
     </div>
 
@@ -250,7 +251,7 @@
                 </div>
             </section>
             
-            <!-- Captura Section -->
+            <!-- Captura Section MEJORADA V4.0 -->
             <section id="captura-section" class="section">
                 <div class="section-header">
                     <h2>Capturar Gasto</h2>
@@ -313,8 +314,33 @@
                         <input type="text" id="lugar-gasto" placeholder="Ej: Gasolinera Pemex, km 45">
                     </div>
                     
+                    <!-- NUEVOS CAMPOS V4.0 -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Folio de Factura</label>
+                            <input type="text" id="folio-factura" placeholder="Ej: A-12345">
+                        </div>
+                        <div class="form-group">
+                            <label>Razón Social</label>
+                            <input type="text" id="razon-social" placeholder="Ej: Gasolinera del Norte SA">
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
-                        <label>Foto del ticket (opcional)</label>
+                        <label>Comentarios detallados</label>
+                        <textarea id="comentarios-gasto" rows="2" placeholder="Información adicional relevante para el reporte..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="es-facturable" checked>
+                            <span class="checkmark"></span>
+                            Es gasto facturable (para reembolso)
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fotos de soporte (múltiples)</label>
                         <div class="photo-upload" onclick="document.getElementById('camera-input').click()">
                             <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoCapture(event)">
                             <div class="upload-placeholder" id="photo-preview">
@@ -387,14 +413,14 @@
                     
                     <div class="actions-bar">
                         <button class="btn btn-secondary" onclick="exportReport('pdf')">📄 Descargar PDF</button>
-                        <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar Excel</button>
+                        <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar Excel Profesional</button>
                     </div>
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- Modal: Nuevo Viaje -->
+    <!-- Modal: Nuevo Viaje MEJORADO V4.0 -->
     <div id="modal-nuevo-viaje" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -404,13 +430,26 @@
             
             <form onsubmit="event.preventDefault(); crearViaje();">
                 <div class="form-group">
-                    <label>Destino *</label>
-                    <input type="text" id="viaje-destino" placeholder="Ej: Ciudad de México" required>
+                    <label>Cliente *</label>
+                    <input type="text" id="viaje-cliente" placeholder="Ej: Grupo Industrial ABC" required>
+                    <small>Nombre del cliente a visitar</small>
                 </div>
                 
                 <div class="form-group">
-                    <label>Propósito del viaje</label>
-                    <input type="text" id="viaje-proposito" placeholder="Ej: Visita a cliente, entrega, etc.">
+                    <label>Destino General *</label>
+                    <input type="text" id="viaje-destino" placeholder="Ej: Ciudad de México" required>
+                    <small>Ciudad o región de destino</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Lugar específico de visita</label>
+                    <input type="text" id="viaje-lugar-visita" placeholder="Ej: Planta Industrial Tlalnepantla">
+                    <small>Dirección o lugar específico donde se realizará la visita</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Objetivo del viaje</label>
+                    <input type="text" id="viaje-objetivo" placeholder="Ej: Instalación de equipo, capacitación, etc.">
                 </div>
                 
                 <div class="form-row">
@@ -491,7 +530,7 @@
         </div>
     </div>
 
-    <!-- Modal: Detalle Gasto -->
+    <!-- Modal: Detalle Gasto MEJORADO V4 -->
     <div id="modal-detalle-gasto" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -505,9 +544,18 @@
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
 
-    <!-- Scripts con versión para evitar caché -->
-    <script src="./db.js?v=2"></script>
-    <script src="./app.js?v=2"></script>
-    <script src="./ux-improvements.js?v=2"></script>
+    <!-- Scripts -->
+    <script src="./db.js?v=4"></script>
+    <script src="./app.js?v=4"></script>
+    <script src="./ux-improvements.js?v=4"></script>
+    
+    <!-- Registrar Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('✅ SW registrado:', reg.scope))
+                .catch(err => console.log('❌ SW error:', err));
+        }
+    </script>
 </body>
 </html>
