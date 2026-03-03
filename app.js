@@ -1,6 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v2.0
- * Mejorado con reportes visuales, mejor UX y funcionalidades avanzadas
+ * 3P VIAJESPRO - Main Application v2.0 (DEBUG VERSION)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -36,8 +35,15 @@ const TIPOS_GASTO = {
     otros: { icon: '📦', color: '#6b7280', label: 'Otros' }
 };
 
+// Función de log para depuración
+function debug(msg, data) {
+    console.log(`[DEBUG] ${msg}`, data || '');
+}
+
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
+    debug('DOM cargado, iniciando...');
+    
     // Mostrar splash screen
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
@@ -47,12 +53,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 1500);
 
-    await initApp();
+    try {
+        await initApp();
+    } catch (error) {
+        debug('Error en initApp:', error);
+        alert('Error al iniciar: ' + error.message);
+    }
 });
 
 async function initApp() {
+    debug('Iniciando app...');
+    
     try {
+        // Verificar que db existe
+        if (typeof db === 'undefined') {
+            throw new Error('La base de datos no está cargada. Verifica que db.js se cargó antes que app.js');
+        }
+        
+        debug('Inicializando DB...');
         await db.init();
+        debug('DB inicializada correctamente');
+        
         checkSession();
         setupEventListeners();
         updateConnectionStatus();
@@ -76,13 +97,17 @@ async function initApp() {
         }
         if (reporteFin) reporteFin.value = today;
         
+        debug('App iniciada correctamente');
+        
     } catch (error) {
-        console.error('Error initializing app:', error);
-        showToast('Error al iniciar la aplicación', 'error');
+        debug('Error en initApp:', error);
+        throw error;
     }
 }
 
 function setupEventListeners() {
+    debug('Configurando event listeners...');
+    
     // Online/Offline
     window.addEventListener('online', () => updateConnectionStatus(true));
     window.addEventListener('offline', () => updateConnectionStatus(false));
@@ -101,17 +126,27 @@ function setupEventListeners() {
             }
         });
     });
+    
+    debug('Event listeners configurados');
 }
 
 // ===== NAVEGACIÓN Y UI =====
 function showScreen(screenId) {
+    debug('Cambiando a pantalla:', screenId);
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.add('hidden');
     });
-    document.getElementById(screenId).classList.remove('hidden');
+    const screen = document.getElementById(screenId);
+    if (screen) {
+        screen.classList.remove('hidden');
+    } else {
+        debug('ERROR: No se encontró pantalla:', screenId);
+    }
 }
 
 function showSection(sectionName) {
+    debug('Mostrando sección:', sectionName);
+    
     // Actualizar navegación
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.remove('active');
@@ -143,6 +178,8 @@ function showSection(sectionName) {
 }
 
 function showAdminTab(tabName) {
+    debug('Mostrando tab admin:', tabName);
+    
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.classList.remove('active');
     });
@@ -164,7 +201,9 @@ function showAdminTab(tabName) {
 
 // ===== LOGIN =====
 function checkSession() {
+    debug('Verificando sesión...');
     const savedSession = localStorage.getItem('viajespro_session');
+    
     if (savedSession) {
         try {
             const session = JSON.parse(savedSession);
@@ -187,22 +226,29 @@ function checkSession() {
 }
 
 function showLoginScreen() {
+    debug('Mostrando login');
     showScreen('login-screen');
 }
 
 function showAdminLogin() {
+    debug('Mostrando admin login');
     showScreen('admin-login-screen');
 }
 
 function backToLogin() {
+    debug('Volviendo a login');
     showLoginScreen();
 }
 
 async function login() {
+    debug('Iniciando login...');
+    
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
     const remember = document.getElementById('remember-me').checked;
     const btn = document.querySelector('#login-form .btn-primary');
+    
+    debug('Usuario:', username);
     
     if (!username || !password) {
         showToast('Ingresa usuario y contraseña', 'warning');
@@ -212,15 +258,19 @@ async function login() {
     setLoading(btn, true);
     
     try {
+        debug('Buscando vendedor en DB...');
         const vendor = await db.get('vendedores', username);
+        debug('Vendedor encontrado:', vendor);
         
         if (!vendor || vendor.password !== password) {
             showToast('Usuario o contraseña incorrectos', 'error');
+            setLoading(btn, false);
             return;
         }
         
         if (vendor.status === 'inactive') {
             showToast('Usuario inactivo. Contacta al administrador', 'warning');
+            setLoading(btn, false);
             return;
         }
         
@@ -239,14 +289,16 @@ async function login() {
         showMainApp();
         
     } catch (error) {
-        console.error('Login error:', error);
-        showToast('Error al iniciar sesión', 'error');
+        debug('Error en login:', error);
+        showToast('Error al iniciar sesión: ' + error.message, 'error');
     } finally {
         setLoading(btn, false);
     }
 }
 
 async function loginAdmin() {
+    debug('Login admin...');
+    
     const username = document.getElementById('admin-username').value;
     const password = document.getElementById('admin-password').value;
     const errorEl = document.getElementById('admin-login-error');
@@ -273,37 +325,77 @@ function logout() {
 
 // ===== ADMIN PANEL =====
 function showAdminPanel() {
+    debug('Mostrando panel admin');
     showScreen('admin-panel');
     loadVendorsList();
 }
 
 async function registerVendor() {
-    const name = document.getElementById('new-vendor-name').value.trim();
-    const username = document.getElementById('new-vendor-username').value.trim().toLowerCase();
-    const password = document.getElementById('new-vendor-password').value;
-    const email = document.getElementById('new-vendor-email').value.trim();
-    const zone = document.getElementById('new-vendor-zone').value;
-    const errorDiv = document.getElementById('register-error');
-    
-    errorDiv.textContent = '';
-    
-    if (!name || !username || !password) {
-        errorDiv.textContent = 'Nombre, usuario y contraseña son obligatorios';
-        return;
-    }
-    
-    if (!/^[a-z0-9.]+$/.test(username)) {
-        errorDiv.textContent = 'Usuario solo puede contener letras minúsculas, números y puntos';
-        return;
-    }
+    debug('=== INICIANDO REGISTRO DE VENDEDOR ===');
     
     try {
-        const existing = await db.get('vendedores', username);
-        if (existing) {
-            errorDiv.textContent = 'Este nombre de usuario ya existe';
+        // Obtener elementos
+        const nameInput = document.getElementById('new-vendor-name');
+        const usernameInput = document.getElementById('new-vendor-username');
+        const passwordInput = document.getElementById('new-vendor-password');
+        const emailInput = document.getElementById('new-vendor-email');
+        const zoneInput = document.getElementById('new-vendor-zone');
+        const errorDiv = document.getElementById('register-error');
+        
+        debug('Elementos del DOM:', {
+            nameInput: !!nameInput,
+            usernameInput: !!usernameInput,
+            passwordInput: !!passwordInput,
+            emailInput: !!emailInput,
+            zoneInput: !!zoneInput,
+            errorDiv: !!errorDiv
+        });
+        
+        if (!nameInput || !usernameInput || !passwordInput) {
+            throw new Error('No se encontraron los campos del formulario');
+        }
+        
+        const name = nameInput.value.trim();
+        const username = usernameInput.value.trim().toLowerCase();
+        const password = passwordInput.value;
+        const email = emailInput.value.trim();
+        const zone = zoneInput ? zoneInput.value : 'Centro';
+        
+        debug('Valores:', { name, username, email, zone, passwordLength: password?.length });
+        
+        if (errorDiv) errorDiv.textContent = '';
+        
+        // Validaciones
+        if (!name || !username || !password) {
+            const msg = 'Nombre, usuario y contraseña son obligatorios';
+            debug('VALIDACIÓN FALLIDA:', msg);
+            if (errorDiv) errorDiv.textContent = msg;
+            showToast(msg, 'warning');
             return;
         }
         
+        if (!/^[a-z0-9.]+$/.test(username)) {
+            const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
+            debug('VALIDACIÓN FALLIDA:', msg);
+            if (errorDiv) errorDiv.textContent = msg;
+            showToast(msg, 'warning');
+            return;
+        }
+        
+        // Verificar si existe
+        debug('Verificando si el usuario existe...');
+        const existing = await db.get('vendedores', username);
+        debug('Usuario existente:', existing);
+        
+        if (existing) {
+            const msg = 'Este nombre de usuario ya existe';
+            debug('VALIDACIÓN FALLIDA:', msg);
+            if (errorDiv) errorDiv.textContent = msg;
+            showToast(msg, 'warning');
+            return;
+        }
+        
+        // Crear vendedor
         const vendor = {
             id: username,
             name: name,
@@ -316,28 +408,51 @@ async function registerVendor() {
             createdBy: 'admin'
         };
         
+        debug('Guardando vendedor:', vendor);
+        
         await db.add('vendedores', vendor);
+        
+        debug('Vendedor guardado exitosamente');
         
         showToast('✅ Vendedor registrado exitosamente', 'success');
         
         // Limpiar formulario
-        document.getElementById('new-vendor-name').value = '';
-        document.getElementById('new-vendor-username').value = '';
-        document.getElementById('new-vendor-password').value = '';
-        document.getElementById('new-vendor-email').value = '';
+        nameInput.value = '';
+        usernameInput.value = '';
+        passwordInput.value = '';
+        if (emailInput) emailInput.value = '';
         
         await loadVendorsList();
         
     } catch (error) {
-        console.error('Error en registerVendor:', error);
-        errorDiv.textContent = 'Error al registrar: ' + error.message;
+        debug('ERROR EN REGISTRO:', error);
+        console.error('Error completo:', error);
+        
+        const errorDiv = document.getElementById('register-error');
+        const msg = 'Error al registrar: ' + error.message;
+        
+        if (errorDiv) errorDiv.textContent = msg;
+        showToast(msg, 'error');
+        
+        // Mostrar alert para errores críticos
+        alert('Error al registrar vendedor:\n' + error.message + '\n\nRevisa la consola (F12) para más detalles.');
     }
+    
+    debug('=== FIN REGISTRO ===');
 }
 
 async function loadVendorsList() {
+    debug('Cargando lista de vendedores...');
+    
     try {
         const vendors = await db.getAll('vendedores');
+        debug('Vendedores encontrados:', vendors.length);
+        
         const container = document.getElementById('vendors-list');
+        if (!container) {
+            debug('ERROR: No se encontró contenedor vendors-list');
+            return;
+        }
         
         if (vendors.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>No hay vendedores registrados</p></div>';
@@ -361,7 +476,7 @@ async function loadVendorsList() {
         `).join('');
         
     } catch (error) {
-        console.error('Error loading vendors:', error);
+        debug('Error cargando vendedores:', error);
         showToast('Error al cargar vendedores', 'error');
     }
 }
@@ -375,6 +490,8 @@ function filterVendors() {
 }
 
 async function editVendor(username) {
+    debug('Editando vendedor:', username);
+    
     try {
         const vendor = await db.get('vendedores', username);
         if (!vendor) {
@@ -392,12 +509,14 @@ async function editVendor(username) {
         
         openModal('editar-vendedor');
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error editando vendedor:', error);
         showToast('Error al cargar datos', 'error');
     }
 }
 
 async function saveVendorChanges() {
+    debug('Guardando cambios de vendedor...');
+    
     const id = document.getElementById('edit-vendor-id').value;
     const name = document.getElementById('edit-vendor-name').value.trim();
     const password = document.getElementById('edit-vendor-password').value;
@@ -429,7 +548,7 @@ async function saveVendorChanges() {
         showToast('✅ Vendedor actualizado', 'success');
         loadVendorsList();
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error guardando cambios:', error);
         showToast('Error al guardar', 'error');
     }
 }
@@ -442,13 +561,14 @@ async function deleteVendor(username) {
         showToast('✅ Vendedor eliminado', 'success');
         loadVendorsList();
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error eliminando vendedor:', error);
         showToast('Error al eliminar', 'error');
     }
 }
 
 // ===== MAIN APP =====
 function showMainApp() {
+    debug('Mostrando app principal');
     showScreen('app');
     
     const userNameEl = document.getElementById('current-user-name');
@@ -462,7 +582,12 @@ function showMainApp() {
 
 // ===== VIAJES =====
 async function loadViajes() {
-    if (!state.currentVendor) return;
+    debug('Cargando viajes...');
+    
+    if (!state.currentVendor) {
+        debug('ERROR: No hay vendedor actual');
+        return;
+    }
     
     try {
         const filter = document.getElementById('filter-viaje-status')?.value || 'all';
@@ -472,10 +597,10 @@ async function loadViajes() {
             viajes = viajes.filter(v => v.estado === filter);
         }
         
-        // Ordenar por fecha más reciente
         viajes.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
         
         const container = document.getElementById('viajes-list');
+        if (!container) return;
         
         if (viajes.length === 0) {
             container.innerHTML = `
@@ -488,7 +613,6 @@ async function loadViajes() {
             return;
         }
         
-        // Calcular estadísticas para cada viaje
         const viajesConStats = await Promise.all(viajes.map(async v => {
             const gastos = await db.getGastosByViaje(v.id);
             const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
@@ -522,12 +646,14 @@ async function loadViajes() {
         `).join('');
         
     } catch (error) {
-        console.error('Error loading viajes:', error);
+        debug('Error cargando viajes:', error);
         showToast('Error al cargar viajes', 'error');
     }
 }
 
 async function crearViaje() {
+    debug('Creando viaje...');
+    
     const destino = document.getElementById('viaje-destino').value.trim();
     const proposito = document.getElementById('viaje-proposito').value.trim();
     const fechaInicio = document.getElementById('viaje-fecha-inicio').value;
@@ -556,7 +682,6 @@ async function crearViaje() {
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
         
-        // Limpiar formulario
         document.getElementById('viaje-destino').value = '';
         document.getElementById('viaje-proposito').value = '';
         document.getElementById('viaje-fecha-fin').value = '';
@@ -564,20 +689,24 @@ async function crearViaje() {
         
         loadViajes();
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error creando viaje:', error);
         showToast('Error al crear viaje', 'error');
     }
 }
 
 function selectViaje(viajeId) {
+    debug('Seleccionando viaje:', viajeId);
     state.currentViaje = viajeId;
     showSection('gastos');
-    document.getElementById('gastos-viaje-select').value = viajeId;
+    const select = document.getElementById('gastos-viaje-select');
+    if (select) select.value = viajeId;
     loadGastosList();
 }
 
 // ===== GASTOS =====
 async function loadViajesSelect() {
+    debug('Cargando select de viajes...');
+    
     if (!state.currentVendor) return;
     
     try {
@@ -603,7 +732,7 @@ async function loadViajesSelect() {
         });
         
     } catch (error) {
-        console.error('Error loading viajes select:', error);
+        debug('Error cargando selects:', error);
     }
 }
 
@@ -613,6 +742,8 @@ function selectTipoGasto(btn) {
 }
 
 async function guardarGasto() {
+    debug('Guardando gasto...');
+    
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoCard = document.querySelector('.tipo-card.selected');
     const monto = document.getElementById('monto-gasto').value;
@@ -649,12 +780,10 @@ async function guardarGasto() {
     try {
         await db.add('gastos', gasto);
         
-        // Limpiar formulario
         document.getElementById('monto-gasto').value = '';
         document.getElementById('lugar-gasto').value = '';
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
         
-        // Limpiar foto
         state.tempFotos = [];
         const preview = document.getElementById('photo-preview');
         if (preview) {
@@ -666,18 +795,19 @@ async function guardarGasto() {
         
         showToast('✅ Gasto guardado exitosamente', 'success');
         
-        // Actualizar selects si estamos en gastos
         if (document.getElementById('gastos-section').classList.contains('active')) {
             loadGastosList();
         }
         
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error guardando gasto:', error);
         showToast('Error al guardar gasto', 'error');
     }
 }
 
 async function loadGastosList() {
+    debug('Cargando gastos...');
+    
     try {
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
         let gastos = [];
@@ -685,7 +815,6 @@ async function loadGastosList() {
         if (viajeId) {
             gastos = await db.getGastosByViaje(viajeId);
         } else if (state.currentVendor) {
-            // Obtener todos los gastos del vendedor
             const viajes = await db.getViajesByVendedor(state.currentVendor.username);
             for (const viaje of viajes) {
                 const g = await db.getGastosByViaje(viaje.id);
@@ -693,21 +822,14 @@ async function loadGastosList() {
             }
         }
         
-        // Ordenar por fecha más reciente
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
         
-        // Calcular resumen
-        const resumen = {
-            total: 0,
-            porTipo: {}
-        };
-        
+        const resumen = { total: 0, porTipo: {} };
         gastos.forEach(g => {
             resumen.total += g.monto;
             resumen.porTipo[g.tipo] = (resumen.porTipo[g.tipo] || 0) + g.monto;
         });
         
-        // Mostrar resumen
         const resumenEl = document.getElementById('gastos-resumen');
         if (resumenEl) {
             if (gastos.length === 0) {
@@ -731,8 +853,9 @@ async function loadGastosList() {
             }
         }
         
-        // Mostrar lista
         const container = document.getElementById('gastos-list');
+        if (!container) return;
+        
         if (gastos.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -760,12 +883,14 @@ async function loadGastosList() {
         `).join('');
         
     } catch (error) {
-        console.error('Error loading gastos:', error);
+        debug('Error cargando gastos:', error);
         showToast('Error al cargar gastos', 'error');
     }
 }
 
 async function showDetalleGasto(gastoId) {
+    debug('Mostrando detalle gasto:', gastoId);
+    
     try {
         const gasto = await db.get('gastos', gastoId);
         if (!gasto) return;
@@ -811,7 +936,7 @@ async function showDetalleGasto(gastoId) {
         
         openModal('detalle-gasto');
     } catch (error) {
-        console.error('Error:', error);
+        debug('Error mostrando detalle:', error);
     }
 }
 
@@ -830,6 +955,8 @@ async function eliminarGasto(gastoId) {
 
 // ===== REPORTES =====
 async function generarReporte() {
+    debug('Generando reporte...');
+    
     const fechaInicio = document.getElementById('reporte-fecha-inicio').value;
     const fechaFin = document.getElementById('reporte-fecha-fin').value;
     
@@ -839,7 +966,6 @@ async function generarReporte() {
     }
     
     try {
-        // Obtener gastos del período
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         let allGastos = [];
         
@@ -857,7 +983,6 @@ async function generarReporte() {
             return;
         }
         
-        // Preparar datos para gráficos
         const porTipo = {};
         const porMes = {};
         let total = 0;
@@ -870,10 +995,9 @@ async function generarReporte() {
             porMes[mes] = (porMes[mes] || 0) + g.monto;
         });
         
-        // Mostrar resultado
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de pastel (tipos)
+        // Gráfico de pastel
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -894,10 +1018,7 @@ async function generarReporte() {
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: {
-                            padding: 15,
-                            font: { size: 11 }
-                        }
+                        labels: { padding: 15, font: { size: 11 } }
                     },
                     tooltip: {
                         callbacks: {
@@ -913,7 +1034,7 @@ async function generarReporte() {
             }
         });
         
-        // Gráfico de tendencia (línea)
+        // Gráfico de tendencia
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -941,9 +1062,7 @@ async function generarReporte() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
+                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -957,7 +1076,6 @@ async function generarReporte() {
             }
         });
         
-        // Guardar datos para exportación
         state.lastReport = {
             fechaInicio,
             fechaFin,
@@ -968,12 +1086,14 @@ async function generarReporte() {
         };
         
     } catch (error) {
-        console.error('Error generando reporte:', error);
+        debug('Error generando reporte:', error);
         showToast('Error al generar reporte', 'error');
     }
 }
 
 async function loadGlobalReport() {
+    debug('Cargando reporte global...');
+    
     try {
         const allGastos = await db.getAll('gastos');
         const allViajes = await db.getAll('viajes');
@@ -986,28 +1106,28 @@ async function loadGlobalReport() {
             promedioPorViaje: allViajes.length ? allGastos.reduce((sum, g) => sum + g.monto, 0) / allViajes.length : 0
         };
         
-        // Mostrar stats
         const statsContainer = document.getElementById('admin-stats');
-        statsContainer.innerHTML = `
-            <div class="stat-card">
-                <span class="stat-value">${formatMoney(stats.totalGastos)}</span>
-                <span class="stat-label">Total Gastos</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-value">${stats.totalViajes}</span>
-                <span class="stat-label">Viajes</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-value">${stats.totalVendedores}</span>
-                <span class="stat-label">Vendedores</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-value">${formatMoney(stats.promedioPorViaje)}</span>
-                <span class="stat-label">Promedio/Viaje</span>
-            </div>
-        `;
+        if (statsContainer) {
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <span class="stat-value">${formatMoney(stats.totalGastos)}</span>
+                    <span class="stat-label">Total Gastos</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${stats.totalViajes}</span>
+                    <span class="stat-label">Viajes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${stats.totalVendedores}</span>
+                    <span class="stat-label">Vendedores</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${formatMoney(stats.promedioPorViaje)}</span>
+                    <span class="stat-label">Promedio/Viaje</span>
+                </div>
+            `;
+        }
         
-        // Gráfico global por tipo
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
@@ -1030,9 +1150,7 @@ async function loadGlobalReport() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
+                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -1047,7 +1165,7 @@ async function loadGlobalReport() {
         });
         
     } catch (error) {
-        console.error('Error loading global report:', error);
+        debug('Error cargando reporte global:', error);
     }
 }
 
@@ -1059,36 +1177,28 @@ function exportReport(format) {
     }
     
     if (format === 'pdf') {
-        exportToPDF();
+        window.print();
+        showToast('Reporte preparado para imprimir', 'success');
     } else if (format === 'excel') {
-        exportToExcel();
+        const { gastos, fechaInicio, fechaFin } = state.lastReport;
+        
+        let csv = 'Fecha,Tipo,Concepto,Monto,Viaje\n';
+        
+        gastos.forEach(g => {
+            const fecha = formatDate(g.fecha || g.createdAt);
+            const tipo = TIPOS_GASTO[g.tipo]?.label || g.tipo;
+            const linea = `"${fecha}","${tipo}","${g.lugar || ''}",${g.monto},"${g.viajeId}"\n`;
+            csv += linea;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Reporte_Gastos_${fechaInicio}_${fechaFin}.csv`;
+        link.click();
+        
+        showToast('Reporte descargado como CSV', 'success');
     }
-}
-
-function exportToPDF() {
-    window.print();
-    showToast('Reporte preparado para imprimir/Guardar como PDF', 'success');
-}
-
-function exportToExcel() {
-    const { gastos, fechaInicio, fechaFin } = state.lastReport;
-    
-    let csv = 'Fecha,Tipo,Concepto,Monto,Viaje\n';
-    
-    gastos.forEach(g => {
-        const fecha = formatDate(g.fecha || g.createdAt);
-        const tipo = TIPOS_GASTO[g.tipo]?.label || g.tipo;
-        const linea = `"${fecha}","${tipo}","${g.lugar || ''}",${g.monto},"${g.viajeId}"\n`;
-        csv += linea;
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Reporte_Gastos_${fechaInicio}_${fechaFin}.csv`;
-    link.click();
-    
-    showToast('Reporte descargado como CSV', 'success');
 }
 
 // ===== UTILIDADES =====
@@ -1110,6 +1220,11 @@ function closeModal(modalId) {
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) {
+        alert(message); // Fallback si no existe el contenedor
+        return;
+    }
+    
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
@@ -1131,6 +1246,8 @@ function showToast(message, type = 'info') {
 }
 
 function setLoading(btn, loading) {
+    if (!btn) return;
+    
     const text = btn.querySelector('.btn-text');
     const loader = btn.querySelector('.btn-loader');
     
@@ -1157,7 +1274,9 @@ function updateConnectionStatus(online = navigator.onLine) {
 
 function togglePassword(inputId) {
     const input = document.getElementById(inputId);
-    input.type = input.type === 'password' ? 'text' : 'password';
+    if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+    }
 }
 
 function formatMoney(amount) {
@@ -1217,7 +1336,8 @@ function clearPhoto() {
             <span class="upload-text">Toca para capturar foto</span>
         `;
     }
-    document.getElementById('camera-input').value = '';
+    const input = document.getElementById('camera-input');
+    if (input) input.value = '';
 }
 
 // Exponer funciones necesarias globalmente
@@ -1247,3 +1367,5 @@ window.exportReport = exportReport;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
+
+debug('App.js cargado completamente');
