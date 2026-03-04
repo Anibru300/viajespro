@@ -1,8 +1,8 @@
 /**
- * 3P VIAJESPRO - Firebase Configuration (MODO OFFLINE - Cuota excedida)
+ * 3P VIAJESPRO - Firebase Configuration v5.0 (MODO OFFLINE)
  */
 
-console.log('⚠️ Firebase desactivado - Modo offline activo');
+console.log('⚠️ Firebase desactivado - Modo offline activo v5.0');
 
 // Funciones vacías para evitar errores
 window.dbFirebase = null;
