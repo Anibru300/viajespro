@@ -19,7 +19,8 @@ const state = {
     tempFotos: [],
     isOnline: navigator.onLine,
     charts: {},
-    filters: { viajes: 'all', gastos: '' }
+    filters: { viajes: 'all', gastos: '' },
+    lastReport: null // para el reporte generado
 };
 
 // ===== ICONOS =====
@@ -41,6 +42,7 @@ function getMexicoDateTime() {
 
 function formatDateTimeMexico(dateString) {
     if (!dateString) return '-';
+    
     const date = new Date(dateString);
     return date.toLocaleString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -55,6 +57,7 @@ function formatDateTimeMexico(dateString) {
 
 function formatDateMexico(dateString) {
     if (!dateString) return '-';
+    
     const date = new Date(dateString);
     return date.toLocaleDateString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -345,8 +348,7 @@ function logout() {
         state.currentUser = null;
         state.currentVendor = null;
         state.currentViaje = null;
-        // No recargamos, solo mostramos login
-        showLoginScreen();
+        location.reload();
     }
 }
 
@@ -357,6 +359,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
+// ===== REGISTRO VENDEDOR =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -437,6 +440,7 @@ async function registerVendor() {
     }
 }
 
+// ===== CARGAR VENDEDORES =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -691,6 +695,7 @@ async function crearViaje() {
     }
 }
 
+// ===== FUNCIÓN EDITAR VIAJE (CORREGIDA) =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -873,28 +878,39 @@ function resetCapturaForm() {
 }
 
 async function guardarGasto() {
-    const viajeId = document.getElementById('captura-viaje-select').value;
+    // Verificar que todos los elementos existan antes de usarlos
+    const viajeSelect = document.getElementById('captura-viaje-select');
     const tipoCard = document.querySelector('.tipo-card.selected');
-    const monto = document.getElementById('monto-gasto').value;
-    const lugar = document.getElementById('lugar-gasto').value.trim();
-    const fecha = document.getElementById('fecha-gasto').value;
-    const folioFactura = document.getElementById('folio-factura')?.value.trim() || '';
-    const razonSocial = document.getElementById('razon-social')?.value.trim() || '';
-    const comentarios = document.getElementById('comentarios-gasto')?.value.trim() || '';
-    const esFacturable = document.getElementById('es-facturable')?.checked !== false;
-    
+    const montoInput = document.getElementById('monto-gasto');
+    const lugarInput = document.getElementById('lugar-gasto');
+    const fechaInput = document.getElementById('fecha-gasto');
+    const folioInput = document.getElementById('folio-factura');
+    const razonInput = document.getElementById('razon-social');
+    const comentariosInput = document.getElementById('comentarios-gasto');
+    const facturableCheck = document.getElementById('es-facturable');
+
+    if (!viajeSelect || !montoInput || !lugarInput || !fechaInput || !folioInput || !razonInput || !comentariosInput || !facturableCheck) {
+        showToast('Error en el formulario, faltan elementos', 'error');
+        return;
+    }
+
+    const viajeId = viajeSelect.value;
+    const monto = montoInput.value;
+    const lugar = lugarInput.value.trim();
+    const fecha = fechaInput.value;
+    const folioFactura = folioInput.value.trim();
+    const razonSocial = razonInput.value.trim();
+    const comentarios = comentariosInput.value.trim();
+    const esFacturable = facturableCheck.checked;
+
     // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
-        const comentariosEl = document.getElementById('comentarios-gasto');
-        if (comentariosEl) {
-            comentariosEl.focus();
-            comentariosEl.style.borderColor = '#dc2626';
-        }
+        comentariosInput.focus();
+        comentariosInput.style.borderColor = '#dc2626';
         return;
     } else {
-        const comentariosEl = document.getElementById('comentarios-gasto');
-        if (comentariosEl) comentariosEl.style.borderColor = '';
+        comentariosInput.style.borderColor = '';
     }
     
     if (!viajeId) {
@@ -1125,25 +1141,14 @@ async function editarGasto(gastoId) {
         closeModal('detalle-gasto');
         showSection('captura');
         
-        // Asegurar que los elementos existen antes de asignar
-        const viajeSelect = document.getElementById('captura-viaje-select');
-        const montoInput = document.getElementById('monto-gasto');
-        const lugarInput = document.getElementById('lugar-gasto');
-        const fechaInput = document.getElementById('fecha-gasto');
-        const folioInput = document.getElementById('folio-factura');
-        const razonInput = document.getElementById('razon-social');
-        const comentariosInput = document.getElementById('comentarios-gasto');
-        const facturableCheck = document.getElementById('es-facturable');
-
-        if (viajeSelect) viajeSelect.value = gasto.viajeId;
-        if (montoInput) montoInput.value = gasto.monto;
-        if (lugarInput) lugarInput.value = gasto.lugar || '';
-        if (fechaInput) fechaInput.value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
-        if (folioInput) folioInput.value = gasto.folioFactura || '';
-        if (razonInput) razonInput.value = gasto.razonSocial || '';
-        if (comentariosInput) comentariosInput.value = gasto.comentarios || '';
-        if (facturableCheck) facturableCheck.checked = gasto.esFacturable !== false;
-        
+        document.getElementById('captura-viaje-select').value = gasto.viajeId;
+        document.getElementById('monto-gasto').value = gasto.monto;
+        document.getElementById('lugar-gasto').value = gasto.lugar || '';
+        document.getElementById('fecha-gasto').value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
+        document.getElementById('folio-factura').value = gasto.folioFactura || '';
+        document.getElementById('razon-social').value = gasto.razonSocial || '';
+        document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
+        document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
         toggleComentarioRequerido();
         
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
@@ -1172,7 +1177,6 @@ async function editarGasto(gastoId) {
         state.currentGasto = gasto;
         
     } catch (error) {
-        console.error('Error al editar gasto:', error);
         showToast('Error al cargar gasto para edición', 'error');
     }
 }
@@ -1407,13 +1411,7 @@ function generarExcelProfesional() {
     
     const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    // Ordenar gastos por fecha ascendente para numerar consecutivamente
-    const gastosOrdenados = [...gastos].sort((a, b) => {
-        const fechaA = new Date(a.fecha || a.createdAt);
-        const fechaB = new Date(b.fecha || b.createdAt);
-        return fechaA - fechaB;
-    });
-
+    // Función para escapar HTML
     const escape = (text) => {
         if (text == null) return '';
         return String(text).replace(/[&<>"]/g, function(m) {
@@ -1424,6 +1422,10 @@ function generarExcelProfesional() {
             return m;
         });
     };
+
+    // Ordenar gastos por fecha para asignar número de factura consecutivo
+    const gastosOrdenados = [...gastos].sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
+    let contadorFactura = 1;
 
     let html = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -1474,7 +1476,7 @@ function generarExcelProfesional() {
     <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
         <thead>
             <tr style="background-color: #1e3a5f; color: white;">
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No.</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No. Factura</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
@@ -1489,9 +1491,9 @@ function generarExcelProfesional() {
         <tbody>
 `;
 
-    gastosOrdenados.forEach((g, index) => {
+    gastosOrdenados.forEach(g => {
         const esFacturable = g.esFacturable !== false;
-        const numeroFactura = index + 1; // Número consecutivo según orden de fecha
+        const numeroFactura = contadorFactura++;
         html += `
             <tr>
                 <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${numeroFactura}</td>
@@ -1552,6 +1554,174 @@ function generarExcelProfesional() {
     showToast('📊 Reporte Excel generado', 'success');
 }
 
+// ===== NUEVA FUNCIÓN: CORTE COMPLETO (ZIP con fotos) =====
+async function exportCorteCompleto() {
+    if (!state.lastReport) {
+        showToast('Primero genera un reporte', 'warning');
+        return;
+    }
+
+    const { gastos, fechaInicio, fechaFin, responsable } = state.lastReport;
+    const zip = new JSZip();
+
+    // 1. Generar el Excel (reutilizamos la función pero necesitamos el contenido, no descargarlo)
+    // Vamos a generar el HTML del Excel igual que en generarExcelProfesional pero sin descargar
+    const primerasLetras = responsable.trim().toUpperCase().substring(0, 3);
+    const hoy = new Date();
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const año = String(hoy.getFullYear()).slice(-2);
+    const fechaStr = dia + mes + año;
+    const numReporte = `3p-${primerasLetras}-${fechaStr}`;
+    const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
+
+    const gastosOrdenados = [...gastos].sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
+    let contadorFactura = 1;
+
+    let html = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte 3P Viáticos</title>
+</head>
+<body>
+    <table width="100%" cellpadding="10" cellspacing="0" style="font-family: Arial, sans-serif;">
+        <tr>
+            <td style="background-color: #1e3a5f; color: white; text-align: center;" colspan="2">
+                <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
+                <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
+            </td>
+        </tr>
+    </table>
+    
+    <table width="100%" cellpadding="8" cellspacing="0" style="background-color: #f3f4f6; margin-top: 10px; font-family: Arial, sans-serif; border-collapse: collapse;">
+        <tr>
+            <td style="border: 1px solid #d1d5db;"><strong>Responsable:</strong> ${escapeHtml(responsable)}</td>
+            <td style="border: 1px solid #d1d5db;"><strong>Zona:</strong> ${escapeHtml(state.lastReport.zona || 'No especificada')}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #d1d5db;"><strong>Período:</strong> ${escapeHtml(formatDateMexico(fechaInicio))} al ${escapeHtml(formatDateMexico(fechaFin))}</td>
+            <td style="border: 1px solid #d1d5db;"><strong>No. Reporte:</strong> ${escapeHtml(numReporte)}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #d1d5db;"><strong>Fecha de generación:</strong> ${escapeHtml(fechaGeneracion)}</td>
+            <td style="border: 1px solid #d1d5db;"><strong>Total General:</strong> ${escapeHtml(formatMoney(state.lastReport.total))}</td>
+        </tr>
+    </table>
+    
+    <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #1e3a5f; color: white;">
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No. Factura</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Tipo Gasto</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Folio Factura</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Razón Social</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: right;">Total</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: center;">Facturable</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Comentarios</th>
+            </tr>
+        </thead>
+        <tbody>
+`;
+
+    gastosOrdenados.forEach(g => {
+        const esFacturable = g.esFacturable !== false;
+        const numeroFactura = contadorFactura++;
+        html += `
+            <tr>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${numeroFactura}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(formatDateMexico(g.fecha || g.createdAt))}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.viaje?.cliente || 'N/A')}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.folioFactura || '-')}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.razonSocial || '-')}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(g.monto))}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center; ${esFacturable ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;'}">${esFacturable ? 'SÍ' : 'NO'}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.comentarios || '')}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+            <tr style="background-color: #e5e7eb; font-weight: bold;">
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.total))}</td>
+                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
+            </tr>
+            <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.totalFacturable))}</td>
+                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
+            </tr>
+            <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.total - state.lastReport.totalFacturable))}</td>
+                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; font-family: Arial, sans-serif;">
+        <p><strong>Documento generado por 3P ViajesPro v5.0</strong></p>
+        <p>Este reporte es un documento oficial de 3P SA DE CV</p>
+        <p>Fecha y hora: ${escapeHtml(formatDateTimeMexico(new Date().toISOString()))}</p>
+    </div>
+</body>
+</html>
+    `;
+
+    // Agregar el Excel al ZIP
+    zip.file(`Reporte_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`, '\uFEFF' + html);
+
+    // 2. Agregar las fotos
+    const fotosFolder = zip.folder('Fotos');
+    let fotoCount = 0;
+
+    for (const gasto of gastos) {
+        if (gasto.fotos && gasto.fotos.length > 0) {
+            const cliente = gasto.viaje?.cliente || 'SinCliente';
+            const folio = gasto.folioFactura || 'SINFOLIO';
+            const fecha = formatDateMexico(gasto.fecha || gasto.createdAt).replace(/\//g, '-');
+            
+            for (let i = 0; i < gasto.fotos.length; i++) {
+                const fotoData = gasto.fotos[i];
+                // fotoData es una URL base64, necesitamos extraer los datos
+                const base64Data = fotoData.split(',')[1];
+                if (base64Data) {
+                    const fileName = `${folio}_${cliente}_${fecha}_${i+1}.jpg`;
+                    fotosFolder.file(fileName, base64Data, { base64: true });
+                    fotoCount++;
+                }
+            }
+        }
+    }
+
+    if (fotoCount === 0) {
+        fotosFolder.file('Sin_fotos.txt', 'No hay fotos asociadas a los gastos de este período.');
+    }
+
+    // Generar el ZIP
+    const zipContent = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipContent);
+    
+    const newWindow = window.open(url, '_blank');
+    if (!newWindow) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Corte_Completo_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.zip`;
+        link.click();
+    }
+    
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    showToast(`📦 Corte completo generado con ${fotoCount} foto(s)`, 'success');
+}
+
+// ===== REPORTES GLOBALES ADMIN =====
 async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
@@ -1869,6 +2039,7 @@ window.eliminarGasto = eliminarGasto;
 window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
+window.exportCorteCompleto = exportCorteCompleto; // NUEVA
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
