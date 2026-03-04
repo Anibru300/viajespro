@@ -1,8 +1,8 @@
 /**
- * 3P VIAJESPRO - Database Module v5.2 (MODO OFFLINE)
+ * 3P VIAJESPRO - Database Module v5.0 (MODO OFFLINE)
  */
 
-console.log('🚀 db.js v5.2 cargando (modo offline)...');
+console.log('🚀 db.js v5.0 cargando (modo offline)...');
 
 if (!window.indexedDB) {
     alert('Tu navegador no soporta IndexedDB');
@@ -15,7 +15,7 @@ class ViajesProDB {
     constructor() {
         this.db = null;
         this.initialized = false;
-        console.log('📦 ViajesProDB v5.2 creado (offline)');
+        console.log('📦 ViajesProDB v5.0 creado (offline)');
     }
 
     async init() {
@@ -75,6 +75,7 @@ class ViajesProDB {
                 status: 'active',
                 createdAt: new Date().toISOString()
             });
+            console.log('✅ Usuario admin creado: admin / admin123');
         }
     }
 
