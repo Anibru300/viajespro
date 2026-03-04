@@ -41,7 +41,6 @@ function getMexicoDateTime() {
 
 function formatDateTimeMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -56,7 +55,6 @@ function formatDateTimeMexico(dateString) {
 
 function formatDateMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleDateString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -76,7 +74,7 @@ function debug(msg, data) {
     console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
-// ===== ESCAPE HTML (para evitar caracteres maliciosos y roturas) =====
+// ===== ESCAPE HTML =====
 function escapeHtml(text) {
     if (text == null) return '';
     return String(text).replace(/[&<>"]/g, function(m) {
@@ -162,7 +160,6 @@ function setupEventListeners() {
         });
     });
 
-    // CORRECCIÓN: Listener para el filtro de gastos
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
@@ -348,7 +345,8 @@ function logout() {
         state.currentUser = null;
         state.currentVendor = null;
         state.currentViaje = null;
-        location.reload();
+        // No recargamos, solo mostramos login
+        showLoginScreen();
     }
 }
 
@@ -359,7 +357,6 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -440,7 +437,6 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -695,7 +691,6 @@ async function crearViaje() {
     }
 }
 
-// ===== FUNCIÓN EDITAR VIAJE (CORREGIDA) =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -704,13 +699,9 @@ async function editarViaje(viajeId) {
             return;
         }
 
-        // Abrir el modal primero
         openModal('editar-viaje');
-
-        // Pequeño retraso para asegurar que el modal se haya renderizado
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Verificar que todos los elementos existan antes de asignar
         const elements = {
             id: document.getElementById('edit-viaje-id'),
             cliente: document.getElementById('edit-viaje-cliente'),
@@ -723,7 +714,6 @@ async function editarViaje(viajeId) {
             estado: document.getElementById('edit-viaje-estado')
         };
 
-        // Verificar si algún elemento no existe
         for (const [key, el] of Object.entries(elements)) {
             if (!el) {
                 console.error(`Elemento faltante: edit-viaje-${key}`);
@@ -733,7 +723,6 @@ async function editarViaje(viajeId) {
             }
         }
 
-        // Asignar valores
         elements.id.value = viaje.id;
         elements.cliente.value = viaje.cliente;
         elements.destino.value = viaje.destino;
@@ -967,6 +956,7 @@ async function guardarGasto() {
         }
         
     } catch (error) {
+        console.error('Error al guardar gasto:', error);
         showToast('Error al guardar: ' + error.message, 'error');
     }
 }
@@ -1135,14 +1125,25 @@ async function editarGasto(gastoId) {
         closeModal('detalle-gasto');
         showSection('captura');
         
-        document.getElementById('captura-viaje-select').value = gasto.viajeId;
-        document.getElementById('monto-gasto').value = gasto.monto;
-        document.getElementById('lugar-gasto').value = gasto.lugar || '';
-        document.getElementById('fecha-gasto').value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
-        document.getElementById('folio-factura').value = gasto.folioFactura || '';
-        document.getElementById('razon-social').value = gasto.razonSocial || '';
-        document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
-        document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
+        // Asegurar que los elementos existen antes de asignar
+        const viajeSelect = document.getElementById('captura-viaje-select');
+        const montoInput = document.getElementById('monto-gasto');
+        const lugarInput = document.getElementById('lugar-gasto');
+        const fechaInput = document.getElementById('fecha-gasto');
+        const folioInput = document.getElementById('folio-factura');
+        const razonInput = document.getElementById('razon-social');
+        const comentariosInput = document.getElementById('comentarios-gasto');
+        const facturableCheck = document.getElementById('es-facturable');
+
+        if (viajeSelect) viajeSelect.value = gasto.viajeId;
+        if (montoInput) montoInput.value = gasto.monto;
+        if (lugarInput) lugarInput.value = gasto.lugar || '';
+        if (fechaInput) fechaInput.value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
+        if (folioInput) folioInput.value = gasto.folioFactura || '';
+        if (razonInput) razonInput.value = gasto.razonSocial || '';
+        if (comentariosInput) comentariosInput.value = gasto.comentarios || '';
+        if (facturableCheck) facturableCheck.checked = gasto.esFacturable !== false;
+        
         toggleComentarioRequerido();
         
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
@@ -1171,6 +1172,7 @@ async function editarGasto(gastoId) {
         state.currentGasto = gasto;
         
     } catch (error) {
+        console.error('Error al editar gasto:', error);
         showToast('Error al cargar gasto para edición', 'error');
     }
 }
@@ -1405,7 +1407,13 @@ function generarExcelProfesional() {
     
     const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    // Función para escapar HTML
+    // Ordenar gastos por fecha ascendente para numerar consecutivamente
+    const gastosOrdenados = [...gastos].sort((a, b) => {
+        const fechaA = new Date(a.fecha || a.createdAt);
+        const fechaB = new Date(b.fecha || b.createdAt);
+        return fechaA - fechaB;
+    });
+
     const escape = (text) => {
         if (text == null) return '';
         return String(text).replace(/[&<>"]/g, function(m) {
@@ -1466,6 +1474,7 @@ function generarExcelProfesional() {
     <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
         <thead>
             <tr style="background-color: #1e3a5f; color: white;">
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No.</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
@@ -1480,10 +1489,12 @@ function generarExcelProfesional() {
         <tbody>
 `;
 
-    gastos.forEach(g => {
+    gastosOrdenados.forEach((g, index) => {
         const esFacturable = g.esFacturable !== false;
+        const numeroFactura = index + 1; // Número consecutivo según orden de fecha
         html += `
             <tr>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${numeroFactura}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(formatDateMexico(g.fecha || g.createdAt))}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.cliente || 'N/A')}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
@@ -1499,17 +1510,17 @@ function generarExcelProfesional() {
 
     html += `
             <tr style="background-color: #e5e7eb; font-weight: bold;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total))}</td>
                 <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
             </tr>
             <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(totalFacturable))}</td>
                 <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
             </tr>
             <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
+                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total - totalFacturable))}</td>
                 <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
             </tr>
@@ -1525,21 +1536,17 @@ function generarExcelProfesional() {
 </html>
     `;
 
-    // Agregar BOM para UTF-8
     const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     
-    // Intentar abrir automáticamente en una nueva pestaña
     const newWindow = window.open(url, '_blank');
     if (!newWindow) {
-        // Si no se pudo abrir (pop-up bloqueado), forzar descarga
         const link = document.createElement('a');
         link.href = url;
         link.download = `Reporte_3P_Viaticos_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`;
         link.click();
     }
     
-    // Liberar memoria después de un tiempo
     setTimeout(() => URL.revokeObjectURL(url), 30000);
 
     showToast('📊 Reporte Excel generado', 'success');
