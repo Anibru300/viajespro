@@ -76,6 +76,18 @@ function debug(msg, data) {
     console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
+// ===== ESCAPE HTML (para evitar caracteres maliciosos y roturas) =====
+function escapeHtml(text) {
+    if (text == null) return '';
+    return String(text).replace(/[&<>"]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        if (m === '"') return '&quot;';
+        return m;
+    });
+}
+
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
     debug('DOM cargado, iniciando v5.0...');
@@ -149,6 +161,12 @@ function setupEventListeners() {
             }
         });
     });
+
+    // CORRECCIÓN: Listener para el filtro de gastos
+    const gastosViajeSelect = document.getElementById('gastos-viaje-select');
+    if (gastosViajeSelect) {
+        gastosViajeSelect.addEventListener('change', loadGastosList);
+    }
 }
 
 // ===== NAVEGACIÓN =====
@@ -454,10 +472,10 @@ async function loadVendorsList() {
         container.innerHTML = vendors.map(v => `
             <div class="vendor-card" data-username="${v.username}">
                 <div class="vendor-info">
-                    <h4>${v.name}</h4>
+                    <h4>${escapeHtml(v.name)}</h4>
                     <p>
                         <span class="vendor-status ${v.status}"></span>
-                        @${v.username} • ${v.zone}
+                        @${escapeHtml(v.username)} • ${escapeHtml(v.zone)}
                     </p>
                 </div>
                 <div class="vendor-actions">
@@ -603,14 +621,14 @@ async function loadViajes() {
             <div class="viaje-card ${v.estado}" onclick="selectViaje('${v.id}')">
                 <div class="viaje-header">
                     <div>
-                        <div class="viaje-title">${v.destino}</div>
-                        <div class="viaje-cliente">👤 ${v.cliente || 'Sin cliente'}</div>
+                        <div class="viaje-title">${escapeHtml(v.destino)}</div>
+                        <div class="viaje-cliente">👤 ${escapeHtml(v.cliente || 'Sin cliente')}</div>
                     </div>
                     <span class="viaje-badge ${v.estado}">${v.estado}</span>
                 </div>
                 <div class="viaje-meta">
                     <span>📅 ${formatDate(v.fechaInicio)}</span>
-                    <span>📍 ${v.lugarVisita || v.destino}</span>
+                    <span>📍 ${escapeHtml(v.lugarVisita || v.destino)}</span>
                 </div>
                 <div class="viaje-stats">
                     <span>🧾 ${v.gastosCount} gastos</span>
@@ -701,7 +719,7 @@ async function loadViajesSelect() {
                 '<option value="">Todos los viajes</option>';
             
             select.innerHTML = defaultOption + activos.map(v => 
-                `<option value="${v.id}">${v.cliente} - ${v.destino}</option>`
+                `<option value="${v.id}">${escapeHtml(v.cliente)} - ${escapeHtml(v.destino)}</option>`
             ).join('');
             
             if (currentValue) select.value = currentValue;
@@ -929,8 +947,8 @@ async function loadGastosList() {
                     </div>
                     <div class="gasto-details">
                         <h4>${TIPOS_GASTO[g.tipo]?.label || g.tipo} ${g.esFacturable === false ? '🚫' : '📄'}</h4>
-                        <p>${g.lugar || 'Sin lugar'} • ${formatDate(g.fecha || g.createdAt)}</p>
-                        ${g.folioFactura ? `<p style="color: var(--success); font-size: 0.7rem;">📄 Folio: ${g.folioFactura}</p>` : ''}
+                        <p>${escapeHtml(g.lugar || 'Sin lugar')} • ${formatDate(g.fecha || g.createdAt)}</p>
+                        ${g.folioFactura ? `<p style="color: var(--success); font-size: 0.7rem;">📄 Folio: ${escapeHtml(g.folioFactura)}</p>` : ''}
                     </div>
                 </div>
                 <div class="gasto-amount">${formatMoney(g.monto)}</div>
@@ -962,13 +980,13 @@ async function showDetalleGasto(gastoId) {
             </div>
             
             <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-lg); margin-bottom: 1rem;">
-                <p><strong>📍 Lugar:</strong> ${gasto.lugar || 'No especificado'}</p>
+                <p><strong>📍 Lugar:</strong> ${escapeHtml(gasto.lugar || 'No especificado')}</p>
                 <p><strong>📅 Fecha:</strong> ${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
-                ${gasto.folioFactura ? `<p><strong>📄 Folio:</strong> ${gasto.folioFactura}</p>` : ''}
-                ${gasto.numFactura ? `<p><strong>📋 Número Factura:</strong> ${gasto.numFactura}</p>` : ''}
-                ${gasto.razonSocial ? `<p><strong>🏢 Razón Social:</strong> ${gasto.razonSocial}</p>` : ''}
-                ${gasto.comentarios ? `<p><strong>💬 Comentarios:</strong> ${gasto.comentarios}</p>` : ''}
-                <p><strong>🚗 Viaje:</strong> ${viaje?.cliente || ''} - ${viaje?.destino || 'Desconocido'}</p>
+                ${gasto.folioFactura ? `<p><strong>📄 Folio:</strong> ${escapeHtml(gasto.folioFactura)}</p>` : ''}
+                ${gasto.numFactura ? `<p><strong>📋 Número Factura:</strong> ${escapeHtml(gasto.numFactura)}</p>` : ''}
+                ${gasto.razonSocial ? `<p><strong>🏢 Razón Social:</strong> ${escapeHtml(gasto.razonSocial)}</p>` : ''}
+                ${gasto.comentarios ? `<p><strong>💬 Comentarios:</strong> ${escapeHtml(gasto.comentarios)}</p>` : ''}
+                <p><strong>🚗 Viaje:</strong> ${escapeHtml(viaje?.cliente || '')} - ${escapeHtml(viaje?.destino || 'Desconocido')}</p>
             </div>
             
             ${gasto.fotos && gasto.fotos.length > 0 ? `
@@ -1265,123 +1283,110 @@ function generarExcelProfesional() {
     
     const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
     const numReporte = `3P-VIA-${Date.now().toString().slice(-6)}`;
-    const fechaGeneracion = formatDateMexico(new Date().toISOString());
-    
+    const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
+
     let html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
     <head>
         <meta charset="UTF-8">
-        <style>
-            body { font-family: Arial, sans-serif; }
-            .header { background-color: #1e3a5f; color: white; padding: 20px; text-align: center; }
-            .header h1 { margin: 0; font-size: 24px; color: white; }
-            .header h2 { margin: 5px 0 0 0; font-size: 16px; font-weight: normal; color: white; }
-            .info-section { background-color: #f3f4f6; padding: 15px; margin: 10px 0; }
-            .info-row { margin: 5px 0; }
-            .label { font-weight: bold; color: #374151; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33; }
-            td { padding: 10px; border: 1px solid #d1d5db; }
-            tr:nth-child(even) { background-color: #f9fafb; }
-            .total-row { background-color: #e5e7eb !important; font-weight: bold; }
-            .facturable-si { color: #059669; font-weight: bold; }
-            .facturable-no { color: #dc2626; font-weight: bold; }
-            .footer { margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; }
-        </style>
+        <title>Reporte 3P Viáticos</title>
+        <!--[if gte mso 9]>
+        <xml>
+            <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                    <x:ExcelWorksheet>
+                        <x:Name>Reporte</x:Name>
+                    </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
     </head>
     <body>
-        <div class="header">
-            <h1>3P SA DE CV</h1>
-            <h2>Reporte de Viáticos y Gastos de Viaje</h2>
+        <!-- Encabezado con inline styles -->
+        <div style="background-color: #1e3a5f; color: white; padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+            <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
+            <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
         </div>
         
-        <div class="info-section">
-            <div class="info-row">
-                <span class="label">Responsable:</span> ${responsable} | 
-                <span class="label">Zona:</span> ${zona || 'No especificada'}
-            </div>
-            <div class="info-row">
-                <span class="label">Período:</span> ${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)} | 
-                <span class="label">No. Reporte:</span> ${numReporte}
-            </div>
-            <div class="info-row">
-                <span class="label">Fecha de generación:</span> ${fechaGeneracion} | 
-                <span class="label">Total General:</span> ${formatMoney(total)}
-            </div>
+        <!-- Información del reporte -->
+        <div style="background-color: #f3f4f6; padding: 15px; margin: 10px 0; font-family: Arial, sans-serif;">
+            <div style="margin: 5px 0;"><strong>Responsable:</strong> ${escapeHtml(responsable)} | <strong>Zona:</strong> ${escapeHtml(zona || 'No especificada')}</div>
+            <div style="margin: 5px 0;"><strong>Período:</strong> ${escapeHtml(formatDateMexico(fechaInicio))} al ${escapeHtml(formatDateMexico(fechaFin))} | <strong>No. Reporte:</strong> ${escapeHtml(numReporte)}</div>
+            <div style="margin: 5px 0;"><strong>Fecha de generación:</strong> ${escapeHtml(fechaGeneracion)} | <strong>Total General:</strong> ${escapeHtml(formatMoney(total))}</div>
         </div>
         
-        <table>
+        <!-- Tabla de gastos -->
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px;">
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Cliente</th>
-                    <th>Lugar de Visita</th>
-                    <th>Tipo Gasto</th>
-                    <th>Folio Factura</th>
-                    <th>Número Factura</th>
-                    <th>Razón Social</th>
-                    <th>Total</th>
-                    <th>Facturable</th>
-                    <th>Comentarios</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Fecha</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Cliente</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Lugar de Visita</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Tipo Gasto</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Folio Factura</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Número Factura</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Razón Social</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: right; font-weight: bold; border: 1px solid #0f1f33;">Total</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: center; font-weight: bold; border: 1px solid #0f1f33;">Facturable</th>
+                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Comentarios</th>
                 </tr>
             </thead>
             <tbody>
     `;
-    
+
     gastos.forEach(g => {
         const esFacturable = g.esFacturable !== false;
         html += `
             <tr>
-                <td>${formatDateMexico(g.fecha || g.createdAt)}</td>
-                <td>${g.viaje?.cliente || 'N/A'}</td>
-                <td>${g.viaje?.lugarVisita || g.viaje?.destino || 'N/A'}</td>
-                <td>${TIPOS_GASTO[g.tipo]?.label || g.tipo}</td>
-                <td>${g.folioFactura || '-'}</td>
-                <td>${g.numFactura || '-'}</td>
-                <td>${g.razonSocial || '-'}</td>
-                <td style="text-align: right;">${formatMoney(g.monto)}</td>
-                <td style="text-align: center;" class="${esFacturable ? 'facturable-si' : 'facturable-no'}">
-                    ${esFacturable ? 'SÍ' : 'NO'}
-                </td>
-                <td>${g.comentarios || ''}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(formatDateMexico(g.fecha || g.createdAt))}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.viaje?.cliente || 'N/A')}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.folioFactura || '-')}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.numFactura || '-')}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.razonSocial || '-')}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">${escapeHtml(formatMoney(g.monto))}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db; text-align: center; ${esFacturable ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;'}">${esFacturable ? 'SÍ' : 'NO'}</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db;">${escapeHtml(g.comentarios || '')}</td>
             </tr>
         `;
     });
-    
+
     html += `
-            <tr class="total-row">
-                <td colspan="7" style="text-align: right;">TOTALES:</td>
-                <td style="text-align: right;">${formatMoney(total)}</td>
-                <td colspan="2"></td>
+            <tr style="background-color: #e5e7eb; font-weight: bold;">
+                <td colspan="7" style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">TOTALES:</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">${escapeHtml(formatMoney(total))}</td>
+                <td colspan="2" style="padding: 10px; border: 1px solid #d1d5db;"></td>
             </tr>
-            <tr class="total-row">
-                <td colspan="7" style="text-align: right; color: #059669;">Total Facturable:</td>
-                <td style="text-align: right; color: #059669;">${formatMoney(totalFacturable)}</td>
-                <td colspan="2"></td>
+            <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
+                <td colspan="7" style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">Total Facturable:</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">${escapeHtml(formatMoney(totalFacturable))}</td>
+                <td colspan="2" style="padding: 10px; border: 1px solid #d1d5db;"></td>
             </tr>
-            <tr class="total-row">
-                <td colspan="7" style="text-align: right; color: #dc2626;">Total No Facturable:</td>
-                <td style="text-align: right; color: #dc2626;">${formatMoney(total - totalFacturable)}</td>
-                <td colspan="2"></td>
+            <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
+                <td colspan="7" style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">Total No Facturable:</td>
+                <td style="padding: 10px; border: 1px solid #d1d5db; text-align: right;">${escapeHtml(formatMoney(total - totalFacturable))}</td>
+                <td colspan="2" style="padding: 10px; border: 1px solid #d1d5db;"></td>
             </tr>
         </tbody>
         </table>
         
-        <div class="footer">
+        <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; font-family: Arial, sans-serif;">
             <p><strong>Documento generado por 3P ViajesPro v5.0</strong></p>
             <p>Este reporte es un documento oficial de 3P SA DE CV</p>
-            <p>Fecha y hora: ${formatDateTimeMexico(new Date().toISOString())}</p>
+            <p>Fecha y hora: ${escapeHtml(formatDateTimeMexico(new Date().toISOString()))}</p>
         </div>
     </body>
     </html>
     `;
-    
+
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `Reporte_3P_Viaticos_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`;
     link.click();
-    
+
     showToast('📊 Reporte Excel descargado', 'success');
 }
 
@@ -1463,9 +1468,9 @@ async function loadGlobalReport() {
                     <div class="vendor-summary-card">
                         <div class="vendor-summary-header">
                             <div>
-                                <h4>${v.nombre}</h4>
+                                <h4>${escapeHtml(v.nombre)}</h4>
                                 <p class="vendor-summary-meta">
-                                    📍 ${v.zona} | 🚗 ${v.viajes} viajes | 🧾 ${v.gastos} gastos
+                                    📍 ${escapeHtml(v.zona)} | 🚗 ${v.viajes} viajes | 🧾 ${v.gastos} gastos
                                 </p>
                             </div>
                             <div class="vendor-summary-amounts">
