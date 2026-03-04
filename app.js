@@ -624,7 +624,10 @@ async function loadViajes() {
                         <div class="viaje-title">${escapeHtml(v.destino)}</div>
                         <div class="viaje-cliente">👤 ${escapeHtml(v.cliente || 'Sin cliente')}</div>
                     </div>
-                    <span class="viaje-badge ${v.estado}">${v.estado}</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="viaje-badge ${v.estado}">${v.estado}</span>
+                        <button class="btn btn-icon btn-small" style="background: none; color: var(--primary);" onclick="event.stopPropagation(); editarViaje('${v.id}')" title="Editar viaje">✏️</button>
+                    </div>
                 </div>
                 <div class="viaje-meta">
                     <span>📅 ${formatDate(v.fechaInicio)}</span>
@@ -688,6 +691,72 @@ async function crearViaje() {
         loadViajes();
     } catch (error) {
         showToast('Error al crear viaje: ' + error.message, 'error');
+    }
+}
+
+// ===== NUEVA FUNCIÓN: EDITAR VIAJE =====
+async function editarViaje(viajeId) {
+    try {
+        const viaje = await db.get('viajes', viajeId);
+        if (!viaje) {
+            showToast('Viaje no encontrado', 'error');
+            return;
+        }
+        
+        document.getElementById('edit-viaje-id').value = viaje.id;
+        document.getElementById('edit-viaje-cliente').value = viaje.cliente;
+        document.getElementById('edit-viaje-destino').value = viaje.destino;
+        document.getElementById('edit-viaje-lugar-visita').value = viaje.lugarVisita || '';
+        document.getElementById('edit-viaje-objetivo').value = viaje.objetivo || '';
+        document.getElementById('edit-viaje-fecha-inicio').value = viaje.fechaInicio ? viaje.fechaInicio.split('T')[0] : '';
+        document.getElementById('edit-viaje-fecha-fin').value = viaje.fechaFin ? viaje.fechaFin.split('T')[0] : '';
+        document.getElementById('edit-viaje-presupuesto').value = viaje.presupuesto || '';
+        document.getElementById('edit-viaje-estado').value = viaje.estado || 'activo';
+        
+        openModal('editar-viaje');
+    } catch (error) {
+        showToast('Error al cargar viaje', 'error');
+    }
+}
+
+async function guardarEdicionViaje() {
+    const id = document.getElementById('edit-viaje-id').value;
+    const cliente = document.getElementById('edit-viaje-cliente').value.trim();
+    const destino = document.getElementById('edit-viaje-destino').value.trim();
+    const lugarVisita = document.getElementById('edit-viaje-lugar-visita').value.trim();
+    const objetivo = document.getElementById('edit-viaje-objetivo').value.trim();
+    const fechaInicioInput = document.getElementById('edit-viaje-fecha-inicio').value;
+    const fechaFinInput = document.getElementById('edit-viaje-fecha-fin').value;
+    const presupuesto = document.getElementById('edit-viaje-presupuesto').value;
+    const estado = document.getElementById('edit-viaje-estado').value;
+
+    if (!cliente || !destino || !fechaInicioInput) {
+        showToast('Cliente, destino y fecha de inicio son obligatorios', 'warning');
+        return;
+    }
+
+    try {
+        const viaje = await db.get('viajes', id);
+        if (!viaje) {
+            showToast('Viaje no encontrado', 'error');
+            return;
+        }
+
+        viaje.cliente = cliente.toUpperCase();
+        viaje.destino = destino.toUpperCase();
+        viaje.lugarVisita = lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase();
+        viaje.objetivo = objetivo;
+        viaje.fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
+        viaje.fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
+        viaje.presupuesto = presupuesto ? parseFloat(presupuesto) : null;
+        viaje.estado = estado;
+
+        await db.update('viajes', viaje);
+        closeModal('editar-viaje');
+        showToast('✅ Viaje actualizado', 'success');
+        loadViajes();
+    } catch (error) {
+        showToast('Error al guardar: ' + error.message, 'error');
     }
 }
 
@@ -1285,55 +1354,57 @@ function generarExcelProfesional() {
     const numReporte = `3P-VIA-${Date.now().toString().slice(-6)}`;
     const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    let html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
-    <head>
-        <meta charset="UTF-8">
-        <title>Reporte 3P Viáticos</title>
-        <!--[if gte mso 9]>
-        <xml>
-            <x:ExcelWorkbook>
-                <x:ExcelWorksheets>
-                    <x:ExcelWorksheet>
-                        <x:Name>Reporte</x:Name>
-                    </x:ExcelWorksheet>
-                </x:ExcelWorksheets>
-            </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-    </head>
-    <body>
-        <!-- Encabezado con inline styles -->
-        <div style="background-color: #1e3a5f; color: white; padding: 20px; text-align: center; font-family: Arial, sans-serif;">
-            <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
-            <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
-        </div>
-        
-        <!-- Información del reporte -->
-        <div style="background-color: #f3f4f6; padding: 15px; margin: 10px 0; font-family: Arial, sans-serif;">
-            <div style="margin: 5px 0;"><strong>Responsable:</strong> ${escapeHtml(responsable)} | <strong>Zona:</strong> ${escapeHtml(zona || 'No especificada')}</div>
-            <div style="margin: 5px 0;"><strong>Período:</strong> ${escapeHtml(formatDateMexico(fechaInicio))} al ${escapeHtml(formatDateMexico(fechaFin))} | <strong>No. Reporte:</strong> ${escapeHtml(numReporte)}</div>
-            <div style="margin: 5px 0;"><strong>Fecha de generación:</strong> ${escapeHtml(fechaGeneracion)} | <strong>Total General:</strong> ${escapeHtml(formatMoney(total))}</div>
-        </div>
-        
-        <!-- Tabla de gastos -->
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px;">
-            <thead>
-                <tr>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Fecha</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Cliente</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Lugar de Visita</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Tipo Gasto</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Folio Factura</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Número Factura</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Razón Social</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: right; font-weight: bold; border: 1px solid #0f1f33;">Total</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: center; font-weight: bold; border: 1px solid #0f1f33;">Facturable</th>
-                    <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Comentarios</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+    // Versión mejorada con declaraciones XML para Excel
+    let html = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte 3P Viáticos</title>
+    <!--[if gte mso 9]>
+    <xml>
+        <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                    <x:Name>Reporte</x:Name>
+                </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+    </xml>
+    <![endif]-->
+</head>
+<body>
+    <!-- Encabezado con inline styles -->
+    <div style="background-color: #1e3a5f; color: white; padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+        <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
+        <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
+    </div>
+    
+    <!-- Información del reporte -->
+    <div style="background-color: #f3f4f6; padding: 15px; margin: 10px 0; font-family: Arial, sans-serif;">
+        <div style="margin: 5px 0;"><strong>Responsable:</strong> ${escapeHtml(responsable)} | <strong>Zona:</strong> ${escapeHtml(zona || 'No especificada')}</div>
+        <div style="margin: 5px 0;"><strong>Período:</strong> ${escapeHtml(formatDateMexico(fechaInicio))} al ${escapeHtml(formatDateMexico(fechaFin))} | <strong>No. Reporte:</strong> ${escapeHtml(numReporte)}</div>
+        <div style="margin: 5px 0;"><strong>Fecha de generación:</strong> ${escapeHtml(fechaGeneracion)} | <strong>Total General:</strong> ${escapeHtml(formatMoney(total))}</div>
+    </div>
+    
+    <!-- Tabla de gastos -->
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px;">
+        <thead>
+            <tr>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Fecha</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Cliente</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Lugar de Visita</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Tipo Gasto</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Folio Factura</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Número Factura</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Razón Social</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: right; font-weight: bold; border: 1px solid #0f1f33;">Total</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: center; font-weight: bold; border: 1px solid #0f1f33;">Facturable</th>
+                <th style="background-color: #1e3a5f; color: white; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #0f1f33;">Comentarios</th>
+            </tr>
+        </thead>
+        <tbody>
+`;
 
     gastos.forEach(g => {
         const esFacturable = g.esFacturable !== false;
@@ -1694,6 +1765,8 @@ window.showAdminTab = showAdminTab;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.crearViaje = crearViaje;
+window.editarViaje = editarViaje;
+window.guardarEdicionViaje = guardarEdicionViaje;
 window.selectViaje = selectViaje;
 window.selectTipoGasto = selectTipoGasto;
 window.guardarGasto = guardarGasto;
