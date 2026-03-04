@@ -41,7 +41,6 @@ function getMexicoDateTime() {
 
 function formatDateTimeMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -56,7 +55,6 @@ function formatDateTimeMexico(dateString) {
 
 function formatDateMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleDateString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -76,7 +74,7 @@ function debug(msg, data) {
     console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
-// ===== ESCAPE HTML (para evitar caracteres maliciosos y roturas) =====
+// ===== ESCAPE HTML =====
 function escapeHtml(text) {
     if (text == null) return '';
     return String(text).replace(/[&<>"]/g, function(m) {
@@ -91,7 +89,6 @@ function escapeHtml(text) {
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
     debug('DOM cargado, iniciando v5.0...');
-    
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if (splash) {
@@ -99,7 +96,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             setTimeout(() => splash.remove(), 500);
         }
     }, 1500);
-
     try {
         await initApp();
     } catch (error) {
@@ -110,19 +106,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function initApp() {
     debug('Iniciando app v5.0...');
-    
     if (typeof db === 'undefined') {
         throw new Error('La base de datos no está cargada');
     }
-    
     await db.init();
     debug('DB inicializada correctamente');
-    
     checkSession();
     setupEventListeners();
     updateConnectionStatus();
-    
-    // Fechas por defecto
     const today = new Date().toISOString().split('T')[0];
     if (document.getElementById('viaje-fecha-inicio')) {
         document.getElementById('viaje-fecha-inicio').value = today;
@@ -130,7 +121,6 @@ async function initApp() {
     if (document.getElementById('fecha-gasto')) {
         document.getElementById('fecha-gasto').value = getMexicoDateTimeLocal();
     }
-    
     const firstDay = new Date();
     firstDay.setDate(1);
     if (document.getElementById('reporte-fecha-inicio')) {
@@ -139,21 +129,17 @@ async function initApp() {
     if (document.getElementById('reporte-fecha-fin')) {
         document.getElementById('reporte-fecha-fin').value = today;
     }
-    
     debug('App v5.0 iniciada correctamente');
 }
 
 function setupEventListeners() {
     debug('Configurando event listeners...');
-    
     window.addEventListener('online', () => updateConnectionStatus(true));
     window.addEventListener('offline', () => updateConnectionStatus(false));
-    
     const cameraInput = document.getElementById('camera-input');
     if (cameraInput) {
         cameraInput.addEventListener('change', handlePhotoCapture);
     }
-    
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -161,8 +147,6 @@ function setupEventListeners() {
             }
         });
     });
-
-    // CORRECCIÓN: Listener para el filtro de gastos
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
@@ -183,22 +167,18 @@ function showScreen(screenId) {
 
 function showSection(sectionName) {
     debug('Mostrando sección:', sectionName);
-    
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.section === sectionName) {
             btn.classList.add('active');
         }
     });
-    
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
     });
-    
     const sectionEl = document.getElementById(`${sectionName}-section`);
     if (sectionEl) {
         sectionEl.classList.add('active');
-        
         if (sectionName === 'viajes') loadViajes();
         if (sectionName === 'gastos') {
             loadViajesSelect();
@@ -219,18 +199,15 @@ function showAdminTab(tabName) {
         tab.classList.remove('active');
     });
     event.target.classList.add('active');
-    
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.classList.remove('active');
         tab.classList.add('hidden');
     });
-    
     const tabEl = document.getElementById(`admin-tab-${tabName}`);
     if (tabEl) {
         tabEl.classList.remove('hidden');
         tabEl.classList.add('active');
     }
-    
     if (tabName === 'reportes') loadGlobalReport();
 }
 
@@ -238,14 +215,12 @@ function showAdminTab(tabName) {
 function checkSession() {
     debug('Verificando sesión...');
     const savedSession = localStorage.getItem('viajespro_session');
-    
     if (savedSession) {
         try {
             const session = JSON.parse(savedSession);
             if (session.remember && session.user) {
                 state.currentUser = session.user;
                 state.currentVendor = session.vendor;
-                
                 if (session.user.type === 'admin') {
                     showAdminPanel();
                 } else {
@@ -274,39 +249,31 @@ function backToLogin() {
 
 async function login() {
     debug('Iniciando login...');
-    
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
     const remember = document.getElementById('remember-me').checked;
     const btn = document.querySelector('#login-form .btn-primary');
-    
     if (!username || !password) {
         showToast('Ingresa usuario y contraseña', 'warning');
         return;
     }
-    
     setLoading(btn, true);
-    
     try {
         debug('Buscando vendedor:', username);
         const vendor = await db.get('vendedores', username);
         debug('Vendedor encontrado:', vendor ? 'SÍ' : 'NO');
-        
         if (!vendor || vendor.password !== password) {
             showToast('Usuario o contraseña incorrectos', 'error');
             setLoading(btn, false);
             return;
         }
-        
         if (vendor.status === 'inactive') {
             showToast('Usuario inactivo', 'warning');
             setLoading(btn, false);
             return;
         }
-        
         state.currentUser = { username, type: 'vendor' };
         state.currentVendor = vendor;
-        
         if (remember) {
             localStorage.setItem('viajespro_session', JSON.stringify({
                 user: state.currentUser,
@@ -314,10 +281,8 @@ async function login() {
                 remember: true
             }));
         }
-        
         showToast(`¡Bienvenido, ${vendor.name}!`, 'success');
         showMainApp();
-        
     } catch (error) {
         debug('Error en login:', error);
         showToast('Error al iniciar sesión: ' + error.message, 'error');
@@ -328,10 +293,8 @@ async function login() {
 
 async function loginAdmin() {
     debug('Login admin...');
-    
     const username = document.getElementById('admin-username').value;
     const password = document.getElementById('admin-password').value;
-    
     if (username === CONFIG.ADMIN_USER && password === CONFIG.ADMIN_PASS) {
         state.currentUser = { username, type: 'admin' };
         showToast('Bienvenido, Administrador', 'success');
@@ -359,55 +322,45 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
-    
     const nameInput = document.getElementById('new-vendor-name');
     const usernameInput = document.getElementById('new-vendor-username');
     const passwordInput = document.getElementById('new-vendor-password');
     const emailInput = document.getElementById('new-vendor-email');
     const zoneInput = document.getElementById('new-vendor-zone');
     const errorDiv = document.getElementById('register-error');
-    
     if (!nameInput || !usernameInput || !passwordInput) {
         console.error('No se encontraron campos del formulario');
         return;
     }
-    
     const name = nameInput.value.trim();
     const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     const email = emailInput ? emailInput.value.trim() : '';
     const zone = zoneInput ? zoneInput.value : 'Centro';
-    
     if (errorDiv) errorDiv.textContent = '';
-    
     if (!name || !username || !password) {
         const msg = 'Nombre, usuario y contraseña son obligatorios';
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'warning');
         return;
     }
-    
     if (!/^[a-z0-9.]+$/.test(username)) {
         const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'warning');
         return;
     }
-    
     try {
         debug('Verificando si existe:', username);
         const existing = await db.get('vendedores', username);
-        
         if (existing) {
             const msg = 'Este nombre de usuario ya existe';
             if (errorDiv) errorDiv.textContent = msg;
             showToast(msg, 'warning');
             return;
         }
-        
         const vendor = {
             id: username,
             name: name,
@@ -419,19 +372,14 @@ async function registerVendor() {
             createdAt: new Date().toISOString(),
             createdBy: 'admin'
         };
-        
         debug('Guardando vendedor:', vendor);
         await db.add('vendedores', vendor);
-        
         showToast('✅ Vendedor registrado exitosamente', 'success');
-        
         nameInput.value = '';
         usernameInput.value = '';
         passwordInput.value = '';
         if (emailInput) emailInput.value = '';
-        
         await loadVendorsList();
-        
     } catch (error) {
         debug('Error al registrar:', error);
         const msg = 'Error al registrar: ' + error.message;
@@ -440,7 +388,6 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -451,24 +398,19 @@ async function loadVendorsList() {
         return;
     }
     lastVendorsLoad = now;
-    
     debug('Cargando lista de vendedores...');
-    
     try {
         const vendors = await db.getAll('vendedores');
         debug('Vendedores encontrados:', vendors.length);
-        
         const container = document.getElementById('vendors-list');
         if (!container) {
             console.error('No se encontró container vendors-list');
             return;
         }
-        
         if (vendors.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>No hay vendedores registrados</p></div>';
             return;
         }
-        
         container.innerHTML = vendors.map(v => `
             <div class="vendor-card" data-username="${v.username}">
                 <div class="vendor-info">
@@ -484,9 +426,7 @@ async function loadVendorsList() {
                 </div>
             </div>
         `).join('');
-        
         debug('Lista renderizada');
-        
     } catch (error) {
         debug('Error cargando vendedores:', error);
         showToast('Error al cargar vendedores: ' + error.message, 'error');
@@ -508,7 +448,6 @@ async function editVendor(username) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
-        
         document.getElementById('edit-vendor-id').value = vendor.id;
         document.getElementById('edit-vendor-name').value = vendor.name;
         document.getElementById('edit-vendor-username').value = vendor.username;
@@ -516,7 +455,6 @@ async function editVendor(username) {
         document.getElementById('edit-vendor-email').value = vendor.email || '';
         document.getElementById('edit-vendor-zone').value = vendor.zone;
         document.getElementById('edit-vendor-status').value = vendor.status;
-        
         openModal('editar-vendedor');
     } catch (error) {
         showToast('Error al cargar datos', 'error');
@@ -530,25 +468,21 @@ async function saveVendorChanges() {
     const email = document.getElementById('edit-vendor-email').value.trim();
     const zone = document.getElementById('edit-vendor-zone').value;
     const status = document.getElementById('edit-vendor-status').value;
-
     if (!name) {
         showToast('Nombre es obligatorio', 'warning');
         return;
     }
-
     try {
         const vendor = await db.get('vendedores', id);
         if (!vendor) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
-        
         vendor.name = name;
         if (password) vendor.password = password;
         vendor.email = email;
         vendor.zone = zone;
         vendor.status = status;
-
         await db.update('vendedores', vendor);
         closeModal('editar-vendedor');
         showToast('✅ Vendedor actualizado', 'success');
@@ -560,7 +494,6 @@ async function saveVendorChanges() {
 
 async function deleteVendor(username) {
     if (!confirm(`¿Eliminar al vendedor ${username}?`)) return;
-    
     try {
         await db.delete('vendedores', username);
         showToast('✅ Vendedor eliminado', 'success');
@@ -573,33 +506,25 @@ async function deleteVendor(username) {
 // ===== MAIN APP =====
 function showMainApp() {
     showScreen('app');
-    
     const userNameEl = document.getElementById('current-user-name');
     const welcomeEl = document.getElementById('welcome-text');
-    
     if (userNameEl) userNameEl.textContent = state.currentVendor?.name || 'Vendedor';
     if (welcomeEl) welcomeEl.textContent = `Hola, ${state.currentVendor?.name?.split(' ')[0] || 'Vendedor'}`;
-    
     loadViajes();
 }
 
 // ===== VIAJES =====
 async function loadViajes() {
     if (!state.currentVendor) return;
-    
     try {
         const filter = document.getElementById('filter-viaje-status')?.value || 'all';
         let viajes = await db.getViajesByVendedor(state.currentVendor.username);
-        
         if (filter !== 'all') {
             viajes = viajes.filter(v => v.estado === filter);
         }
-        
         viajes.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
-        
         const container = document.getElementById('viajes-list');
         if (!container) return;
-        
         if (viajes.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -610,13 +535,11 @@ async function loadViajes() {
             `;
             return;
         }
-        
         const viajesConStats = await Promise.all(viajes.map(async v => {
             const gastos = await db.getGastosByViaje(v.id);
             const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
             return { ...v, gastosCount: gastos.length, totalGastos: total };
         }));
-        
         container.innerHTML = viajesConStats.map(v => `
             <div class="viaje-card ${v.estado}" onclick="selectViaje('${v.id}')">
                 <div class="viaje-header">
@@ -626,8 +549,8 @@ async function loadViajes() {
                     </div>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span class="viaje-badge ${v.estado}">${v.estado}</span>
-                        <button class="btn btn-icon btn-small" style="background: none; color: var(--primary);" onclick="event.stopPropagation(); editarViaje('${v.id}')" title="Editar viaje">✏️</button>
-                        <button class="btn btn-icon btn-small" style="background: none; color: #dc2626;" onclick="event.stopPropagation(); eliminarViaje('${v.id}')" title="Eliminar viaje">🗑️</button>
+                        <button class="btn btn-icon btn-small" style="background: none; color: var(--primary);" onclick="event.stopPropagation(); event.preventDefault(); editarViaje('${v.id}')" title="Editar viaje">✏️</button>
+                        <button class="btn btn-icon btn-small" style="background: none; color: #dc2626;" onclick="event.stopPropagation(); event.preventDefault(); eliminarViaje('${v.id}')" title="Eliminar viaje">🗑️</button>
                     </div>
                 </div>
                 <div class="viaje-meta">
@@ -640,7 +563,6 @@ async function loadViajes() {
                 </div>
             </div>
         `).join('');
-        
     } catch (error) {
         showToast('Error al cargar viajes: ' + error.message, 'error');
     }
@@ -654,12 +576,10 @@ async function crearViaje() {
     const fechaInicioInput = document.getElementById('viaje-fecha-inicio').value;
     const fechaFinInput = document.getElementById('viaje-fecha-fin').value;
     const presupuesto = document.getElementById('viaje-presupuesto').value;
-    
     if (!cliente || !destino || !fechaInicioInput) {
         showToast('Cliente, destino y fecha de inicio son obligatorios', 'warning');
         return;
     }
-    
     const viaje = {
         id: 'VIAJE_' + Date.now(),
         vendedorId: state.currentVendor.username,
@@ -676,34 +596,31 @@ async function crearViaje() {
         createdAt: new Date().toISOString(),
         version: 5
     };
-    
     try {
         await db.add('viajes', viaje);
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
-        
         document.getElementById('viaje-cliente').value = '';
         document.getElementById('viaje-destino').value = '';
         document.getElementById('viaje-lugar-visita').value = '';
         document.getElementById('viaje-objetivo').value = '';
         document.getElementById('viaje-fecha-fin').value = '';
         document.getElementById('viaje-presupuesto').value = '';
-        
         loadViajes();
     } catch (error) {
         showToast('Error al crear viaje: ' + error.message, 'error');
     }
 }
 
-// ===== NUEVA FUNCIÓN: EDITAR VIAJE =====
+// ===== EDITAR VIAJE =====
 async function editarViaje(viajeId) {
+    debug('Editar viaje ID:', viajeId);
     try {
         const viaje = await db.get('viajes', viajeId);
         if (!viaje) {
             showToast('Viaje no encontrado', 'error');
             return;
         }
-        
         document.getElementById('edit-viaje-id').value = viaje.id;
         document.getElementById('edit-viaje-cliente').value = viaje.cliente;
         document.getElementById('edit-viaje-destino').value = viaje.destino;
@@ -713,10 +630,9 @@ async function editarViaje(viajeId) {
         document.getElementById('edit-viaje-fecha-fin').value = viaje.fechaFin ? viaje.fechaFin.split('T')[0] : '';
         document.getElementById('edit-viaje-presupuesto').value = viaje.presupuesto || '';
         document.getElementById('edit-viaje-estado').value = viaje.estado || 'activo';
-        
         openModal('editar-viaje');
     } catch (error) {
-        showToast('Error al cargar viaje', 'error');
+        showToast('Error al cargar viaje: ' + error.message, 'error');
     }
 }
 
@@ -730,19 +646,16 @@ async function guardarEdicionViaje() {
     const fechaFinInput = document.getElementById('edit-viaje-fecha-fin').value;
     const presupuesto = document.getElementById('edit-viaje-presupuesto').value;
     const estado = document.getElementById('edit-viaje-estado').value;
-
     if (!cliente || !destino || !fechaInicioInput) {
         showToast('Cliente, destino y fecha de inicio son obligatorios', 'warning');
         return;
     }
-
     try {
         const viaje = await db.get('viajes', id);
         if (!viaje) {
             showToast('Viaje no encontrado', 'error');
             return;
         }
-
         viaje.cliente = cliente.toUpperCase();
         viaje.destino = destino.toUpperCase();
         viaje.lugarVisita = lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase();
@@ -751,7 +664,6 @@ async function guardarEdicionViaje() {
         viaje.fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
         viaje.presupuesto = presupuesto ? parseFloat(presupuesto) : null;
         viaje.estado = estado;
-
         await db.update('viajes', viaje);
         closeModal('editar-viaje');
         showToast('✅ Viaje actualizado', 'success');
@@ -761,17 +673,14 @@ async function guardarEdicionViaje() {
     }
 }
 
-// ===== NUEVA FUNCIÓN: ELIMINAR VIAJE =====
+// ===== ELIMINAR VIAJE =====
 async function eliminarViaje(viajeId) {
     if (!confirm('¿Eliminar este viaje permanentemente? También se eliminarán todos los gastos asociados.')) return;
-    
     try {
-        // Primero eliminar todos los gastos de este viaje
         const gastos = await db.getGastosByViaje(viajeId);
         for (const gasto of gastos) {
             await db.delete('gastos', gasto.id);
         }
-        // Luego eliminar el viaje
         await db.delete('viajes', viajeId);
         showToast('✅ Viaje eliminado', 'success');
         loadViajes();
@@ -791,29 +700,22 @@ function selectViaje(viajeId) {
 // ===== GASTOS =====
 async function loadViajesSelect() {
     if (!state.currentVendor) return;
-    
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         const activos = viajes.filter(v => v.estado === 'activo');
-        
         const selects = ['captura-viaje-select', 'gastos-viaje-select'];
-        
         selects.forEach(selectId => {
             const select = document.getElementById(selectId);
             if (!select) return;
-            
             const currentValue = select.value;
             const defaultOption = selectId === 'captura-viaje-select' ? 
                 '<option value="">Elige un viaje activo...</option>' :
                 '<option value="">Todos los viajes</option>';
-            
             select.innerHTML = defaultOption + activos.map(v => 
                 `<option value="${v.id}">${escapeHtml(v.cliente)} - ${escapeHtml(v.destino)}</option>`
             ).join('');
-            
             if (currentValue) select.value = currentValue;
         });
-        
     } catch (error) {
         debug('Error cargando selects:', error);
     }
@@ -827,7 +729,6 @@ function selectTipoGasto(btn) {
 function resetCapturaForm() {
     state.tempFotos = [];
     state.currentGasto = null;
-    
     document.getElementById('monto-gasto').value = '';
     document.getElementById('lugar-gasto').value = '';
     document.getElementById('folio-factura').value = '';
@@ -835,16 +736,13 @@ function resetCapturaForm() {
     document.getElementById('razon-social').value = '';
     document.getElementById('comentarios-gasto').value = '';
     document.getElementById('es-facturable').checked = true;
-    
     const comentariosEl = document.getElementById('comentarios-gasto');
     if (comentariosEl) {
         comentariosEl.placeholder = 'Información adicional...';
         comentariosEl.style.backgroundColor = '';
         comentariosEl.style.borderColor = '';
     }
-    
     document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
-    
     const preview = document.getElementById('photo-preview');
     if (preview) {
         preview.innerHTML = `
@@ -852,7 +750,6 @@ function resetCapturaForm() {
             <span class="upload-text">Toca para capturar foto</span>
         `;
     }
-    
     const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
     if (btnGuardar) btnGuardar.textContent = '💾 GUARDAR GASTO';
 }
@@ -868,8 +765,6 @@ async function guardarGasto() {
     const razonSocial = document.getElementById('razon-social')?.value.trim() || '';
     const comentarios = document.getElementById('comentarios-gasto')?.value.trim() || '';
     const esFacturable = document.getElementById('es-facturable')?.checked !== false;
-    
-    // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
         const comentariosEl = document.getElementById('comentarios-gasto');
@@ -882,24 +777,19 @@ async function guardarGasto() {
         const comentariosEl = document.getElementById('comentarios-gasto');
         if (comentariosEl) comentariosEl.style.borderColor = '';
     }
-    
     if (!viajeId) {
         showToast('Selecciona un viaje', 'warning');
         return;
     }
-    
     if (!tipoCard) {
         showToast('Selecciona el tipo de gasto', 'warning');
         return;
     }
-    
     if (!monto || parseFloat(monto) <= 0) {
         showToast('Ingresa un monto válido', 'warning');
         return;
     }
-    
     const esEdicion = state.currentGasto !== null;
-    
     const gastoData = {
         viajeId,
         vendedorId: state.currentVendor.username,
@@ -916,7 +806,6 @@ async function guardarGasto() {
         editable: true,
         updatedAt: new Date().toISOString()
     };
-    
     try {
         if (esEdicion) {
             const gastoActualizado = {
@@ -935,13 +824,10 @@ async function guardarGasto() {
             await db.add('gastos', nuevoGasto);
             showToast('✅ Gasto guardado', 'success');
         }
-        
         resetCapturaForm();
-        
         if (document.getElementById('gastos-section')?.classList.contains('active')) {
             loadGastosList();
         }
-        
     } catch (error) {
         showToast('Error al guardar: ' + error.message, 'error');
     }
@@ -950,7 +836,6 @@ async function guardarGasto() {
 function toggleComentarioRequerido() {
     const esFacturable = document.getElementById('es-facturable').checked;
     const textarea = document.getElementById('comentarios-gasto');
-    
     if (!esFacturable) {
         if (textarea) {
             textarea.placeholder = 'EXPLICA POR QUÉ NO ES FACTURABLE (obligatorio)...';
@@ -968,7 +853,6 @@ async function loadGastosList() {
     try {
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
         let gastos = [];
-        
         if (viajeId) {
             gastos = await db.getGastosByViaje(viajeId);
         } else if (state.currentVendor) {
@@ -978,16 +862,13 @@ async function loadGastosList() {
                 gastos = gastos.concat(g.map(item => ({...item, viajeDestino: viaje.destino, viajeCliente: viaje.cliente})));
             }
         }
-        
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
-        
         const resumen = { total: 0, facturable: 0, porTipo: {} };
         gastos.forEach(g => {
             resumen.total += g.monto;
             if (g.esFacturable !== false) resumen.facturable += g.monto;
             resumen.porTipo[g.tipo] = (resumen.porTipo[g.tipo] || 0) + g.monto;
         });
-        
         const resumenEl = document.getElementById('gastos-resumen');
         if (resumenEl) {
             if (gastos.length === 0) {
@@ -1014,10 +895,8 @@ async function loadGastosList() {
                 `;
             }
         }
-        
         const container = document.getElementById('gastos-list');
         if (!container) return;
-        
         if (gastos.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -1027,7 +906,6 @@ async function loadGastosList() {
             `;
             return;
         }
-        
         container.innerHTML = gastos.map(g => `
             <div class="gasto-item" onclick="showDetalleGasto('${g.id}')">
                 <div class="gasto-info">
@@ -1043,7 +921,6 @@ async function loadGastosList() {
                 <div class="gasto-amount">${formatMoney(g.monto)}</div>
             </div>
         `).join('');
-        
     } catch (error) {
         showToast('Error al cargar gastos: ' + error.message, 'error');
     }
@@ -1053,10 +930,8 @@ async function showDetalleGasto(gastoId) {
     try {
         const gasto = await db.get('gastos', gastoId);
         if (!gasto) return;
-        
         const viaje = await db.get('viajes', gasto.viajeId);
         state.currentGasto = gasto;
-        
         const content = document.getElementById('detalle-gasto-content');
         content.innerHTML = `
             <div style="text-align: center; margin-bottom: 1.5rem;">
@@ -1067,7 +942,6 @@ async function showDetalleGasto(gastoId) {
                     '<span style="background: #fee2e2; color: #dc2626; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">NO FACTURABLE</span>' : 
                     '<span style="background: #d1fae5; color: #059669; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem;">FACTURABLE</span>'}
             </div>
-            
             <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius-lg); margin-bottom: 1rem;">
                 <p><strong>📍 Lugar:</strong> ${escapeHtml(gasto.lugar || 'No especificado')}</p>
                 <p><strong>📅 Fecha:</strong> ${formatDateTime(gasto.fecha || gasto.createdAt)}</p>
@@ -1077,7 +951,6 @@ async function showDetalleGasto(gastoId) {
                 ${gasto.comentarios ? `<p><strong>💬 Comentarios:</strong> ${escapeHtml(gasto.comentarios)}</p>` : ''}
                 <p><strong>🚗 Viaje:</strong> ${escapeHtml(viaje?.cliente || '')} - ${escapeHtml(viaje?.destino || 'Desconocido')}</p>
             </div>
-            
             ${gasto.fotos && gasto.fotos.length > 0 ? `
                 <div style="margin-bottom: 1rem;">
                     <p style="color: var(--gray-500); font-size: 0.875rem; margin-bottom: 0.5rem;">📷 Fotos (${gasto.fotos.length}):</p>
@@ -1088,13 +961,11 @@ async function showDetalleGasto(gastoId) {
                     </div>
                 </div>
             ` : ''}
-            
             <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                 <button class="btn btn-primary btn-large" style="flex: 1;" onclick="editarGasto('${gasto.id}')">✏️ Editar</button>
                 <button class="btn btn-danger btn-large" style="flex: 1;" onclick="eliminarGasto('${gasto.id}')">🗑️ Eliminar</button>
             </div>
         `;
-        
         openModal('detalle-gasto');
     } catch (error) {
         debug('Error mostrando detalle:', error);
@@ -1108,10 +979,8 @@ async function editarGasto(gastoId) {
             showToast('Gasto no encontrado', 'error');
             return;
         }
-        
         closeModal('detalle-gasto');
         showSection('captura');
-        
         document.getElementById('captura-viaje-select').value = gasto.viajeId;
         document.getElementById('monto-gasto').value = gasto.monto;
         document.getElementById('lugar-gasto').value = gasto.lugar || '';
@@ -1122,11 +991,9 @@ async function editarGasto(gastoId) {
         document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
         document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
         toggleComentarioRequerido();
-        
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
         const tipoCard = document.querySelector(`.tipo-card[data-tipo="${gasto.tipo}"]`);
         if (tipoCard) tipoCard.classList.add('selected');
-        
         state.tempFotos = gasto.fotos || [];
         if (state.tempFotos.length > 0) {
             const preview = document.getElementById('photo-preview');
@@ -1142,12 +1009,9 @@ async function editarGasto(gastoId) {
                 <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
             `;
         }
-        
         const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
         if (btnGuardar) btnGuardar.textContent = '💾 ACTUALIZAR GASTO';
-        
         state.currentGasto = gasto;
-        
     } catch (error) {
         showToast('Error al cargar gasto para edición', 'error');
     }
@@ -1178,7 +1042,6 @@ function removeFoto(index) {
 
 async function eliminarGasto(gastoId) {
     if (!confirm('¿Eliminar este gasto permanentemente?')) return;
-    
     try {
         await db.delete('gastos', gastoId);
         closeModal('detalle-gasto');
@@ -1193,16 +1056,13 @@ async function eliminarGasto(gastoId) {
 async function generarReporte() {
     const fechaInicio = document.getElementById('reporte-fecha-inicio').value;
     const fechaFin = document.getElementById('reporte-fecha-fin').value;
-    
     if (!fechaInicio || !fechaFin) {
         showToast('Selecciona un rango de fechas', 'warning');
         return;
     }
-    
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         let allGastos = [];
-        
         for (const viaje of viajes) {
             const gastos = await db.getGastosByViaje(viaje.id);
             const gastosFiltrados = gastos.filter(g => {
@@ -1211,57 +1071,42 @@ async function generarReporte() {
             });
             allGastos = allGastos.concat(gastosFiltrados.map(g => ({...g, viaje})));
         }
-        
         if (allGastos.length === 0) {
             showToast('No hay gastos en el período seleccionado', 'warning');
             return;
         }
-        
-        // Agrupar por mes
         const porMes = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
             const year = fecha.getFullYear();
             const month = fecha.getMonth();
-            
             const mesKey = `${year}-${String(month + 1).padStart(2, '0')}`;
             const mesLabel = fecha.toLocaleString('es-MX', { 
                 timeZone: 'America/Mexico_City',
                 month: 'short', 
                 year: '2-digit' 
             });
-            
             if (!porMes[mesKey]) {
                 porMes[mesKey] = { label: mesLabel, total: 0, year, month };
             }
             porMes[mesKey].total += g.monto;
         });
-        
-        // Ordenar cronológicamente
         const mesesOrdenados = Object.entries(porMes)
             .sort((a, b) => {
                 if (a[1].year !== b[1].year) return a[1].year - b[1].year;
                 return a[1].month - b[1].month;
             });
-        
         const labels = mesesOrdenados.map(([_, data]) => data.label);
         const dataValues = mesesOrdenados.map(([_, data]) => data.total);
-        
-        // Calcular por tipo para el gráfico de pie
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
         });
-        
         const total = allGastos.reduce((sum, g) => sum + g.monto, 0);
         const totalFacturable = allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0);
-        
         document.getElementById('reporte-resultado').classList.remove('hidden');
-        
-        // Gráfico de tendencia (línea)
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
-        
         state.charts.line = new Chart(ctx2, {
             type: 'line',
             data: {
@@ -1307,11 +1152,8 @@ async function generarReporte() {
                 }
             }
         });
-        
-        // Gráfico de distribución (doughnut)
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
-        
         state.charts.pie = new Chart(ctx1, {
             type: 'doughnut',
             data: {
@@ -1331,8 +1173,6 @@ async function generarReporte() {
                 }
             }
         });
-        
-        // Guardar para exportación
         state.lastReport = {
             fechaInicio, 
             fechaFin,
@@ -1344,7 +1184,6 @@ async function generarReporte() {
             responsable: state.currentVendor.name,
             zona: state.currentVendor.zone
         };
-        
     } catch (error) {
         console.error('Error:', error);
         showToast('Error al generar reporte: ' + error.message, 'error');
@@ -1356,7 +1195,6 @@ function exportReport(format) {
         showToast('Primero genera un reporte', 'warning');
         return;
     }
-    
     if (format === 'excel') {
         generarExcelProfesional();
     } else if (format === 'pdf') {
@@ -1371,10 +1209,18 @@ function generarExcelProfesional() {
     }
     
     const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
-    const numReporte = `3P-VIA-${Date.now().toString().slice(-6)}`;
+    
+    // Generar número de reporte personalizado: 3p-(3 primeras letras del vendedor)-fecha ddmmaa
+    const hoy = new Date();
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const anio = String(hoy.getFullYear()).slice(-2);
+    const fechaStr = dia + mes + anio; // formato ddmmaa
+    const primerasLetras = responsable ? responsable.substring(0, 3).toUpperCase() : 'XXX';
+    const numReporte = `3p-${primerasLetras}-${fechaStr}`;
+    
     const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    // Función para escapar HTML
     const escape = (text) => {
         if (text == null) return '';
         return String(text).replace(/[&<>"]/g, function(m) {
@@ -1496,7 +1342,6 @@ function generarExcelProfesional() {
 </html>
     `;
 
-    // Agregar BOM para UTF-8
     const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -1509,18 +1354,15 @@ function generarExcelProfesional() {
 async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
-        
         allGastos = await db.getAll('gastos');
         allViajes = await db.getAll('viajes');
         allVendors = await db.getAll('vendedores');
-        
         const stats = {
             totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
             totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0),
             totalViajes: allViajes.length,
             totalVendedores: allVendors.filter(v => v.status === 'active').length
         };
-        
         const statsContainer = document.getElementById('admin-stats');
         if (statsContainer) {
             statsContainer.innerHTML = `
@@ -1542,7 +1384,6 @@ async function loadGlobalReport() {
                 </div>
             `;
         }
-        
         const resumenPorVendedor = {};
         allVendors.forEach(v => {
             if (v.status === 'active') {
@@ -1556,13 +1397,11 @@ async function loadGlobalReport() {
                 };
             }
         });
-        
         allViajes.forEach(v => {
             if (resumenPorVendedor[v.vendedorId]) {
                 resumenPorVendedor[v.vendedorId].viajes++;
             }
         });
-        
         allGastos.forEach(g => {
             if (resumenPorVendedor[g.vendedorId]) {
                 resumenPorVendedor[g.vendedorId].gastos++;
@@ -1572,11 +1411,9 @@ async function loadGlobalReport() {
                 }
             }
         });
-        
         const container = document.getElementById('admin-vendors-summary');
         if (container) {
             const vendedoresArray = Object.entries(resumenPorVendedor);
-            
             if (vendedoresArray.length === 0) {
                 container.innerHTML = '<p>No hay vendedores activos</p>';
             } else {
@@ -1598,16 +1435,13 @@ async function loadGlobalReport() {
                 `).join('');
             }
         }
-        
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
         });
-        
         const ctx = document.getElementById('global-chart')?.getContext('2d');
         if (ctx) {
             if (state.charts.global) state.charts.global.destroy();
-            
             state.charts.global = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1636,7 +1470,6 @@ async function loadGlobalReport() {
                 }
             });
         }
-        
     } catch (error) {
         console.error('Error:', error);
         showToast('Error cargando datos: ' + error.message, 'error');
@@ -1666,20 +1499,16 @@ function showToast(message, type = 'info') {
         alert(message);
         return;
     }
-    
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
     const icons = {
         success: '✅',
         error: '❌',
         warning: '⚠️',
         info: 'ℹ️'
     };
-    
     toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
     container.appendChild(toast);
-    
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(20px)';
@@ -1689,10 +1518,8 @@ function showToast(message, type = 'info') {
 
 function setLoading(btn, loading) {
     if (!btn) return;
-    
     const text = btn.querySelector('.btn-text');
     const loader = btn.querySelector('.btn-loader');
-    
     if (loading) {
         btn.disabled = true;
         if (text) text.style.display = 'none';
@@ -1754,17 +1581,14 @@ function formatDateTime(dateString) {
 function handlePhotoCapture(event) {
     const file = event.target.files[0];
     if (!file) return;
-    
     const reader = new FileReader();
     reader.onload = function(e) {
         state.tempFotos.push(e.target.result);
-        
         const preview = document.getElementById('photo-preview');
         if (preview) {
             if (state.tempFotos.length === 1) {
                 preview.innerHTML = '';
             }
-            
             preview.innerHTML = `
                 <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
                     ${state.tempFotos.map((foto, idx) => `
@@ -1812,7 +1636,7 @@ window.closeModal = closeModal;
 window.crearViaje = crearViaje;
 window.editarViaje = editarViaje;
 window.guardarEdicionViaje = guardarEdicionViaje;
-window.eliminarViaje = eliminarViaje;  // <-- NUEVO
+window.eliminarViaje = eliminarViaje;
 window.selectViaje = selectViaje;
 window.selectTipoGasto = selectTipoGasto;
 window.guardarGasto = guardarGasto;
