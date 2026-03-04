@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#dc2626">
-    <title>3P - Control de Viáticos Pro</title>
+    <title>3P - Control de Viáticos Pro v5</title>
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -21,6 +21,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+<base target="_blank">
 </head>
 <body>
     <!-- Splash Screen -->
@@ -28,7 +29,7 @@
         <div class="splash-content">
             <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
-            <p class="splash-text">Cargando v4.0...</p>
+            <p class="splash-text">Cargando v5.0...</p>
         </div>
     </div>
 
@@ -39,7 +40,7 @@
                 <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Control de Viáticos</h1>
                 <p class="login-subtitle">Sistema de Gestión de Gastos de Viaje</p>
-                <span class="version-badge">v4.0 Pro</span>
+                <span class="version-badge">v5.0 Pro</span>
             </div>
             
             <form id="login-form" onsubmit="event.preventDefault(); login();">
@@ -66,16 +67,16 @@
                 </button>
             </form>
             
-                        <div class="login-footer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div class="login-footer">
                 <button class="btn btn-link" onclick="showAdminLogin()">
                     🔐 Acceso Administrador
                 </button>
-                <button class="btn btn-link" onclick="if(window.forceSync) forceSync()" style="color: #059669;">
+                <button class="btn btn-link sync-btn-text" onclick="if(window.forceSync) forceSync()">
                     🔄 Sincronizar Datos
                 </button>
             </div>
             
-            <div class="version-info">v4.0.0 - Actualizado con Excel Profesional</div>
+            <div class="version-info">v5.0.0 - Sistema Offline Profesional</div>
         </div>
     </div>
 
@@ -181,7 +182,7 @@
                 </div>
             </div>
             
-                    <!-- Tab Reportes Admin V5 -->
+            <!-- Tab Reportes Admin -->
             <div id="admin-tab-reportes" class="admin-tab hidden">
                 <div class="card">
                     <h2>📊 Resumen Global</h2>
@@ -189,7 +190,7 @@
                 </div>
                 
                 <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div class="section-header" style="margin-bottom: 1rem;">
                         <h2>👥 Vendedores Activos</h2>
                         <button class="btn btn-primary btn-small" onclick="if(window.forceSync) forceSync()">🔄 Sincronizar</button>
                     </div>
@@ -205,12 +206,15 @@
                     </div>
                 </div>
                 
-                <div style="margin-top: 1rem; padding: 1rem; background: #f0fdf4; border-radius: 8px; border: 1px solid #86efac;">
-                    <p style="margin: 0; color: #166534; font-size: 0.875rem;">
+                <div class="sync-info-box">
+                    <p>
                         <strong>💡 Sincronización:</strong> Los datos se actualizan automáticamente. Usa el botón 🔄 para forzar sincronización manual.
                     </p>
                 </div>
             </div>
+        </main>
+    </div>
+
     <!-- Main App (Vendedor) -->
     <div id="app" class="screen hidden">
         <header class="app-header">
@@ -271,7 +275,7 @@
                 </div>
             </section>
             
-            <!-- Captura Section MEJORADA V4.0 -->
+            <!-- Captura Section -->
             <section id="captura-section" class="section">
                 <div class="section-header">
                     <h2>Capturar Gasto</h2>
@@ -334,16 +338,21 @@
                         <input type="text" id="lugar-gasto" placeholder="Ej: Gasolinera Pemex, km 45">
                     </div>
                     
-                    <!-- NUEVOS CAMPOS V4.0 -->
+                    <!-- Campos V5 - Facturación -->
                     <div class="form-row">
                         <div class="form-group">
                             <label>Folio de Factura</label>
                             <input type="text" id="folio-factura" placeholder="Ej: A-12345">
                         </div>
                         <div class="form-group">
-                            <label>Razón Social</label>
-                            <input type="text" id="razon-social" placeholder="Ej: Gasolinera del Norte SA">
+                            <label>Número de Factura</label>
+                            <input type="text" id="num-factura" placeholder="Ej: 123456">
                         </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Razón Social</label>
+                        <input type="text" id="razon-social" placeholder="Ej: Gasolinera del Norte SA">
                     </div>
                     
                     <div class="form-group">
@@ -353,7 +362,7 @@
                     
                     <div class="form-group">
                         <label class="checkbox-container">
-                            <input type="checkbox" id="es-facturable" checked>
+                            <input type="checkbox" id="es-facturable" checked onchange="toggleComentarioRequerido()">
                             <span class="checkmark"></span>
                             Es gasto facturable (para reembolso)
                         </label>
@@ -440,7 +449,7 @@
         </main>
     </div>
 
-    <!-- Modal: Nuevo Viaje MEJORADO V4.0 -->
+    <!-- Modal: Nuevo Viaje -->
     <div id="modal-nuevo-viaje" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -550,7 +559,7 @@
         </div>
     </div>
 
-    <!-- Modal: Detalle Gasto MEJORADO V4 -->
+    <!-- Modal: Detalle Gasto -->
     <div id="modal-detalle-gasto" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -563,10 +572,8 @@
 
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
+
     <!-- Firebase -->
-    <script type="module" src="./firebase-config.js"></script>
-    
-        <!-- Firebase -->
     <script type="module" src="./firebase-config.js"></script>
     
     <!-- App -->
