@@ -505,6 +505,67 @@
         </div>
     </div>
 
+    <!-- Modal: Editar Viaje (NUEVO) -->
+    <div id="modal-editar-viaje" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ Editar Viaje</h3>
+                <button class="btn btn-icon" onclick="closeModal('editar-viaje')">✕</button>
+            </div>
+            
+            <input type="hidden" id="edit-viaje-id">
+            
+            <div class="form-group">
+                <label>Cliente *</label>
+                <input type="text" id="edit-viaje-cliente" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Destino General *</label>
+                <input type="text" id="edit-viaje-destino" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Lugar específico de visita</label>
+                <input type="text" id="edit-viaje-lugar-visita">
+            </div>
+            
+            <div class="form-group">
+                <label>Objetivo del viaje</label>
+                <input type="text" id="edit-viaje-objetivo">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Fecha inicio *</label>
+                    <input type="date" id="edit-viaje-fecha-inicio" required>
+                </div>
+                <div class="form-group">
+                    <label>Fecha fin</label>
+                    <input type="date" id="edit-viaje-fecha-fin">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Presupuesto estimado</label>
+                <div class="input-prefix">
+                    <span class="prefix">$</span>
+                    <input type="number" id="edit-viaje-presupuesto" step="0.01">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Estado</label>
+                <select id="edit-viaje-estado">
+                    <option value="activo">Activo</option>
+                    <option value="completado">Completado</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-primary btn-large" onclick="guardarEdicionViaje()">GUARDAR CAMBIOS</button>
+        </div>
+    </div>
+
     <!-- Modal: Editar Vendedor -->
     <div id="modal-editar-vendedor" class="modal">
         <div class="modal-content">
