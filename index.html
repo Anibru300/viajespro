@@ -13,10 +13,6 @@
     
     <!-- Chart.js para reportes -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- JSZip para generar ZIP -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- FileSaver para guardar el ZIP -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./ux-improvements.css">
@@ -440,8 +436,8 @@
                     
                     <div class="actions-bar">
                         <button class="btn btn-secondary" onclick="exportReport('pdf')">📄 Descargar PDF</button>
-                        <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar Reporte en Excel</button>
-                        <button class="btn btn-secondary" onclick="exportCorteCompleto()">📦 Descargar Corte Completo (ZIP)</button>
+                        <button class="btn btn-secondary" onclick="exportReport('excel')">📊 Descargar reporte en Excel</button>
+                        <button class="btn btn-secondary" onclick="exportCorteCompleto()">📦 Descargar corte completo</button>
                     </div>
                 </div>
             </section>
@@ -640,6 +636,9 @@
     <script src="./db.js?v=5"></script>
     <script type="module" src="./app.js?v=5"></script>
     <script src="./ux-improvements.js?v=5"></script>
+    
+    <!-- JSZip para compresión -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <!-- Service Worker -->
     <script>
