@@ -20,7 +20,7 @@ const state = {
     isOnline: navigator.onLine,
     charts: {},
     filters: { viajes: 'all', gastos: '' },
-    lastReport: null // para el reporte generado
+    lastReport: null // para guardar el reporte generado
 };
 
 // ===== ICONOS =====
@@ -77,7 +77,7 @@ function debug(msg, data) {
     console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
-// ===== ESCAPE HTML =====
+// ===== ESCAPE HTML (para evitar caracteres maliciosos y roturas) =====
 function escapeHtml(text) {
     if (text == null) return '';
     return String(text).replace(/[&<>"]/g, function(m) {
@@ -163,6 +163,7 @@ function setupEventListeners() {
         });
     });
 
+    // CORRECCIÓN: Listener para el filtro de gastos
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
@@ -285,7 +286,7 @@ async function login() {
         return;
     }
     
-    setLoading(btn, true);
+    if (btn) setLoading(btn, true);
     
     try {
         debug('Buscando vendedor:', username);
@@ -294,13 +295,13 @@ async function login() {
         
         if (!vendor || vendor.password !== password) {
             showToast('Usuario o contraseña incorrectos', 'error');
-            setLoading(btn, false);
+            if (btn) setLoading(btn, false);
             return;
         }
         
         if (vendor.status === 'inactive') {
             showToast('Usuario inactivo', 'warning');
-            setLoading(btn, false);
+            if (btn) setLoading(btn, false);
             return;
         }
         
@@ -322,7 +323,7 @@ async function login() {
         debug('Error en login:', error);
         showToast('Error al iniciar sesión: ' + error.message, 'error');
     } finally {
-        setLoading(btn, false);
+        if (btn) setLoading(btn, false);
     }
 }
 
@@ -705,6 +706,8 @@ async function editarViaje(viajeId) {
         }
 
         openModal('editar-viaje');
+
+        // Pequeño retraso para asegurar que el modal se haya renderizado
         await new Promise(resolve => setTimeout(resolve, 100));
 
         const elements = {
@@ -878,7 +881,7 @@ function resetCapturaForm() {
 }
 
 async function guardarGasto() {
-    // Verificar que todos los elementos existan antes de usarlos
+    // Verificar que los elementos existen
     const viajeSelect = document.getElementById('captura-viaje-select');
     const tipoCard = document.querySelector('.tipo-card.selected');
     const montoInput = document.getElementById('monto-gasto');
@@ -890,7 +893,7 @@ async function guardarGasto() {
     const facturableCheck = document.getElementById('es-facturable');
 
     if (!viajeSelect || !montoInput || !lugarInput || !fechaInput || !folioInput || !razonInput || !comentariosInput || !facturableCheck) {
-        showToast('Error en el formulario, faltan elementos', 'error');
+        showToast('Error en el formulario, algunos campos no existen', 'error');
         return;
     }
 
@@ -898,11 +901,11 @@ async function guardarGasto() {
     const monto = montoInput.value;
     const lugar = lugarInput.value.trim();
     const fecha = fechaInput.value;
-    const folioFactura = folioInput.value.trim();
-    const razonSocial = razonInput.value.trim();
-    const comentarios = comentariosInput.value.trim();
-    const esFacturable = facturableCheck.checked;
-
+    const folioFactura = folioInput.value.trim() || '';
+    const razonSocial = razonInput.value.trim() || '';
+    const comentarios = comentariosInput.value.trim() || '';
+    const esFacturable = facturableCheck.checked !== false;
+    
     // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
@@ -972,7 +975,6 @@ async function guardarGasto() {
         }
         
     } catch (error) {
-        console.error('Error al guardar gasto:', error);
         showToast('Error al guardar: ' + error.message, 'error');
     }
 }
@@ -1141,14 +1143,29 @@ async function editarGasto(gastoId) {
         closeModal('detalle-gasto');
         showSection('captura');
         
-        document.getElementById('captura-viaje-select').value = gasto.viajeId;
-        document.getElementById('monto-gasto').value = gasto.monto;
-        document.getElementById('lugar-gasto').value = gasto.lugar || '';
-        document.getElementById('fecha-gasto').value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
-        document.getElementById('folio-factura').value = gasto.folioFactura || '';
-        document.getElementById('razon-social').value = gasto.razonSocial || '';
-        document.getElementById('comentarios-gasto').value = gasto.comentarios || '';
-        document.getElementById('es-facturable').checked = gasto.esFacturable !== false;
+        // Verificar existencia de elementos
+        const viajeSelect = document.getElementById('captura-viaje-select');
+        const montoInput = document.getElementById('monto-gasto');
+        const lugarInput = document.getElementById('lugar-gasto');
+        const fechaInput = document.getElementById('fecha-gasto');
+        const folioInput = document.getElementById('folio-factura');
+        const razonInput = document.getElementById('razon-social');
+        const comentariosInput = document.getElementById('comentarios-gasto');
+        const facturableCheck = document.getElementById('es-facturable');
+
+        if (!viajeSelect || !montoInput || !lugarInput || !fechaInput || !folioInput || !razonInput || !comentariosInput || !facturableCheck) {
+            showToast('Error al cargar el formulario', 'error');
+            return;
+        }
+
+        viajeSelect.value = gasto.viajeId;
+        montoInput.value = gasto.monto;
+        lugarInput.value = gasto.lugar || '';
+        fechaInput.value = gasto.fecha ? gasto.fecha.slice(0, 16) : '';
+        folioInput.value = gasto.folioFactura || '';
+        razonInput.value = gasto.razonSocial || '';
+        comentariosInput.value = gasto.comentarios || '';
+        facturableCheck.checked = gasto.esFacturable !== false;
         toggleComentarioRequerido();
         
         document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('selected'));
@@ -1245,7 +1262,15 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por mes
+        // Ordenar gastos por fecha (ascendente) para asignar números consecutivos
+        allGastos.sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
+        
+        // Asignar número de factura consecutivo
+        allGastos.forEach((g, index) => {
+            g.numeroFactura = index + 1;
+        });
+        
+        // Agrupar por mes para gráficos (no afecta)
         const porMes = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
@@ -1265,7 +1290,6 @@ async function generarReporte() {
             porMes[mesKey].total += g.monto;
         });
         
-        // Ordenar cronológicamente
         const mesesOrdenados = Object.entries(porMes)
             .sort((a, b) => {
                 if (a[1].year !== b[1].year) return a[1].year - b[1].year;
@@ -1275,7 +1299,6 @@ async function generarReporte() {
         const labels = mesesOrdenados.map(([_, data]) => data.label);
         const dataValues = mesesOrdenados.map(([_, data]) => data.total);
         
-        // Calcular por tipo para el gráfico de pie
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
@@ -1286,7 +1309,7 @@ async function generarReporte() {
         
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de tendencia (línea)
+        // Gráficos...
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1336,7 +1359,6 @@ async function generarReporte() {
             }
         });
         
-        // Gráfico de distribución (doughnut)
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -1360,7 +1382,6 @@ async function generarReporte() {
             }
         });
         
-        // Guardar para exportación
         state.lastReport = {
             fechaInicio, 
             fechaFin,
@@ -1368,7 +1389,7 @@ async function generarReporte() {
             totalFacturable,
             porTipo,
             porMes: Object.fromEntries(mesesOrdenados.map(([k, v]) => [k, v.total])),
-            gastos: allGastos,
+            gastos: allGastos, // ya tienen numeroFactura
             responsable: state.currentVendor.name,
             zona: state.currentVendor.zone
         };
@@ -1411,7 +1432,6 @@ function generarExcelProfesional() {
     
     const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    // Función para escapar HTML
     const escape = (text) => {
         if (text == null) return '';
         return String(text).replace(/[&<>"]/g, function(m) {
@@ -1422,10 +1442,6 @@ function generarExcelProfesional() {
             return m;
         });
     };
-
-    // Ordenar gastos por fecha para asignar número de factura consecutivo
-    const gastosOrdenados = [...gastos].sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
-    let contadorFactura = 1;
 
     let html = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -1476,7 +1492,7 @@ function generarExcelProfesional() {
     <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
         <thead>
             <tr style="background-color: #1e3a5f; color: white;">
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No. Factura</th>
+                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">N° Factura</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
                 <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
@@ -1491,12 +1507,11 @@ function generarExcelProfesional() {
         <tbody>
 `;
 
-    gastosOrdenados.forEach(g => {
+    gastos.forEach(g => {
         const esFacturable = g.esFacturable !== false;
-        const numeroFactura = contadorFactura++;
         html += `
             <tr>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${numeroFactura}</td>
+                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${g.numeroFactura}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(formatDateMexico(g.fecha || g.createdAt))}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.cliente || 'N/A')}</td>
                 <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
@@ -1554,174 +1569,112 @@ function generarExcelProfesional() {
     showToast('📊 Reporte Excel generado', 'success');
 }
 
-// ===== NUEVA FUNCIÓN: CORTE COMPLETO (ZIP con fotos) =====
+// ===== NUEVA FUNCIÓN: CORTE COMPLETO (ZIP) =====
 async function exportCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
         return;
     }
 
-    const { gastos, fechaInicio, fechaFin, responsable } = state.lastReport;
+    showToast('Preparando corte completo...', 'info');
+
+    const { gastos, responsable, fechaInicio, fechaFin } = state.lastReport;
     const zip = new JSZip();
 
-    // 1. Generar el Excel (reutilizamos la función pero necesitamos el contenido, no descargarlo)
-    // Vamos a generar el HTML del Excel igual que en generarExcelProfesional pero sin descargar
-    const primerasLetras = responsable.trim().toUpperCase().substring(0, 3);
-    const hoy = new Date();
-    const dia = String(hoy.getDate()).padStart(2, '0');
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const año = String(hoy.getFullYear()).slice(-2);
-    const fechaStr = dia + mes + año;
-    const numReporte = `3p-${primerasLetras}-${fechaStr}`;
-    const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
+    // 1. Generar el Excel igual que antes y agregarlo al zip
+    const excelBlob = await new Promise((resolve) => {
+        // Reutilizamos la función de generar Excel pero en lugar de descargar, obtenemos el blob
+        const primerasLetras = responsable.trim().toUpperCase().substring(0, 3);
+        const hoy = new Date();
+        const dia = String(hoy.getDate()).padStart(2, '0');
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const año = String(hoy.getFullYear()).slice(-2);
+        const fechaStr = dia + mes + año;
+        const numReporte = `3p-${primerasLetras}-${fechaStr}`;
+        const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    const gastosOrdenados = [...gastos].sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
-    let contadorFactura = 1;
+        const escape = (text) => {
+            if (text == null) return '';
+            return String(text).replace(/[&<>"]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                if (m === '"') return '&quot;';
+                return m;
+            });
+        };
 
-    let html = `<?xml version="1.0" encoding="UTF-8"?>
+        let html = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-    <meta charset="UTF-8">
-    <title>Reporte 3P Viáticos</title>
-</head>
+<head><meta charset="UTF-8"><title>Reporte 3P Viáticos</title></head>
 <body>
-    <table width="100%" cellpadding="10" cellspacing="0" style="font-family: Arial, sans-serif;">
-        <tr>
-            <td style="background-color: #1e3a5f; color: white; text-align: center;" colspan="2">
-                <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
-                <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
-            </td>
-        </tr>
+    <table width="100%" cellpadding="10" cellspacing="0"><tr><td style="background-color: #1e3a5f; color: white; text-align: center;"><h1 style="margin:0;color:white;">3P SA DE CV</h1><h2 style="margin:5px 0 0;color:white;font-weight:normal;">Reporte de Viáticos</h2></td></tr></table>
+    <table width="100%" cellpadding="8" cellspacing="0" style="background:#f3f4f6;margin-top:10px;border-collapse:collapse;">
+        <tr><td style="border:1px solid #d1d5db;"><strong>Responsable:</strong> ${escape(responsable)}</td><td style="border:1px solid #d1d5db;"><strong>Zona:</strong> ${escape(state.lastReport.zona || '')}</td></tr>
+        <tr><td style="border:1px solid #d1d5db;"><strong>Período:</strong> ${escape(formatDateMexico(fechaInicio))} al ${escape(formatDateMexico(fechaFin))}</td><td style="border:1px solid #d1d5db;"><strong>No. Reporte:</strong> ${escape(numReporte)}</td></tr>
+        <tr><td style="border:1px solid #d1d5db;"><strong>Fecha generación:</strong> ${escape(fechaGeneracion)}</td><td style="border:1px solid #d1d5db;"><strong>Total General:</strong> ${escape(formatMoney(state.lastReport.total))}</td></tr>
     </table>
-    
-    <table width="100%" cellpadding="8" cellspacing="0" style="background-color: #f3f4f6; margin-top: 10px; font-family: Arial, sans-serif; border-collapse: collapse;">
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Responsable:</strong> ${escapeHtml(responsable)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Zona:</strong> ${escapeHtml(state.lastReport.zona || 'No especificada')}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Período:</strong> ${escapeHtml(formatDateMexico(fechaInicio))} al ${escapeHtml(formatDateMexico(fechaFin))}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>No. Reporte:</strong> ${escapeHtml(numReporte)}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Fecha de generación:</strong> ${escapeHtml(fechaGeneracion)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Total General:</strong> ${escapeHtml(formatMoney(state.lastReport.total))}</td>
-        </tr>
-    </table>
-    
-    <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #1e3a5f; color: white;">
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">No. Factura</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Tipo Gasto</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Folio Factura</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Razón Social</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: right;">Total</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: center;">Facturable</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Comentarios</th>
-            </tr>
-        </thead>
-        <tbody>
-`;
-
-    gastosOrdenados.forEach(g => {
-        const esFacturable = g.esFacturable !== false;
-        const numeroFactura = contadorFactura++;
-        html += `
-            <tr>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center;">${numeroFactura}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(formatDateMexico(g.fecha || g.createdAt))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.viaje?.cliente || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.folioFactura || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.razonSocial || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(g.monto))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center; ${esFacturable ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;'}">${esFacturable ? 'SÍ' : 'NO'}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escapeHtml(g.comentarios || '')}</td>
-            </tr>
-        `;
+    <table width="100%" cellpadding="8" cellspacing="0" style="margin-top:20px;border-collapse:collapse;">
+        <thead><tr style="background:#1e3a5f;color:white;">
+            <th style="border:1px solid #0f1f33;">N° Factura</th><th style="border:1px solid #0f1f33;">Fecha</th><th style="border:1px solid #0f1f33;">Cliente</th><th style="border:1px solid #0f1f33;">Lugar</th><th style="border:1px solid #0f1f33;">Tipo</th><th style="border:1px solid #0f1f33;">Folio</th><th style="border:1px solid #0f1f33;">Razón Social</th><th style="border:1px solid #0f1f33;">Total</th><th style="border:1px solid #0f1f33;">Fact.</th><th style="border:1px solid #0f1f33;">Comentarios</th>
+        </tr></thead>
+        <tbody>`;
+        gastos.forEach(g => {
+            html += `<tr><td style="border:1px solid #d1d5db;padding:6px;text-align:center;">${g.numeroFactura}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(formatDateMexico(g.fecha || g.createdAt))}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(g.viaje?.cliente || '')}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(g.viaje?.lugarVisita || g.viaje?.destino || '')}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(g.folioFactura || '-')}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(g.razonSocial || '-')}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;text-align:right;">${escape(formatMoney(g.monto))}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;text-align:center;${g.esFacturable!==false?'color:#059669;font-weight:bold;':'color:#dc2626;font-weight:bold;'}">${g.esFacturable!==false?'SÍ':'NO'}</td>
+                <td style="border:1px solid #d1d5db;padding:6px;">${escape(g.comentarios||'')}</td></tr>`;
+        });
+        html += `</tbody></table></body></html>`;
+        const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        resolve(blob);
     });
 
-    html += `
-            <tr style="background-color: #e5e7eb; font-weight: bold;">
-                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.total))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
-                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
-                <td colspan="7" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escapeHtml(formatMoney(state.lastReport.total - state.lastReport.totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-        </tbody>
-    </table>
-    
-    <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; font-family: Arial, sans-serif;">
-        <p><strong>Documento generado por 3P ViajesPro v5.0</strong></p>
-        <p>Este reporte es un documento oficial de 3P SA DE CV</p>
-        <p>Fecha y hora: ${escapeHtml(formatDateTimeMexico(new Date().toISOString()))}</p>
-    </div>
-</body>
-</html>
-    `;
+    zip.file(`Reporte_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`, excelBlob);
 
-    // Agregar el Excel al ZIP
-    zip.file(`Reporte_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.xls`, '\uFEFF' + html);
-
-    // 2. Agregar las fotos
-    const fotosFolder = zip.folder('Fotos');
-    let fotoCount = 0;
-
+    // 2. Carpeta de facturas con fotos
+    const facturasFolder = zip.folder("facturas");
+    let fotoIndex = 0;
     for (const gasto of gastos) {
         if (gasto.fotos && gasto.fotos.length > 0) {
-            const cliente = gasto.viaje?.cliente || 'SinCliente';
-            const folio = gasto.folioFactura || 'SINFOLIO';
-            const fecha = formatDateMexico(gasto.fecha || gasto.createdAt).replace(/\//g, '-');
-            
             for (let i = 0; i < gasto.fotos.length; i++) {
-                const fotoData = gasto.fotos[i];
-                // fotoData es una URL base64, necesitamos extraer los datos
-                const base64Data = fotoData.split(',')[1];
-                if (base64Data) {
-                    const fileName = `${folio}_${cliente}_${fecha}_${i+1}.jpg`;
-                    fotosFolder.file(fileName, base64Data, { base64: true });
-                    fotoCount++;
-                }
+                const fotoBase64 = gasto.fotos[i];
+                // Extraer el tipo de imagen (data:image/jpeg;base64, ...)
+                const matches = fotoBase64.match(/^data:image\/([a-zA-Z]+);base64,/);
+                if (!matches) continue;
+                const ext = matches[1];
+                const base64Data = fotoBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+                // Crear nombre: Folio_Cliente_#.ext  (si no hay folio, usar "sfolio")
+                const folio = gasto.folioFactura && gasto.folioFactura.trim() !== '' ? gasto.folioFactura : 'sfolio';
+                const cliente = gasto.viaje?.cliente?.replace(/[^a-zA-Z0-9]/g, '_') || 'cliente';
+                const nombreArchivo = `${folio}_${cliente}_${i+1}.${ext}`;
+                facturasFolder.file(nombreArchivo, base64Data, { base64: true });
+                fotoIndex++;
             }
         }
     }
 
-    if (fotoCount === 0) {
-        fotosFolder.file('Sin_fotos.txt', 'No hay fotos asociadas a los gastos de este período.');
+    if (fotoIndex === 0) {
+        facturasFolder.file("LEEME.txt", "No hay fotos asociadas a los gastos en este período.");
     }
 
-    // Generar el ZIP
-    const zipContent = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(zipContent);
-    
-    const newWindow = window.open(url, '_blank');
-    if (!newWindow) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Corte_Completo_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.zip`;
-        link.click();
-    }
-    
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    showToast(`📦 Corte completo generado con ${fotoCount} foto(s)`, 'success');
+    // Generar el ZIP y descargar
+    const content = await zip.generateAsync({ type: "blob" });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = `Corte_Completo_${responsable.replace(/\s+/g, '_')}_${fechaInicio}_${fechaFin}.zip`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 30000);
+    showToast('📦 Corte completo descargado', 'success');
 }
 
-// ===== REPORTES GLOBALES ADMIN =====
 async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
