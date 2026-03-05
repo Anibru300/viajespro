@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Firestore + mejoras)
+ * 3P VIAJESPRO - Main Application v5.0 (Versión estable con offline y mejoras)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -34,7 +34,6 @@ const TIPOS_GASTO = {
 };
 
 // ===== FUNCIONES DE FECHA/HORA MÉXICO =====
-
 function getMexicoDateTime() {
     const now = new Date();
     return new Date(now.toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
@@ -96,7 +95,6 @@ function comprimirImagen(base64, maxSizeKB = 300) {
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            // Redimensionar si es muy grande
             const maxDimension = 1024;
             if (width > maxDimension || height > maxDimension) {
                 if (width > height) {
@@ -111,16 +109,15 @@ function comprimirImagen(base64, maxSizeKB = 300) {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            // Comprimir con calidad 0.7
-            let compressed = canvas.toDataURL('image/jpeg', 0.7);
-            // Verificar tamaño
+            const compressed = canvas.toDataURL('image/jpeg', 0.7);
             const sizeKB = Math.round((compressed.length * 3) / 4 / 1024);
             if (sizeKB > maxSizeKB) {
-                // Si aún es muy grande, comprimir más
                 const quality = maxSizeKB / sizeKB;
-                compressed = canvas.toDataURL('image/jpeg', quality);
+                const moreCompressed = canvas.toDataURL('image/jpeg', quality);
+                resolve(moreCompressed);
+            } else {
+                resolve(compressed);
             }
-            resolve(compressed);
         };
     });
 }
@@ -159,7 +156,6 @@ async function initApp() {
     setupEventListeners();
     updateConnectionStatus();
     
-    // Fechas por defecto
     const today = new Date().toISOString().split('T')[0];
     if (document.getElementById('viaje-fecha-inicio')) {
         document.getElementById('viaje-fecha-inicio').value = today;
@@ -199,25 +195,21 @@ function setupEventListeners() {
         });
     });
 
-    // Listener para filtro de gastos por viaje
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
     }
 
-    // NUEVO: Listener para filtro de viajes por estado
     const filterViajeStatus = document.getElementById('filter-viaje-status');
     if (filterViajeStatus) {
         filterViajeStatus.addEventListener('change', loadViajes);
     }
 
-    // NUEVO: Listener para filtro de gastos por estado
     const gastosEstadoSelect = document.getElementById('gastos-estado-select');
     if (gastosEstadoSelect) {
         gastosEstadoSelect.addEventListener('change', loadGastosList);
     }
 
-    // Evento para abrir perfil
     const perfilClickeable = document.getElementById('perfil-clickeable');
     if (perfilClickeable) {
         perfilClickeable.addEventListener('click', abrirPerfil);
@@ -289,6 +281,7 @@ function showAdminTab(tabName) {
     if (tabName === 'reportes') loadGlobalReport();
 }
 
+// ===== LOGIN (con soporte offline) =====
 async function login() {
     debug('Iniciando login...');
     
@@ -305,14 +298,11 @@ async function login() {
     setLoading(btn, true);
     
     try {
-        // Verificar si hay conexión a internet
         if (!navigator.onLine) {
-            // Sin conexión, solo podemos usar la sesión guardada
             const savedSession = localStorage.getItem('viajespro_session');
             if (savedSession) {
                 const session = JSON.parse(savedSession);
                 if (session.vendor && session.vendor.username === username) {
-                    // Usar la sesión guardada
                     state.currentUser = { username, type: 'vendor' };
                     state.currentVendor = session.vendor;
                     showToast('¡Bienvenido! (modo offline)', 'success');
@@ -321,79 +311,11 @@ async function login() {
                     return;
                 }
             }
-            // No hay sesión guardada para este usuario
             showToast('Sin conexión a internet. No se puede verificar el usuario.', 'error');
             setLoading(btn, false);
             return;
         }
         
-        // Con conexión, proceder normal
-        debug('Buscando vendedor:', username);
-        const vendor = await db.get('vendedores', username);
-        debug('Vendedor encontrado:', vendor ? 'SÍ' : 'NO');
-        
-        if (!vendor || vendor.password !== password) {
-            showToast('Usuario o contraseña incorrectos', 'error');
-            setLoading(btn, false);
-            return;
-        }
-        
-        if (vendor.status === 'inactive') {
-            showToast('Usuario inactivo', 'warning');
-            setLoading(btn, false);
-            return;
-        }
-        
-        state.currentUser = { username, type: 'vendor' };
-        state.currentVendor = vendor;
-        
-        if (remember) {
-            localStorage.setItem('viajespro_session', JSON.stringify({
-                user: state.currentUser,
-                vendor: vendor,
-                remember: true
-            }));
-        }
-        
-        showToast(`¡Bienvenido, ${vendor.name}!`, 'success');
-        showMainApp();
-        
-    } catch (error) {
-        debug('Error en login:', error);
-        showToast('Error al iniciar sesión: ' + error.message, 'error');
-    } finally {
-        setLoading(btn, false);
-    }
-}
-
-function showLoginScreen() {
-    showScreen('login-screen');
-}
-
-function showAdminLogin() {
-    showScreen('admin-login-screen');
-}
-
-function backToLogin() {
-    showLoginScreen();
-}
-
-async function login() {
-    debug('Iniciando login...');
-    
-    const username = document.getElementById('login-username').value.trim().toLowerCase();
-    const password = document.getElementById('login-password').value;
-    const remember = document.getElementById('remember-me').checked;
-    const btn = document.querySelector('#login-form .btn-primary');
-    
-    if (!username || !password) {
-        showToast('Ingresa usuario y contraseña', 'warning');
-        return;
-    }
-    
-    setLoading(btn, true);
-    
-    try {
         debug('Buscando vendedor:', username);
         const vendor = await db.get('vendedores', username);
         debug('Vendedor encontrado:', vendor ? 'SÍ' : 'NO');
@@ -448,6 +370,43 @@ async function loginAdmin() {
     }
 }
 
+function checkSession() {
+    debug('Verificando sesión...');
+    const savedSession = localStorage.getItem('viajespro_session');
+    
+    if (savedSession) {
+        try {
+            const session = JSON.parse(savedSession);
+            if (session.remember && session.user) {
+                state.currentUser = session.user;
+                state.currentVendor = session.vendor;
+                
+                if (session.user.type === 'admin') {
+                    showAdminPanel();
+                } else {
+                    showMainApp();
+                }
+                return;
+            }
+        } catch (e) {
+            localStorage.removeItem('viajespro_session');
+        }
+    }
+    showLoginScreen();
+}
+
+function showLoginScreen() {
+    showScreen('login-screen');
+}
+
+function showAdminLogin() {
+    showScreen('admin-login-screen');
+}
+
+function backToLogin() {
+    showLoginScreen();
+}
+
 function logout() {
     if (confirm('¿Cerrar sesión?')) {
         localStorage.removeItem('viajespro_session');
@@ -465,7 +424,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR =====
+// ===== REGISTRO VENDEDOR (admin) =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -546,7 +505,7 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES =====
+// ===== CARGAR VENDEDORES (admin) =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -679,7 +638,6 @@ async function deleteVendor(username) {
 // ===== MAIN APP =====
 function showMainApp() {
     showScreen('app');
-    
     actualizarEncabezado();
     loadViajes();
 }
@@ -829,6 +787,10 @@ async function crearViaje() {
         return;
     }
     
+    if (!navigator.onLine) {
+        showToast('Modo offline: el viaje se guardará localmente y se sincronizará cuando haya conexión', 'info', 4000);
+    }
+    
     const viaje = {
         id: 'VIAJE_' + Date.now(),
         vendedorId: state.currentVendor.username,
@@ -863,7 +825,7 @@ async function crearViaje() {
         showToast('Error al crear viaje: ' + error.message, 'error');
     }
 }
-
+// ===== FUNCIÓN EDITAR VIAJE =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -984,7 +946,7 @@ async function loadViajesSelect() {
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         const activos = viajes.filter(v => v.estado === 'activo');
-        const todos = viajes; // todos los viajes, sin filtrar por estado
+        const todos = viajes;
         
         const selects = [
             { id: 'captura-viaje-select', lista: activos, defaultOption: 'Elige un viaje activo...' },
@@ -1094,7 +1056,6 @@ async function guardarGasto() {
         return;
     }
     
-    // Mensaje informativo si está offline
     if (!navigator.onLine) {
         showToast('Modo offline: el gasto se guardará localmente y se sincronizará cuando haya conexión', 'info', 4000);
     }
@@ -1138,7 +1099,6 @@ async function guardarGasto() {
         
         resetCapturaForm();
         
-        // Si estamos en la sección de gastos, recargar la lista inmediatamente
         if (document.getElementById('gastos-section')?.classList.contains('active')) {
             loadGastosList();
         }
@@ -1148,6 +1108,7 @@ async function guardarGasto() {
         showToast('Error al guardar: ' + error.message, 'error');
     }
 }
+
 function toggleComentarioRequerido() {
     const esFacturable = document.getElementById('es-facturable').checked;
     const textarea = document.getElementById('comentarios-gasto');
@@ -1173,18 +1134,15 @@ async function loadGastosList() {
         let gastos = [];
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         
-        // Obtener todos los gastos de todos los viajes
         for (const viaje of viajes) {
             const g = await db.getGastosByViaje(viaje.id);
             gastos = gastos.concat(g.map(item => ({...item, viaje})));
         }
         
-        // Filtrar por estado del viaje si no es 'all'
         if (estadoFiltro !== 'all') {
             gastos = gastos.filter(g => g.viaje?.estado === estadoFiltro);
         }
         
-        // Filtrar por viaje específico si se seleccionó
         if (viajeId) {
             gastos = gastos.filter(g => g.viajeId === viajeId);
         }
@@ -1258,6 +1216,7 @@ async function loadGastosList() {
         showToast('Error al cargar gastos: ' + error.message, 'error');
     }
 }
+
 async function showDetalleGasto(gastoId) {
     try {
         const gasto = await db.get('gastos', gastoId);
@@ -1424,11 +1383,11 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por día (tendencia diaria)
+        // Agrupar por día
         const porDia = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
-            const diaKey = fecha.toISOString().split('T')[0]; // YYYY-MM-DD
+            const diaKey = fecha.toISOString().split('T')[0];
             const diaLabel = fecha.toLocaleString('es-MX', { day: '2-digit', month: 'short' });
             if (!porDia[diaKey]) {
                 porDia[diaKey] = { label: diaLabel, total: 0 };
@@ -1436,12 +1395,10 @@ async function generarReporte() {
             porDia[diaKey].total += g.monto;
         });
         
-        // Ordenar por fecha
         const diasOrdenados = Object.keys(porDia).sort();
         const labels = diasOrdenados.map(d => porDia[d].label);
         const dataValues = diasOrdenados.map(d => porDia[d].total);
         
-        // Calcular por tipo para el gráfico de pie
         const porTipo = {};
         allGastos.forEach(g => {
             porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
@@ -1452,7 +1409,6 @@ async function generarReporte() {
         
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de tendencia (línea) - AHORA DIARIO
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1502,7 +1458,6 @@ async function generarReporte() {
             }
         });
         
-        // Gráfico de distribución (doughnut)
         const ctx1 = document.getElementById('gastos-chart').getContext('2d');
         if (state.charts.pie) state.charts.pie.destroy();
         
@@ -1526,7 +1481,6 @@ async function generarReporte() {
             }
         });
         
-        // Guardar para exportación
         state.lastReport = {
             fechaInicio, 
             fechaFin,
@@ -1575,7 +1529,6 @@ async function generarExcelProfesional() {
 
     const worksheet = workbook.addWorksheet('Reporte');
 
-    // Título principal
     worksheet.mergeCells('A1:I1');
     const titleRow = worksheet.getCell('A1');
     titleRow.value = '3P SA DE CV';
@@ -1590,7 +1543,6 @@ async function generarExcelProfesional() {
     subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
     subtitleRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // Información del reporte
     worksheet.getCell('A3').value = 'Responsable:';
     worksheet.getCell('B3').value = responsable;
     worksheet.getCell('D3').value = 'Zona:';
@@ -1610,7 +1562,6 @@ async function generarExcelProfesional() {
         worksheet.getCell(addr).font = { bold: true };
     });
 
-    // Encabezados de la tabla
     const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
     const headerRow = worksheet.getRow(7);
     headers.forEach((h, i) => {
@@ -1622,11 +1573,10 @@ async function generarExcelProfesional() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    // Datos
     let rowIndex = 8;
     gastos.forEach(g => {
         const row = worksheet.getRow(rowIndex);
-        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt); // Fecha con hora
+        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
         row.getCell(2).value = g.viaje?.cliente || 'N/A';
         row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
         row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
@@ -1648,7 +1598,6 @@ async function generarExcelProfesional() {
         rowIndex++;
     });
 
-    // Totales
     const totalRow = worksheet.getRow(rowIndex);
     totalRow.getCell(6).value = 'TOTALES:';
     totalRow.getCell(7).value = total;
@@ -1681,17 +1630,9 @@ async function generarExcelProfesional() {
         noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     }
 
-    // Ajustar ancho de columnas
     worksheet.columns = [
-        { width: 18 }, // Fecha con hora
-        { width: 20 }, // Cliente
-        { width: 25 }, // Lugar
-        { width: 15 }, // Tipo
-        { width: 15 }, // Folio
-        { width: 25 }, // Razón Social
-        { width: 15 }, // Total
-        { width: 12 }, // Facturable
-        { width: 30 }  // Comentarios
+        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
+        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
     ];
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -1830,7 +1771,6 @@ async function generarCorteCompleto() {
     const excelBuffer = await workbook.xlsx.writeBuffer();
     zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
 
-    // Carpeta de fotos
     const facturasFolder = zip.folder('facturas_y_fotos');
 
     for (const gasto of gastos) {
@@ -1865,40 +1805,30 @@ let backPressedOnce = false;
 let backTimer = null;
 
 window.addEventListener('popstate', (event) => {
-    // Verificar si hay un modal abierto
     const modalAbierto = document.querySelector('.modal.active');
     if (modalAbierto) {
-        // Cerrar el modal
         modalAbierto.classList.remove('active');
         document.body.style.overflow = '';
-        // Prevenir que el evento continúe
         event.preventDefault();
         return;
     }
 
-    // Si estamos en la pantalla principal de vendedor
     const appScreen = document.getElementById('app');
     if (appScreen && !appScreen.classList.contains('hidden')) {
-        // No hay modal, preguntar si quiere salir
         if (!backPressedOnce) {
             backPressedOnce = true;
             showToast('Presiona atrás nuevamente para salir', 'info', 2000);
-            // Reiniciar después de 3 segundos
             backTimer = setTimeout(() => {
                 backPressedOnce = false;
             }, 3000);
         } else {
-            // Segunda vez, salir
             clearTimeout(backTimer);
             backPressedOnce = false;
             logout();
         }
-    } else {
-        // En otras pantallas (login, admin), permitir el comportamiento normal
     }
 });
 
-// Agregar un estado inicial al cargar la app (para que popstate funcione)
 history.pushState({ page: 'app' }, 'App', location.href);
 
 // ===== UTILIDADES =====
