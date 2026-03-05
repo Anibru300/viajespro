@@ -1,183 +1,91 @@
 /**
- * 3P VIAJESPRO - Database Module v5.0 (MODO OFFLINE)
+ * 3P VIAJESPRO - Database Module v5.0 (Firestore)
  */
 
-console.log('🚀 db.js v5.0 cargando (modo offline)...');
+console.log('🚀 db.js v5.0 (Firestore) cargando...');
 
-if (!window.indexedDB) {
-    alert('Tu navegador no soporta IndexedDB');
-}
-
-const DB_NAME = 'ViajesProDB_v5';
-const DB_VERSION = 5;
+import { db } from './firebase-config.js';
+import { 
+  collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, where 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 class ViajesProDB {
-    constructor() {
-        this.db = null;
-        this.initialized = false;
-        console.log('📦 ViajesProDB v5.0 creado (offline)');
-    }
+  constructor() {
+    this.initialized = true;
+  }
 
-    async init() {
-        if (this.initialized) return this.db;
+  async init() {
+    console.log('✅ Firestore listo (modo online/offline)');
+    return true;
+  }
 
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            
-            request.onerror = () => reject(request.error);
-            
-            request.onsuccess = async (event) => {
-                this.db = event.target.result;
-                this.initialized = true;
-                console.log('✅ IndexedDB lista (modo offline)');
-                
-                await this.seedData();
-                resolve(this.db);
-            };
+  async add(collectionName, data) {
+    const docRef = doc(db, collectionName, data.id);
+    const dataToSave = {
+      ...data,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(docRef, dataToSave);
+    console.log(`💾 Guardado en Firestore: ${collectionName}/${data.id}`);
+    return dataToSave;
+  }
 
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                
-                if (!db.objectStoreNames.contains('vendedores')) {
-                    const store = db.createObjectStore('vendedores', { keyPath: 'id' });
-                    store.createIndex('username', 'username', { unique: true });
-                }
-                if (!db.objectStoreNames.contains('viajes')) {
-                    const store = db.createObjectStore('viajes', { keyPath: 'id' });
-                    store.createIndex('vendedorId', 'vendedorId', { unique: false });
-                }
-                if (!db.objectStoreNames.contains('gastos')) {
-                    const store = db.createObjectStore('gastos', { keyPath: 'id' });
-                    store.createIndex('viajeId', 'viajeId', { unique: false });
-                }
-                if (!db.objectStoreNames.contains('fotos')) {
-                    const store = db.createObjectStore('fotos', { keyPath: 'id' });
-                    store.createIndex('gastoId', 'gastoId', { unique: false });
-                }
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', { keyPath: 'key' });
-                }
-            };
-        });
-    }
+  async get(collectionName, id) {
+    const docRef = doc(db, collectionName, id);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? docSnap.data() : null;
+  }
 
-    async seedData() {
-        const count = await this.count('vendedores');
-        if (count === 0) {
-            console.log('🌱 Creando datos de prueba...');
-            await this.add('vendedores', {
-                id: 'admin',
-                name: 'Administrador',
-                username: 'admin',
-                password: 'admin123',
-                email: 'admin@3p.com',
-                zone: 'Centro',
-                status: 'active',
-                createdAt: new Date().toISOString()
-            });
-            console.log('✅ Usuario admin creado: admin / admin123');
-        }
-    }
+  async getAll(collectionName) {
+    const querySnapshot = await getDocs(collection(db, collectionName));
+    const results = [];
+    querySnapshot.forEach((doc) => {
+      results.push(doc.data());
+    });
+    return results;
+  }
 
-    count(storeName) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readonly');
-            const request = tx.objectStore(storeName).count();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
+  async update(collectionName, data) {
+    const docRef = doc(db, collectionName, data.id);
+    const dataToUpdate = {
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(docRef, dataToUpdate, { merge: true });
+    console.log(`💾 Actualizado en Firestore: ${collectionName}/${data.id}`);
+    return dataToUpdate;
+  }
 
-    async add(storeName, data) {
-        const dataToAdd = {
-            ...data,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readwrite');
-            const request = tx.objectStore(storeName).add(dataToAdd);
-            request.onsuccess = () => {
-                console.log(`💾 Guardado en IndexedDB: ${storeName}/${dataToAdd.id}`);
-                resolve(dataToAdd);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
+  async delete(collectionName, id) {
+    const docRef = doc(db, collectionName, id);
+    await deleteDoc(docRef);
+    console.log(`🗑️ Eliminado de Firestore: ${collectionName}/${id}`);
+    return id;
+  }
 
-    get(storeName, id) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readonly');
-            const request = tx.objectStore(storeName).get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
+  async queryByIndex(collectionName, field, value) {
+    const q = query(collection(db, collectionName), where(field, '==', value));
+    const querySnapshot = await getDocs(q);
+    const results = [];
+    querySnapshot.forEach((doc) => {
+      results.push(doc.data());
+    });
+    return results;
+  }
 
-    getAll(storeName) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readonly');
-            const request = tx.objectStore(storeName).getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
+  getViajesByVendedor(vendedorId) {
+    return this.queryByIndex('viajes', 'vendedorId', vendedorId);
+  }
 
-    async update(storeName, data) {
-        const dataToUpdate = {
-            ...data,
-            updatedAt: new Date().toISOString()
-        };
-        
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readwrite');
-            const request = tx.objectStore(storeName).put(dataToUpdate);
-            request.onsuccess = () => {
-                console.log(`💾 Actualizado en IndexedDB: ${storeName}/${dataToUpdate.id}`);
-                resolve(dataToUpdate);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async delete(storeName, id) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readwrite');
-            const request = tx.objectStore(storeName).delete(id);
-            request.onsuccess = () => {
-                console.log(`🗑️ Eliminado de IndexedDB: ${storeName}/${id}`);
-                resolve(id);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    queryByIndex(storeName, indexName, value) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction([storeName], 'readonly');
-            const index = tx.objectStore(storeName).index(indexName);
-            const request = index.getAll(value);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    getViajesByVendedor(vendedorId) {
-        return this.queryByIndex('viajes', 'vendedorId', vendedorId);
-    }
-
-    getGastosByViaje(viajeId) {
-        return this.queryByIndex('gastos', 'viajeId', viajeId);
-    }
+  getGastosByViaje(viajeId) {
+    return this.queryByIndex('gastos', 'viajeId', viajeId);
+  }
 }
 
-const db = new ViajesProDB();
+const dbInstance = new ViajesProDB();
+window.db = dbInstance;
 
 document.addEventListener('DOMContentLoaded', () => {
-    db.init().then(() => {
-        window.dispatchEvent(new CustomEvent('dbReady'));
-    }).catch(err => console.error('❌ Error:', err));
+  dbInstance.init().catch(err => console.error('❌ Error:', err));
 });
-
-window.db = db;
