@@ -2,7 +2,7 @@
  * 3P VIAJESPRO - Service Worker v5.0 (con actualización automática)
  */
 
-const CACHE_NAME = 'viajespro-v5.0.0';
+const CACHE_NAME = 'viajespro-v5.0.1'; // antes era viajespro-v5.0.0
 const STATIC_ASSETS = [
   './',
   './index.html',
