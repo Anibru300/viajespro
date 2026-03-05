@@ -933,21 +933,20 @@ async function loadViajesSelect() {
     try {
         const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         const activos = viajes.filter(v => v.estado === 'activo');
+        const todos = viajes; // todos los viajes, sin filtrar por estado
         
-        const selects = ['captura-viaje-select', 'gastos-viaje-select'];
+        const selects = [
+            { id: 'captura-viaje-select', lista: activos, defaultOption: 'Elige un viaje activo...' },
+            { id: 'gastos-viaje-select', lista: todos, defaultOption: 'Todos los viajes' }
+        ];
         
-        selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
+        selects.forEach(item => {
+            const select = document.getElementById(item.id);
             if (!select) return;
             
             const currentValue = select.value;
-            const defaultOption = selectId === 'captura-viaje-select' ? 
-                '<option value="">Elige un viaje activo...</option>' :
-                '<option value="">Todos los viajes</option>';
-            
-            select.innerHTML = defaultOption + activos.map(v => 
-                `<option value="${v.id}">${escapeHtml(v.cliente)} - ${escapeHtml(v.destino)}</option>`
-            ).join('');
+            select.innerHTML = `<option value="">${item.defaultOption}</option>` + 
+                item.lista.map(v => `<option value="${v.id}">${escapeHtml(v.cliente)} - ${escapeHtml(v.destino)}</option>`).join('');
             
             if (currentValue) select.value = currentValue;
         });
