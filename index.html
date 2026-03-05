@@ -632,16 +632,16 @@
     <!-- SheetJS para generar Excel real -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 
-    <!-- Firebase -->
-    <script type="module" src="./firebase-config.js"></script>
-    
-    <!-- App -->
-    <script src="./db.js?v=5"></script>
-    <script type="module" src="./app.js?v=5"></script>
-    <script src="./ux-improvements.js?v=5"></script>
-    
-    <!-- JSZip para compresión -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- JSZip para compresión (DEBE IR ANTES DE app.js) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- Firebase -->
+<script type="module" src="./firebase-config.js"></script>
+
+<!-- App -->
+<script src="./db.js?v=5"></script>
+<script type="module" src="./app.js?v=5"></script>
+<script src="./ux-improvements.js?v=5"></script>
     
     <!-- Service Worker -->
     <script>
