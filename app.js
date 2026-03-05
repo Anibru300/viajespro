@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Corregido con ExcelJS y formato)
+ * 3P VIAJESPRO - Main Application v5.0 (Perfil editable)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -75,7 +75,7 @@ function debug(msg, data) {
     console.log(`[DEBUG v5] ${msg}`, data || '');
 }
 
-// ===== ESCAPE HTML (para evitar caracteres maliciosos y roturas) =====
+// ===== ESCAPE HTML =====
 function escapeHtml(text) {
     if (text == null) return '';
     return String(text).replace(/[&<>"]/g, function(m) {
@@ -161,10 +161,15 @@ function setupEventListeners() {
         });
     });
 
-    // CORRECCIÓN: Listener para el filtro de gastos
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
+    }
+
+    // Evento para abrir perfil al hacer clic en el nombre
+    const perfilClickeable = document.getElementById('perfil-clickeable');
+    if (perfilClickeable) {
+        perfilClickeable.addEventListener('click', abrirPerfil);
     }
 }
 
@@ -358,7 +363,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR =====
+// ===== REGISTRO VENDEDOR (admin) =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -439,7 +444,7 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES =====
+// ===== CARGAR VENDEDORES (admin) =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -573,13 +578,77 @@ async function deleteVendor(username) {
 function showMainApp() {
     showScreen('app');
     
+    actualizarEncabezado();
+    loadViajes();
+}
+
+function actualizarEncabezado() {
     const userNameEl = document.getElementById('current-user-name');
     const welcomeEl = document.getElementById('welcome-text');
     
     if (userNameEl) userNameEl.textContent = state.currentVendor?.name || 'Vendedor';
     if (welcomeEl) welcomeEl.textContent = `Hola, ${state.currentVendor?.name?.split(' ')[0] || 'Vendedor'}`;
+}
+
+// ===== PERFIL DEL VENDEDOR =====
+async function abrirPerfil() {
+    if (!state.currentVendor) return;
     
-    loadViajes();
+    const vendor = state.currentVendor;
+    
+    document.getElementById('perfil-nombre').value = vendor.name || '';
+    document.getElementById('perfil-email').value = vendor.email || '';
+    document.getElementById('perfil-zona').value = vendor.zone || 'Bajío';
+    document.getElementById('perfil-usuario').value = vendor.username || '';
+    document.getElementById('perfil-password').value = ''; // Siempre vacío por seguridad
+    
+    openModal('perfil');
+}
+
+async function guardarPerfil() {
+    if (!state.currentVendor) return;
+    
+    const nombre = document.getElementById('perfil-nombre').value.trim();
+    const email = document.getElementById('perfil-email').value.trim();
+    const zona = document.getElementById('perfil-zona').value;
+    const nuevaPassword = document.getElementById('perfil-password').value;
+    
+    if (!nombre) {
+        showToast('El nombre no puede estar vacío', 'warning');
+        return;
+    }
+    
+    try {
+        const vendor = await db.get('vendedores', state.currentVendor.username);
+        if (!vendor) {
+            showToast('Error al cargar tus datos', 'error');
+            return;
+        }
+        
+        vendor.name = nombre;
+        vendor.email = email;
+        vendor.zone = zona;
+        if (nuevaPassword) {
+            vendor.password = nuevaPassword;
+        }
+        
+        await db.update('vendedores', vendor);
+        
+        // Actualizar estado global y sesión guardada
+        state.currentVendor = vendor;
+        const savedSession = localStorage.getItem('viajespro_session');
+        if (savedSession) {
+            const session = JSON.parse(savedSession);
+            session.vendor = vendor;
+            localStorage.setItem('viajespro_session', JSON.stringify(session));
+        }
+        
+        actualizarEncabezado();
+        closeModal('perfil');
+        showToast('✅ Perfil actualizado', 'success');
+    } catch (error) {
+        showToast('Error al guardar: ' + error.message, 'error');
+    }
 }
 
 // ===== VIAJES =====
@@ -694,7 +763,6 @@ async function crearViaje() {
     }
 }
 
-// ===== FUNCIÓN EDITAR VIAJE (CORREGIDA) =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -703,13 +771,9 @@ async function editarViaje(viajeId) {
             return;
         }
 
-        // Abrir el modal primero
         openModal('editar-viaje');
-
-        // Pequeño retraso para asegurar que el modal se haya renderizado
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Verificar que todos los elementos existan antes de asignar
         const elements = {
             id: document.getElementById('edit-viaje-id'),
             cliente: document.getElementById('edit-viaje-cliente'),
@@ -722,7 +786,6 @@ async function editarViaje(viajeId) {
             estado: document.getElementById('edit-viaje-estado')
         };
 
-        // Verificar si algún elemento no existe
         for (const [key, el] of Object.entries(elements)) {
             if (!el) {
                 console.error(`Elemento faltante: edit-viaje-${key}`);
@@ -732,7 +795,6 @@ async function editarViaje(viajeId) {
             }
         }
 
-        // Asignar valores
         elements.id.value = viaje.id;
         elements.cliente.value = viaje.cliente;
         elements.destino.value = viaje.destino;
@@ -893,7 +955,6 @@ async function guardarGasto() {
     const comentarios = document.getElementById('comentarios-gasto')?.value.trim() || '';
     const esFacturable = document.getElementById('es-facturable')?.checked !== false;
     
-    // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
         const comentariosEl = document.getElementById('comentarios-gasto');
@@ -1395,17 +1456,15 @@ async function generarExcelProfesional() {
 
     const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona = '' } = state.lastReport;
 
-    // Crear libro de trabajo
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '3P Control de Gastos';
     workbook.lastModifiedBy = '3P';
     workbook.created = new Date();
     workbook.modified = new Date();
 
-    // Agregar hoja
     const worksheet = workbook.addWorksheet('Reporte');
 
-    // Título principal (fusionar celdas)
+    // Título principal
     worksheet.mergeCells('A1:I1');
     const titleRow = worksheet.getCell('A1');
     titleRow.value = '3P SA DE CV';
@@ -1420,7 +1479,7 @@ async function generarExcelProfesional() {
     subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
     subtitleRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // Información del reporte (filas 3-5)
+    // Información del reporte
     worksheet.getCell('A3').value = 'Responsable:';
     worksheet.getCell('B3').value = responsable;
     worksheet.getCell('D3').value = 'Zona:';
@@ -1436,12 +1495,11 @@ async function generarExcelProfesional() {
     worksheet.getCell('D5').value = 'Total General:';
     worksheet.getCell('E5').value = formatMoney(total);
 
-    // Aplicar estilo a las celdas de información
     ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
         worksheet.getCell(addr).font = { bold: true };
     });
 
-    // Encabezados de la tabla (fila 7)
+    // Encabezados de la tabla
     const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
     const headerRow = worksheet.getRow(7);
     headers.forEach((h, i) => {
@@ -1453,7 +1511,7 @@ async function generarExcelProfesional() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    // Datos de gastos
+    // Datos
     let rowIndex = 8;
     gastos.forEach(g => {
         const row = worksheet.getRow(rowIndex);
@@ -1473,14 +1531,13 @@ async function generarExcelProfesional() {
         }
         row.getCell(9).value = g.comentarios || '';
 
-        // Bordes
         for (let i = 1; i <= 9; i++) {
             row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         }
         rowIndex++;
     });
 
-    // Fila de totales
+    // Totales
     const totalRow = worksheet.getRow(rowIndex);
     totalRow.getCell(6).value = 'TOTALES:';
     totalRow.getCell(7).value = total;
@@ -1526,7 +1583,6 @@ async function generarExcelProfesional() {
         { width: 30 }  // Comentarios
     ];
 
-    // Generar archivo
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
@@ -1539,7 +1595,7 @@ async function generarExcelProfesional() {
     showToast('📊 Reporte Excel descargado con formato', 'success');
 }
 
-// ===== GENERAR CORTE COMPLETO (ZIP CON EXCEL + FOTOS) =====
+// ===== GENERAR CORTE COMPLETO =====
 async function generarCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -1550,30 +1606,25 @@ async function generarCorteCompleto() {
 
     const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona = '' } = state.lastReport;
 
-    // Crear un objeto JSZip
     const zip = new JSZip();
 
-    // 1. Generar el archivo Excel con formato (usando ExcelJS)
+    // Generar Excel con formato
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '3P Control de Gastos';
     const worksheet = workbook.addWorksheet('Reporte');
 
-    // Título
     worksheet.mergeCells('A1:I1');
-    const titleRow = worksheet.getCell('A1');
-    titleRow.value = '3P SA DE CV';
-    titleRow.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    titleRow.alignment = { horizontal: 'center' };
+    worksheet.getCell('A1').value = '3P SA DE CV';
+    worksheet.getCell('A1').font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
     worksheet.mergeCells('A2:I2');
-    const subtitleRow = worksheet.getCell('A2');
-    subtitleRow.value = 'Reporte de Viáticos y Gastos de Viaje';
-    subtitleRow.font = { size: 14, color: { argb: 'FFFFFFFF' } };
-    subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    subtitleRow.alignment = { horizontal: 'center' };
+    worksheet.getCell('A2').value = 'Reporte de Viáticos y Gastos de Viaje';
+    worksheet.getCell('A2').font = { size: 14, color: { argb: 'FFFFFFFF' } };
+    worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
-    // Información
     worksheet.getCell('A3').value = 'Responsable:';
     worksheet.getCell('B3').value = responsable;
     worksheet.getCell('D3').value = 'Zona:';
@@ -1593,7 +1644,6 @@ async function generarCorteCompleto() {
         worksheet.getCell(addr).font = { bold: true };
     });
 
-    // Encabezados
     const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
     const headerRow = worksheet.getRow(7);
     headers.forEach((h, i) => {
@@ -1605,7 +1655,6 @@ async function generarCorteCompleto() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    // Datos
     let rowIndex = 8;
     gastos.forEach(g => {
         const row = worksheet.getRow(rowIndex);
@@ -1630,7 +1679,6 @@ async function generarCorteCompleto() {
         rowIndex++;
     });
 
-    // Totales
     const totalRow = worksheet.getRow(rowIndex);
     totalRow.getCell(6).value = 'TOTALES:';
     totalRow.getCell(7).value = total;
@@ -1671,10 +1719,9 @@ async function generarCorteCompleto() {
     const excelBuffer = await workbook.xlsx.writeBuffer();
     zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
 
-    // 2. Agregar carpeta de facturas con fotos
+    // Carpeta de fotos
     const facturasFolder = zip.folder('facturas_y_fotos');
 
-    let fotoIndex = 1;
     for (const gasto of gastos) {
         if (gasto.fotos && gasto.fotos.length > 0) {
             const folio = gasto.folioFactura ? gasto.folioFactura : 'sin_folio';
@@ -1686,13 +1733,11 @@ async function generarCorteCompleto() {
                 if (base64Data) {
                     const nombreArchivo = `${nombreBase}_${idx + 1}.png`;
                     facturasFolder.file(nombreArchivo, base64Data, { base64: true });
-                    fotoIndex++;
                 }
             });
         }
     }
 
-    // Generar el ZIP
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     const zipUrl = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
@@ -1702,146 +1747,6 @@ async function generarCorteCompleto() {
 
     setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
     showToast('📦 Corte completo descargado', 'success');
-}
-
-// Exponer la función globalmente
-window.exportCorteCompleto = generarCorteCompleto;
-
-async function loadGlobalReport() {
-    try {
-        let allGastos, allViajes, allVendors;
-        
-        allGastos = await db.getAll('gastos');
-        allViajes = await db.getAll('viajes');
-        allVendors = await db.getAll('vendedores');
-        
-        const stats = {
-            totalGastos: allGastos.reduce((sum, g) => sum + g.monto, 0),
-            totalFacturable: allGastos.filter(g => g.esFacturable !== false).reduce((sum, g) => sum + g.monto, 0),
-            totalViajes: allViajes.length,
-            totalVendedores: allVendors.filter(v => v.status === 'active').length
-        };
-        
-        const statsContainer = document.getElementById('admin-stats');
-        if (statsContainer) {
-            statsContainer.innerHTML = `
-                <div class="stat-card">
-                    <span class="stat-value">${formatMoney(stats.totalGastos)}</span>
-                    <span class="stat-label">Total Gastos</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${formatMoney(stats.totalFacturable)}</span>
-                    <span class="stat-label">Total Facturable</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${stats.totalViajes}</span>
-                    <span class="stat-label">Viajes</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${stats.totalVendedores}</span>
-                    <span class="stat-label">Vendedores Activos</span>
-                </div>
-            `;
-        }
-        
-        const resumenPorVendedor = {};
-        allVendors.forEach(v => {
-            if (v.status === 'active') {
-                resumenPorVendedor[v.id] = {
-                    nombre: v.name,
-                    zona: v.zone,
-                    viajes: 0,
-                    gastos: 0,
-                    total: 0,
-                    totalFacturable: 0
-                };
-            }
-        });
-        
-        allViajes.forEach(v => {
-            if (resumenPorVendedor[v.vendedorId]) {
-                resumenPorVendedor[v.vendedorId].viajes++;
-            }
-        });
-        
-        allGastos.forEach(g => {
-            if (resumenPorVendedor[g.vendedorId]) {
-                resumenPorVendedor[g.vendedorId].gastos++;
-                resumenPorVendedor[g.vendedorId].total += g.monto;
-                if (g.esFacturable !== false) {
-                    resumenPorVendedor[g.vendedorId].totalFacturable += g.monto;
-                }
-            }
-        });
-        
-        const container = document.getElementById('admin-vendors-summary');
-        if (container) {
-            const vendedoresArray = Object.entries(resumenPorVendedor);
-            
-            if (vendedoresArray.length === 0) {
-                container.innerHTML = '<p>No hay vendedores activos</p>';
-            } else {
-                container.innerHTML = vendedoresArray.map(([id, v]) => `
-                    <div class="vendor-summary-card">
-                        <div class="vendor-summary-header">
-                            <div>
-                                <h4>${escapeHtml(v.nombre)}</h4>
-                                <p class="vendor-summary-meta">
-                                    📍 ${escapeHtml(v.zona)} | 🚗 ${v.viajes} viajes | 🧾 ${v.gastos} gastos
-                                </p>
-                            </div>
-                            <div class="vendor-summary-amounts">
-                                <div class="vendor-total">${formatMoney(v.total)}</div>
-                                <div class="vendor-facturable">📄 ${formatMoney(v.totalFacturable)} fact.</div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            }
-        }
-        
-        const porTipo = {};
-        allGastos.forEach(g => {
-            porTipo[g.tipo] = (porTipo[g.tipo] || 0) + g.monto;
-        });
-        
-        const ctx = document.getElementById('global-chart')?.getContext('2d');
-        if (ctx) {
-            if (state.charts.global) state.charts.global.destroy();
-            
-            state.charts.global = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.label || t),
-                    datasets: [{
-                        label: 'Monto por categoría',
-                        data: Object.values(porTipo),
-                        backgroundColor: Object.keys(porTipo).map(t => TIPOS_GASTO[t]?.color || '#6b7280'),
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '$' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Error cargando datos: ' + error.message, 'error');
-    }
 }
 
 // ===== UTILIDADES =====
@@ -2025,6 +1930,8 @@ window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
 window.exportCorteCompleto = generarCorteCompleto;
+window.abrirPerfil = abrirPerfil;          // NUEVA
+window.guardarPerfil = guardarPerfil;      // NUEVA
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
