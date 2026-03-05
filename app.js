@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Perfil editable + manejo de retroceso)
+ * 3P VIAJESPRO - Main Application v5.0 (Firestore + mejoras)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -20,9 +20,7 @@ const state = {
     isOnline: navigator.onLine,
     charts: {},
     filters: { viajes: 'all', gastos: '' },
-    lastReport: null,
-    backPressCount: 0,
-    backPressTimer: null
+    lastReport: null
 };
 
 // ===== ICONOS =====
@@ -89,77 +87,41 @@ function escapeHtml(text) {
     });
 }
 
-// ===== MANEJO DE BOTÓN ATRÁS EN MÓVIL =====
-function setupBackButtonHandler() {
-    // Añadir un estado inicial a la historia
-    history.pushState({ page: 'main' }, '', location.href);
-
-    window.addEventListener('popstate', (event) => {
-        // Verificar si hay algún modal abierto
-        const anyModalOpen = document.querySelector('.modal.active') !== null;
-
-        if (anyModalOpen) {
-            // Cerrar todos los modales
-            document.querySelectorAll('.modal.active').forEach(modal => {
-                modal.classList.remove('active');
-            });
-            document.body.style.overflow = '';
-            // Reestablecer el contador de retroceso
-            state.backPressCount = 0;
-            if (state.backPressTimer) {
-                clearTimeout(state.backPressTimer);
-                state.backPressTimer = null;
+// ===== COMPRESIÓN DE IMÁGENES =====
+function comprimirImagen(base64, maxSizeKB = 300) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            // Redimensionar si es muy grande
+            const maxDimension = 1024;
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
             }
-            // Volver a añadir un estado para no salir de la app
-            history.pushState({ page: 'main' }, '', location.href);
-            return;
-        }
-
-        // Si no hay modal, verificar en qué sección estamos
-        const currentSection = document.querySelector('.section.active')?.id || 'viajes-section';
-
-        if (currentSection !== 'viajes-section') {
-            // No estamos en la pantalla principal de viajes → ir a viajes
-            showSection('viajes');
-            history.pushState({ page: 'main' }, '', location.href);
-            state.backPressCount = 0;
-            if (state.backPressTimer) {
-                clearTimeout(state.backPressTimer);
-                state.backPressTimer = null;
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            // Comprimir con calidad 0.7
+            let compressed = canvas.toDataURL('image/jpeg', 0.7);
+            // Verificar tamaño
+            const sizeKB = Math.round((compressed.length * 3) / 4 / 1024);
+            if (sizeKB > maxSizeKB) {
+                // Si aún es muy grande, comprimir más
+                const quality = maxSizeKB / sizeKB;
+                compressed = canvas.toDataURL('image/jpeg', quality);
             }
-            return;
-        }
-
-        // Estamos en viajes-section, sin modales → manejar doble clic para salir
-        if (state.backPressCount === 0) {
-            // Primer clic
-            state.backPressCount = 1;
-            showToast('Presiona de nuevo para salir', 'info', 2000);
-
-            state.backPressTimer = setTimeout(() => {
-                state.backPressCount = 0;
-                state.backPressTimer = null;
-            }, 2000);
-
-            // Volver a añadir estado para que podamos detectar el segundo clic
-            history.pushState({ page: 'main' }, '', location.href);
-        } else {
-            // Segundo clic dentro del tiempo
-            if (state.backPressTimer) {
-                clearTimeout(state.backPressTimer);
-                state.backPressTimer = null;
-            }
-            state.backPressCount = 0;
-            // Salir de la app (en navegador móvil, cierra la pestaña o minimiza)
-            // No podemos forzar el cierre, pero podemos intentar window.close() (no siempre funciona)
-            // Lo mejor es simplemente ir a una página en blanco o simular salida.
-            // En una PWA, podemos intentar cerrar la ventana:
-            window.close();
-            // Si no funciona, al menos mostramos un mensaje.
-            setTimeout(() => {
-                showToast('Puedes cerrar la pestaña', 'info');
-            }, 500);
-        }
+            resolve(compressed);
+        };
     });
 }
 
@@ -196,7 +158,6 @@ async function initApp() {
     checkSession();
     setupEventListeners();
     updateConnectionStatus();
-    setupBackButtonHandler(); // <-- NUEVO
     
     // Fechas por defecto
     const today = new Date().toISOString().split('T')[0];
@@ -234,16 +195,29 @@ function setupEventListeners() {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.classList.remove('active');
-                document.body.style.overflow = '';
             }
         });
     });
 
+    // Listener para filtro de gastos por viaje
     const gastosViajeSelect = document.getElementById('gastos-viaje-select');
     if (gastosViajeSelect) {
         gastosViajeSelect.addEventListener('change', loadGastosList);
     }
 
+    // NUEVO: Listener para filtro de viajes por estado
+    const filterViajeStatus = document.getElementById('filter-viaje-status');
+    if (filterViajeStatus) {
+        filterViajeStatus.addEventListener('change', loadViajes);
+    }
+
+    // NUEVO: Listener para filtro de gastos por estado
+    const gastosEstadoSelect = document.getElementById('gastos-estado-select');
+    if (gastosEstadoSelect) {
+        gastosEstadoSelect.addEventListener('change', loadGastosList);
+    }
+
+    // Evento para abrir perfil
     const perfilClickeable = document.getElementById('perfil-clickeable');
     if (perfilClickeable) {
         perfilClickeable.addEventListener('click', abrirPerfil);
@@ -440,7 +414,7 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR (admin) =====
+// ===== REGISTRO VENDEDOR =====
 async function registerVendor() {
     debug('=== REGISTRO DE VENDEDOR ===');
     
@@ -521,7 +495,7 @@ async function registerVendor() {
     }
 }
 
-// ===== CARGAR VENDEDORES (admin) =====
+// ===== CARGAR VENDEDORES =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
 
@@ -677,7 +651,7 @@ async function abrirPerfil() {
     document.getElementById('perfil-email').value = vendor.email || '';
     document.getElementById('perfil-zona').value = vendor.zone || 'Bajío';
     document.getElementById('perfil-usuario').value = vendor.username || '';
-    document.getElementById('perfil-password').value = ''; // Siempre vacío por seguridad
+    document.getElementById('perfil-password').value = '';
     
     openModal('perfil');
 }
@@ -797,7 +771,7 @@ async function crearViaje() {
     const objetivo = document.getElementById('viaje-objetivo').value.trim();
     const fechaInicioInput = document.getElementById('viaje-fecha-inicio').value;
     const fechaFinInput = document.getElementById('viaje-fecha-fin').value;
-    const presupuesto = document.getElementById('viaje-presupuesto').value;
+    const presupuesto = parseFloat(document.getElementById('viaje-presupuesto').value) || null;
     
     if (!cliente || !destino || !fechaInicioInput) {
         showToast('Cliente, destino y fecha de inicio son obligatorios', 'warning');
@@ -815,7 +789,7 @@ async function crearViaje() {
         zona: state.currentVendor.zone || 'Bajío',
         fechaInicio: new Date(fechaInicioInput + 'T12:00:00').toISOString(),
         fechaFin: fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null,
-        presupuesto: presupuesto ? parseFloat(presupuesto) : null,
+        presupuesto: presupuesto,
         estado: 'activo',
         createdAt: new Date().toISOString(),
         version: 5
@@ -895,7 +869,7 @@ async function guardarEdicionViaje() {
     const objetivo = document.getElementById('edit-viaje-objetivo').value.trim();
     const fechaInicioInput = document.getElementById('edit-viaje-fecha-inicio').value;
     const fechaFinInput = document.getElementById('edit-viaje-fecha-fin').value;
-    const presupuesto = document.getElementById('edit-viaje-presupuesto').value;
+    const presupuesto = parseFloat(document.getElementById('edit-viaje-presupuesto').value) || null;
     const estado = document.getElementById('edit-viaje-estado').value;
 
     if (!cliente || !destino || !fechaInicioInput) {
@@ -916,7 +890,7 @@ async function guardarEdicionViaje() {
         viaje.objetivo = objetivo;
         viaje.fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
         viaje.fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
-        viaje.presupuesto = presupuesto ? parseFloat(presupuesto) : null;
+        viaje.presupuesto = presupuesto;
         viaje.estado = estado;
 
         await db.update('viajes', viaje);
@@ -1023,7 +997,7 @@ function resetCapturaForm() {
 async function guardarGasto() {
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoCard = document.querySelector('.tipo-card.selected');
-    const monto = document.getElementById('monto-gasto').value;
+    const monto = parseFloat(document.getElementById('monto-gasto').value) || 0;
     const lugar = document.getElementById('lugar-gasto').value.trim();
     const fecha = document.getElementById('fecha-gasto').value;
     const folioFactura = document.getElementById('folio-factura')?.value.trim() || '';
@@ -1031,6 +1005,7 @@ async function guardarGasto() {
     const comentarios = document.getElementById('comentarios-gasto')?.value.trim() || '';
     const esFacturable = document.getElementById('es-facturable')?.checked !== false;
     
+    // Validación: si NO es facturable, debe tener comentario
     if (!esFacturable && !comentarios) {
         showToast('⚠️ Debes explicar por qué no es facturable en los comentarios', 'warning');
         const comentariosEl = document.getElementById('comentarios-gasto');
@@ -1054,8 +1029,18 @@ async function guardarGasto() {
         return;
     }
     
-    if (!monto || parseFloat(monto) <= 0) {
+    if (!monto || monto <= 0) {
         showToast('Ingresa un monto válido', 'warning');
+        return;
+    }
+
+    // Verificar tamaño de fotos
+    let totalSize = 0;
+    state.tempFotos.forEach(foto => {
+        totalSize += (foto.length * 3) / 4; // aprox bytes
+    });
+    if (totalSize > 900 * 1024) { // 900 KB
+        showToast('Las fotos son demasiado grandes. Intenta con menos imágenes o comprime manualmente.', 'error');
         return;
     }
     
@@ -1065,7 +1050,7 @@ async function guardarGasto() {
         viajeId,
         vendedorId: state.currentVendor.username,
         tipo: tipoCard.dataset.tipo,
-        monto: parseFloat(monto),
+        monto: monto,
         lugar,
         fecha: fecha || new Date().toISOString(),
         folioFactura,
@@ -1127,17 +1112,26 @@ function toggleComentarioRequerido() {
 
 async function loadGastosList() {
     try {
+        const estadoFiltro = document.getElementById('gastos-estado-select')?.value || 'all';
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
-        let gastos = [];
         
+        let gastos = [];
+        const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+        
+        // Obtener todos los gastos de todos los viajes
+        for (const viaje of viajes) {
+            const g = await db.getGastosByViaje(viaje.id);
+            gastos = gastos.concat(g.map(item => ({...item, viaje})));
+        }
+        
+        // Filtrar por estado del viaje si no es 'all'
+        if (estadoFiltro !== 'all') {
+            gastos = gastos.filter(g => g.viaje?.estado === estadoFiltro);
+        }
+        
+        // Filtrar por viaje específico si se seleccionó
         if (viajeId) {
-            gastos = await db.getGastosByViaje(viajeId);
-        } else if (state.currentVendor) {
-            const viajes = await db.getViajesByVendedor(state.currentVendor.username);
-            for (const viaje of viajes) {
-                const g = await db.getGastosByViaje(viaje.id);
-                gastos = gastos.concat(g.map(item => ({...item, viajeDestino: viaje.destino, viajeCliente: viaje.cliente})));
-            }
+            gastos = gastos.filter(g => g.viajeId === viajeId);
         }
         
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
@@ -1209,7 +1203,6 @@ async function loadGastosList() {
         showToast('Error al cargar gastos: ' + error.message, 'error');
     }
 }
-
 async function showDetalleGasto(gastoId) {
     try {
         const gasto = await db.get('gastos', gastoId);
@@ -1376,35 +1369,22 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por mes
-        const porMes = {};
+        // Agrupar por día (tendencia diaria)
+        const porDia = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
-            const year = fecha.getFullYear();
-            const month = fecha.getMonth();
-            
-            const mesKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-            const mesLabel = fecha.toLocaleString('es-MX', { 
-                timeZone: 'America/Mexico_City',
-                month: 'short', 
-                year: '2-digit' 
-            });
-            
-            if (!porMes[mesKey]) {
-                porMes[mesKey] = { label: mesLabel, total: 0, year, month };
+            const diaKey = fecha.toISOString().split('T')[0]; // YYYY-MM-DD
+            const diaLabel = fecha.toLocaleString('es-MX', { day: '2-digit', month: 'short' });
+            if (!porDia[diaKey]) {
+                porDia[diaKey] = { label: diaLabel, total: 0 };
             }
-            porMes[mesKey].total += g.monto;
+            porDia[diaKey].total += g.monto;
         });
         
-        // Ordenar cronológicamente
-        const mesesOrdenados = Object.entries(porMes)
-            .sort((a, b) => {
-                if (a[1].year !== b[1].year) return a[1].year - b[1].year;
-                return a[1].month - b[1].month;
-            });
-        
-        const labels = mesesOrdenados.map(([_, data]) => data.label);
-        const dataValues = mesesOrdenados.map(([_, data]) => data.total);
+        // Ordenar por fecha
+        const diasOrdenados = Object.keys(porDia).sort();
+        const labels = diasOrdenados.map(d => porDia[d].label);
+        const dataValues = diasOrdenados.map(d => porDia[d].total);
         
         // Calcular por tipo para el gráfico de pie
         const porTipo = {};
@@ -1417,7 +1397,7 @@ async function generarReporte() {
         
         document.getElementById('reporte-resultado').classList.remove('hidden');
         
-        // Gráfico de tendencia (línea)
+        // Gráfico de tendencia (línea) - AHORA DIARIO
         const ctx2 = document.getElementById('trend-chart').getContext('2d');
         if (state.charts.line) state.charts.line.destroy();
         
@@ -1426,7 +1406,7 @@ async function generarReporte() {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Gastos por mes',
+                    label: 'Gastos por día',
                     data: dataValues,
                     borderColor: '#dc2626',
                     backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -1498,7 +1478,7 @@ async function generarReporte() {
             total,
             totalFacturable,
             porTipo,
-            porMes: Object.fromEntries(mesesOrdenados.map(([k, v]) => [k, v.total])),
+            porDia: Object.fromEntries(diasOrdenados.map(d => [d, porDia[d].total])),
             gastos: allGastos,
             responsable: state.currentVendor.name,
             zona: state.currentVendor.zone || ''
@@ -1591,7 +1571,7 @@ async function generarExcelProfesional() {
     let rowIndex = 8;
     gastos.forEach(g => {
         const row = worksheet.getRow(rowIndex);
-        row.getCell(1).value = formatDateMexico(g.fecha || g.createdAt);
+        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt); // Fecha con hora
         row.getCell(2).value = g.viaje?.cliente || 'N/A';
         row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
         row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
@@ -1648,7 +1628,7 @@ async function generarExcelProfesional() {
 
     // Ajustar ancho de columnas
     worksheet.columns = [
-        { width: 12 }, // Fecha
+        { width: 18 }, // Fecha con hora
         { width: 20 }, // Cliente
         { width: 25 }, // Lugar
         { width: 15 }, // Tipo
@@ -1734,7 +1714,7 @@ async function generarCorteCompleto() {
     let rowIndex = 8;
     gastos.forEach(g => {
         const row = worksheet.getRow(rowIndex);
-        row.getCell(1).value = formatDateMexico(g.fecha || g.createdAt);
+        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
         row.getCell(2).value = g.viaje?.cliente || 'N/A';
         row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
         row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
@@ -1788,7 +1768,7 @@ async function generarCorteCompleto() {
     }
 
     worksheet.columns = [
-        { width: 12 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
+        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
         { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
     ];
 
@@ -1825,18 +1805,53 @@ async function generarCorteCompleto() {
     showToast('📦 Corte completo descargado', 'success');
 }
 
+// ===== MANEJO DEL BOTÓN DE RETROCESO =====
+let backPressedOnce = false;
+let backTimer = null;
+
+window.addEventListener('popstate', (event) => {
+    // Verificar si hay un modal abierto
+    const modalAbierto = document.querySelector('.modal.active');
+    if (modalAbierto) {
+        // Cerrar el modal
+        modalAbierto.classList.remove('active');
+        document.body.style.overflow = '';
+        // Prevenir que el evento continúe
+        event.preventDefault();
+        return;
+    }
+
+    // Si estamos en la pantalla principal de vendedor
+    const appScreen = document.getElementById('app');
+    if (appScreen && !appScreen.classList.contains('hidden')) {
+        // No hay modal, preguntar si quiere salir
+        if (!backPressedOnce) {
+            backPressedOnce = true;
+            showToast('Presiona atrás nuevamente para salir', 'info', 2000);
+            // Reiniciar después de 3 segundos
+            backTimer = setTimeout(() => {
+                backPressedOnce = false;
+            }, 3000);
+        } else {
+            // Segunda vez, salir
+            clearTimeout(backTimer);
+            backPressedOnce = false;
+            logout();
+        }
+    } else {
+        // En otras pantallas (login, admin), permitir el comportamiento normal
+    }
+});
+
+// Agregar un estado inicial al cargar la app (para que popstate funcione)
+history.pushState({ page: 'app' }, 'App', location.href);
+
 // ===== UTILIDADES =====
 function openModal(modalId) {
     const modal = document.getElementById(`modal-${modalId}`);
     if (modal) {
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
-        // Reiniciar contador de retroceso al abrir modal
-        state.backPressCount = 0;
-        if (state.backPressTimer) {
-            clearTimeout(state.backPressTimer);
-            state.backPressTimer = null;
-        }
     }
 }
 
@@ -1845,12 +1860,6 @@ function closeModal(modalId) {
     if (modal) {
         modal.classList.remove('active');
         document.body.style.overflow = '';
-        // Reiniciar contador de retroceso al cerrar modal
-        state.backPressCount = 0;
-        if (state.backPressTimer) {
-            clearTimeout(state.backPressTimer);
-            state.backPressTimer = null;
-        }
     }
 }
 
@@ -1945,13 +1954,14 @@ function formatDateTime(dateString) {
     });
 }
 
-function handlePhotoCapture(event) {
+async function handlePhotoCapture(event) {
     const file = event.target.files[0];
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = function(e) {
-        state.tempFotos.push(e.target.result);
+    reader.onload = async function(e) {
+        const compressed = await comprimirImagen(e.target.result, 300);
+        state.tempFotos.push(compressed);
         
         const preview = document.getElementById('photo-preview');
         if (preview) {
@@ -2024,48 +2034,5 @@ window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
 window.removeFoto = removeFoto;
-
-// ===== MANEJO DEL BOTÓN DE RETROCESO =====
-let backPressedOnce = false;
-let backTimer = null;
-
-window.addEventListener('popstate', (event) => {
-    // Verificar si hay un modal abierto
-    const modalAbierto = document.querySelector('.modal.active');
-    if (modalAbierto) {
-        // Cerrar el modal
-        modalAbierto.classList.remove('active');
-        document.body.style.overflow = '';
-        // Prevenir que el evento continúe
-        event.preventDefault();
-        return;
-    }
-
-    // Si estamos en la pantalla principal de vendedor
-    const appScreen = document.getElementById('app');
-    if (appScreen && !appScreen.classList.contains('hidden')) {
-        // No hay modal, preguntar si quiere salir
-        if (!backPressedOnce) {
-            backPressedOnce = true;
-            showToast('Presiona atrás nuevamente para salir', 'info', 2000);
-            // Reiniciar después de 3 segundos
-            backTimer = setTimeout(() => {
-                backPressedOnce = false;
-            }, 3000);
-        } else {
-            // Segunda vez, salir
-            clearTimeout(backTimer);
-            backPressedOnce = false;
-            // Cerrar sesión
-            logout();
-        }
-    } else {
-        // En otras pantallas (login, admin), permitir el comportamiento normal
-        // (no hacemos nada)
-    }
-});
-
-// Agregar un estado inicial al cargar la app (para que popstate funcione)
-history.pushState({ page: 'app' }, 'App', location.href);
 
 debug('App.js v5.0 cargado completamente');
