@@ -1094,6 +1094,11 @@ async function guardarGasto() {
         return;
     }
     
+    // Mensaje informativo si está offline
+    if (!navigator.onLine) {
+        showToast('Modo offline: el gasto se guardará localmente y se sincronizará cuando haya conexión', 'info', 4000);
+    }
+    
     const esEdicion = state.currentGasto !== null;
     
     const gastoData = {
@@ -1133,6 +1138,7 @@ async function guardarGasto() {
         
         resetCapturaForm();
         
+        // Si estamos en la sección de gastos, recargar la lista inmediatamente
         if (document.getElementById('gastos-section')?.classList.contains('active')) {
             loadGastosList();
         }
@@ -1142,7 +1148,6 @@ async function guardarGasto() {
         showToast('Error al guardar: ' + error.message, 'error');
     }
 }
-
 function toggleComentarioRequerido() {
     const esFacturable = document.getElementById('es-facturable').checked;
     const textarea = document.getElementById('comentarios-gasto');
