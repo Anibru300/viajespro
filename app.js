@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Versión estable con offline y mejoras)
+ * 3P VIAJESPRO - Main Application v5.0 (Con caché offline y mejoras)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -20,7 +20,9 @@ const state = {
     isOnline: navigator.onLine,
     charts: {},
     filters: { viajes: 'all', gastos: '' },
-    lastReport: null
+    lastReport: null,
+    gastosCache: [],      // Caché para modo offline
+    viajesCache: []       // Caché para viajes (opcional)
 };
 
 // ===== ICONOS =====
@@ -281,7 +283,7 @@ function showAdminTab(tabName) {
     if (tabName === 'reportes') loadGlobalReport();
 }
 
-// ===== LOGIN (con soporte offline) =====
+// ===== LOGIN (con soporte offline mejorado) =====
 async function login() {
     debug('Iniciando login...');
     
@@ -311,7 +313,7 @@ async function login() {
                     return;
                 }
             }
-            showToast('Sin conexión a internet. No se puede verificar el usuario.', 'error');
+            showToast('Sin conexión. Debes haber iniciado sesión previamente con "Recordarme" para acceder sin internet.', 'warning', 5000);
             setLoading(btn, false);
             return;
         }
@@ -413,6 +415,8 @@ function logout() {
         state.currentUser = null;
         state.currentVendor = null;
         state.currentViaje = null;
+        state.gastosCache = []; // Limpiar caché al salir
+        state.viajesCache = [];
         location.reload();
     }
 }
@@ -709,14 +713,21 @@ async function guardarPerfil() {
         showToast('Error al guardar: ' + error.message, 'error');
     }
 }
-
 // ===== VIAJES =====
 async function loadViajes() {
     if (!state.currentVendor) return;
     
     try {
         const filter = document.getElementById('filter-viaje-status')?.value || 'all';
-        let viajes = await db.getViajesByVendedor(state.currentVendor.username);
+        let viajes;
+        
+        // Usar caché si estamos offline y hay datos
+        if (!navigator.onLine && state.viajesCache.length > 0) {
+            viajes = state.viajesCache;
+        } else {
+            viajes = await db.getViajesByVendedor(state.currentVendor.username);
+            state.viajesCache = viajes; // actualizar caché
+        }
         
         if (filter !== 'all') {
             viajes = viajes.filter(v => v.estado === filter);
@@ -810,6 +821,10 @@ async function crearViaje() {
     
     try {
         await db.add('viajes', viaje);
+        // Actualizar caché si estamos offline
+        if (!navigator.onLine) {
+            state.viajesCache.push(viaje);
+        }
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
         
@@ -825,7 +840,7 @@ async function crearViaje() {
         showToast('Error al crear viaje: ' + error.message, 'error');
     }
 }
-// ===== FUNCIÓN EDITAR VIAJE =====
+
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -907,6 +922,11 @@ async function guardarEdicionViaje() {
         viaje.estado = estado;
 
         await db.update('viajes', viaje);
+        // Actualizar caché
+        if (!navigator.onLine) {
+            const index = state.viajesCache.findIndex(v => v.id === id);
+            if (index !== -1) state.viajesCache[index] = viaje;
+        }
         closeModal('editar-viaje');
         showToast('✅ Viaje actualizado', 'success');
         loadViajes();
@@ -924,6 +944,11 @@ async function eliminarViaje(viajeId) {
             await db.delete('gastos', gasto.id);
         }
         await db.delete('viajes', viajeId);
+        // Eliminar de caché
+        if (!navigator.onLine) {
+            state.viajesCache = state.viajesCache.filter(v => v.id !== viajeId);
+            state.gastosCache = state.gastosCache.filter(g => g.viajeId !== viajeId);
+        }
         showToast('✅ Viaje eliminado', 'success');
         loadViajes();
     } catch (error) {
@@ -1079,6 +1104,7 @@ async function guardarGasto() {
     };
     
     try {
+        let nuevoGasto;
         if (esEdicion) {
             const gastoActualizado = {
                 ...state.currentGasto,
@@ -1086,15 +1112,27 @@ async function guardarGasto() {
                 id: state.currentGasto.id
             };
             await db.update('gastos', gastoActualizado);
+            nuevoGasto = gastoActualizado;
             showToast('✅ Gasto actualizado', 'success');
         } else {
-            const nuevoGasto = {
+            nuevoGasto = {
                 ...gastoData,
                 id: 'GASTO_' + Date.now(),
                 createdAt: new Date().toISOString()
             };
             await db.add('gastos', nuevoGasto);
             showToast('✅ Gasto guardado', 'success');
+        }
+        
+        // Actualizar caché si estamos offline
+        if (!navigator.onLine) {
+            if (esEdicion) {
+                const index = state.gastosCache.findIndex(g => g.id === nuevoGasto.id);
+                if (index !== -1) state.gastosCache[index] = nuevoGasto;
+                else state.gastosCache.push(nuevoGasto);
+            } else {
+                state.gastosCache.push(nuevoGasto);
+            }
         }
         
         resetCapturaForm();
@@ -1132,17 +1170,23 @@ async function loadGastosList() {
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
         
         let gastos = [];
-        const viajes = await db.getViajesByVendedor(state.currentVendor.username);
         
-        for (const viaje of viajes) {
-            const g = await db.getGastosByViaje(viaje.id);
-            gastos = gastos.concat(g.map(item => ({...item, viaje})));
+        // Usar caché si estamos offline
+        if (!navigator.onLine && state.gastosCache.length > 0) {
+            gastos = state.gastosCache;
+        } else {
+            const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+            for (const viaje of viajes) {
+                const g = await db.getGastosByViaje(viaje.id);
+                gastos = gastos.concat(g.map(item => ({...item, viaje})));
+            }
+            state.gastosCache = gastos; // actualizar caché
         }
         
+        // Aplicar filtros
         if (estadoFiltro !== 'all') {
             gastos = gastos.filter(g => g.viaje?.estado === estadoFiltro);
         }
-        
         if (viajeId) {
             gastos = gastos.filter(g => g.viajeId === viajeId);
         }
@@ -1347,6 +1391,10 @@ async function eliminarGasto(gastoId) {
     
     try {
         await db.delete('gastos', gastoId);
+        // Eliminar de caché
+        if (!navigator.onLine) {
+            state.gastosCache = state.gastosCache.filter(g => g.id !== gastoId);
+        }
         closeModal('detalle-gasto');
         showToast('Gasto eliminado', 'success');
         loadGastosList();
@@ -1383,7 +1431,7 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por día
+        // Agrupar por día (tendencia diaria)
         const porDia = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
@@ -1512,292 +1560,14 @@ function exportReport(format) {
     }
 }
 
-// ===== GENERAR EXCEL CON FORMATO USANDO EXCELJS =====
 async function generarExcelProfesional() {
-    if (!state.lastReport) {
-        showToast('Primero genera un reporte', 'warning');
-        return;
-    }
-
-    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona = '' } = state.lastReport;
-
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = '3P Control de Gastos';
-    workbook.lastModifiedBy = '3P';
-    workbook.created = new Date();
-    workbook.modified = new Date();
-
-    const worksheet = workbook.addWorksheet('Reporte');
-
-    worksheet.mergeCells('A1:I1');
-    const titleRow = worksheet.getCell('A1');
-    titleRow.value = '3P SA DE CV';
-    titleRow.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    titleRow.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    worksheet.mergeCells('A2:I2');
-    const subtitleRow = worksheet.getCell('A2');
-    subtitleRow.value = 'Reporte de Viáticos y Gastos de Viaje';
-    subtitleRow.font = { size: 14, color: { argb: 'FFFFFFFF' } };
-    subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    subtitleRow.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    worksheet.getCell('A3').value = 'Responsable:';
-    worksheet.getCell('B3').value = responsable;
-    worksheet.getCell('D3').value = 'Zona:';
-    worksheet.getCell('E3').value = zona;
-
-    worksheet.getCell('A4').value = 'Período:';
-    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
-    worksheet.getCell('D4').value = 'No. Reporte:';
-    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
-
-    worksheet.getCell('A5').value = 'Fecha de generación:';
-    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
-    worksheet.getCell('D5').value = 'Total General:';
-    worksheet.getCell('E5').value = formatMoney(total);
-
-    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
-        worksheet.getCell(addr).font = { bold: true };
-    });
-
-    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
-    const headerRow = worksheet.getRow(7);
-    headers.forEach((h, i) => {
-        const cell = headerRow.getCell(i+1);
-        cell.value = h;
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    });
-
-    let rowIndex = 8;
-    gastos.forEach(g => {
-        const row = worksheet.getRow(rowIndex);
-        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
-        row.getCell(2).value = g.viaje?.cliente || 'N/A';
-        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
-        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
-        row.getCell(5).value = g.folioFactura || '-';
-        row.getCell(6).value = g.razonSocial || '-';
-        row.getCell(7).value = g.monto;
-        row.getCell(7).numFmt = '"$"#,##0.00';
-        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
-        if (g.esFacturable !== false) {
-            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
-        } else {
-            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
-        }
-        row.getCell(9).value = g.comentarios || '';
-
-        for (let i = 1; i <= 9; i++) {
-            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        }
-        rowIndex++;
-    });
-
-    const totalRow = worksheet.getRow(rowIndex);
-    totalRow.getCell(6).value = 'TOTALES:';
-    totalRow.getCell(7).value = total;
-    totalRow.getCell(7).numFmt = '"$"#,##0.00';
-    totalRow.font = { bold: true };
-    totalRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-    rowIndex++;
-
-    const facturableRow = worksheet.getRow(rowIndex);
-    facturableRow.getCell(6).value = 'Total Facturable:';
-    facturableRow.getCell(7).value = totalFacturable;
-    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
-    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
-    facturableRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-    rowIndex++;
-
-    const noFacturableRow = worksheet.getRow(rowIndex);
-    noFacturableRow.getCell(6).value = 'Total No Facturable:';
-    noFacturableRow.getCell(7).value = total - totalFacturable;
-    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
-    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
-    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-
-    worksheet.columns = [
-        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
-        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
-    ];
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `corte de ${fechaInicio} a ${fechaFin}.xlsx`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-
-    showToast('📊 Reporte Excel descargado con formato', 'success');
+    // ... (mantén tu función existente, ya la tienes correcta)
+    // Por brevedad, no la repito aquí, pero asegúrate de que esté presente.
+    // Si no la tienes, puedo incluirla después.
 }
 
-// ===== GENERAR CORTE COMPLETO =====
 async function generarCorteCompleto() {
-    if (!state.lastReport) {
-        showToast('Primero genera un reporte', 'warning');
-        return;
-    }
-
-    showToast('🔄 Preparando corte completo...', 'info');
-
-    const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona = '' } = state.lastReport;
-
-    const zip = new JSZip();
-
-    // Generar Excel con formato
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = '3P Control de Gastos';
-    const worksheet = workbook.addWorksheet('Reporte');
-
-    worksheet.mergeCells('A1:I1');
-    worksheet.getCell('A1').value = '3P SA DE CV';
-    worksheet.getCell('A1').font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
-    worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    worksheet.getCell('A1').alignment = { horizontal: 'center' };
-
-    worksheet.mergeCells('A2:I2');
-    worksheet.getCell('A2').value = 'Reporte de Viáticos y Gastos de Viaje';
-    worksheet.getCell('A2').font = { size: 14, color: { argb: 'FFFFFFFF' } };
-    worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-    worksheet.getCell('A2').alignment = { horizontal: 'center' };
-
-    worksheet.getCell('A3').value = 'Responsable:';
-    worksheet.getCell('B3').value = responsable;
-    worksheet.getCell('D3').value = 'Zona:';
-    worksheet.getCell('E3').value = zona;
-
-    worksheet.getCell('A4').value = 'Período:';
-    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
-    worksheet.getCell('D4').value = 'No. Reporte:';
-    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
-
-    worksheet.getCell('A5').value = 'Fecha de generación:';
-    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
-    worksheet.getCell('D5').value = 'Total General:';
-    worksheet.getCell('E5').value = formatMoney(total);
-
-    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
-        worksheet.getCell(addr).font = { bold: true };
-    });
-
-    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
-    const headerRow = worksheet.getRow(7);
-    headers.forEach((h, i) => {
-        const cell = headerRow.getCell(i+1);
-        cell.value = h;
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-        cell.alignment = { horizontal: 'center' };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    });
-
-    let rowIndex = 8;
-    gastos.forEach(g => {
-        const row = worksheet.getRow(rowIndex);
-        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
-        row.getCell(2).value = g.viaje?.cliente || 'N/A';
-        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
-        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
-        row.getCell(5).value = g.folioFactura || '-';
-        row.getCell(6).value = g.razonSocial || '-';
-        row.getCell(7).value = g.monto;
-        row.getCell(7).numFmt = '"$"#,##0.00';
-        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
-        if (g.esFacturable !== false) {
-            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
-        } else {
-            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
-        }
-        row.getCell(9).value = g.comentarios || '';
-        for (let i = 1; i <= 9; i++) {
-            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        }
-        rowIndex++;
-    });
-
-    const totalRow = worksheet.getRow(rowIndex);
-    totalRow.getCell(6).value = 'TOTALES:';
-    totalRow.getCell(7).value = total;
-    totalRow.getCell(7).numFmt = '"$"#,##0.00';
-    totalRow.font = { bold: true };
-    totalRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-    rowIndex++;
-
-    const facturableRow = worksheet.getRow(rowIndex);
-    facturableRow.getCell(6).value = 'Total Facturable:';
-    facturableRow.getCell(7).value = totalFacturable;
-    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
-    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
-    facturableRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-    rowIndex++;
-
-    const noFacturableRow = worksheet.getRow(rowIndex);
-    noFacturableRow.getCell(6).value = 'Total No Facturable:';
-    noFacturableRow.getCell(7).value = total - totalFacturable;
-    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
-    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
-    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
-    for (let i = 1; i <= 9; i++) {
-        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-
-    worksheet.columns = [
-        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
-        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
-    ];
-
-    const excelBuffer = await workbook.xlsx.writeBuffer();
-    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
-
-    const facturasFolder = zip.folder('facturas_y_fotos');
-
-    for (const gasto of gastos) {
-        if (gasto.fotos && gasto.fotos.length > 0) {
-            const folio = gasto.folioFactura ? gasto.folioFactura : 'sin_folio';
-            const viajeNombre = (gasto.viaje?.cliente || 'viaje') + '_' + (gasto.viaje?.destino || 'desconocido');
-            const nombreBase = `${folio}_${viajeNombre}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
-
-            gasto.fotos.forEach((fotoData, idx) => {
-                const base64Data = fotoData.split(',')[1];
-                if (base64Data) {
-                    const nombreArchivo = `${nombreBase}_${idx + 1}.png`;
-                    facturasFolder.file(nombreArchivo, base64Data, { base64: true });
-                }
-            });
-        }
-    }
-
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const zipUrl = URL.createObjectURL(zipBlob);
-    const link = document.createElement('a');
-    link.href = zipUrl;
-    link.download = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
-    link.click();
-
-    setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
-    showToast('📦 Corte completo descargado', 'success');
+    // ... (igualmente, mantenla)
 }
 
 // ===== MANEJO DEL BOTÓN DE RETROCESO =====
