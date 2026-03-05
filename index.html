@@ -27,7 +27,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-<base target="_blank">
+    <base target="_blank">
 </head>
 <body>
     <!-- Splash Screen -->
@@ -82,7 +82,7 @@
                 </button>
             </div>
             
-            <div class="version-info">v5.0.0 - Sistema Offline Profesional</div>
+            <div class="version-info">v5.0.0 - Sistema Profesional</div>
         </div>
     </div>
 
@@ -669,20 +669,64 @@
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
 
-    <!-- Firebase (modo offline) -->
-    <script type="module" src="./firebase-config.js"></script>
-    
-    <!-- App -->
-    <script src="./db.js?v=5"></script>
-    <script type="module" src="./app.js?v=5"></script>
+    <!-- Import map para Firebase -->
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+                "firebase/analytics": "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js"
+            }
+        }
+    </script>
+
+    <!-- Firebase config -->
+    <script type="module">
+        import { initializeApp } from "firebase/app";
+        import { getAnalytics } from "firebase/analytics";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzkggisrJ61xrIEGIqQS4j7Aab0e_XPEA",
+            authDomain: "viajespro-3p.firebaseapp.com",
+            projectId: "viajespro-3p",
+            storageBucket: "viajespro-3p.firebasestorage.app",
+            messagingSenderId: "615680223699",
+            appId: "1:615680223699:web:67dd37d594062eb713e726",
+            measurementId: "G-4KW6PXPQ4L"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        
+        // Guardar la app en window para uso global si es necesario
+        window.firebaseApp = app;
+        console.log("✅ Firebase inicializado");
+    </script>
+
+    <!-- App scripts (db.js y app.js deben ser type="module") -->
+    <script src="./db.js?v=5" type="module"></script>
+    <script src="./app.js?v=5" type="module"></script>
     <script src="./ux-improvements.js?v=5"></script>
     
-    <!-- Service Worker -->
+    <!-- Detector de actualizaciones (service worker) -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('✅ SW registrado'))
-                .catch(err => console.log('❌ SW error:', err));
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                console.log('✅ SW registrado');
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // Nueva versión disponible
+                            const toast = document.createElement('div');
+                            toast.className = 'toast info';
+                            toast.innerHTML = '<span>🔄</span><span>Nueva versión disponible. <button onclick="location.reload()">Actualizar</button></span>';
+                            document.getElementById('toast-container').appendChild(toast);
+                            setTimeout(() => toast.remove(), 10000);
+                        }
+                    });
+                });
+            }).catch(err => console.log('❌ SW error:', err));
         }
     </script>
 </body>
