@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Corregido con XLSX nativo)
+ * 3P VIAJESPRO - Main Application v5.0 (Corregido con ExcelJS y formato)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -7,7 +7,7 @@ const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
     VERSION: '5.0.0',
-    APP_NAME: '3P Control de Viáticos Pro'
+    APP_NAME: '3P Control de Gastos'
 };
 
 // ===== ESTADO GLOBAL =====
@@ -378,7 +378,7 @@ async function registerVendor() {
     const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     const email = emailInput ? emailInput.value.trim() : '';
-    const zone = zoneInput ? zoneInput.value : 'Centro';
+    const zone = zoneInput ? zoneInput.value : 'Bajío';
     
     if (errorDiv) errorDiv.textContent = '';
     
@@ -667,7 +667,7 @@ async function crearViaje() {
         lugarVisita: lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase(),
         objetivo: objetivo,
         responsable: state.currentVendor.name,
-        zona: state.currentVendor.zone || 'Centro',
+        zona: state.currentVendor.zone || 'Bajío',
         fechaInicio: new Date(fechaInicioInput + 'T12:00:00').toISOString(),
         fechaFin: fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null,
         presupuesto: presupuesto ? parseFloat(presupuesto) : null,
@@ -694,7 +694,7 @@ async function crearViaje() {
     }
 }
 
-// ===== FUNCIÓN EDITAR VIAJE =====
+// ===== FUNCIÓN EDITAR VIAJE (CORREGIDA) =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -703,9 +703,13 @@ async function editarViaje(viajeId) {
             return;
         }
 
+        // Abrir el modal primero
         openModal('editar-viaje');
+
+        // Pequeño retraso para asegurar que el modal se haya renderizado
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        // Verificar que todos los elementos existan antes de asignar
         const elements = {
             id: document.getElementById('edit-viaje-id'),
             cliente: document.getElementById('edit-viaje-cliente'),
@@ -718,6 +722,7 @@ async function editarViaje(viajeId) {
             estado: document.getElementById('edit-viaje-estado')
         };
 
+        // Verificar si algún elemento no existe
         for (const [key, el] of Object.entries(elements)) {
             if (!el) {
                 console.error(`Elemento faltante: edit-viaje-${key}`);
@@ -727,6 +732,7 @@ async function editarViaje(viajeId) {
             }
         }
 
+        // Asignar valores
         elements.id.value = viaje.id;
         elements.cliente.value = viaje.cliente;
         elements.destino.value = viaje.destino;
@@ -1358,7 +1364,7 @@ async function generarReporte() {
             porMes: Object.fromEntries(mesesOrdenados.map(([k, v]) => [k, v.total])),
             gastos: allGastos,
             responsable: state.currentVendor.name,
-            zona: state.currentVendor.zone
+            zona: state.currentVendor.zone || ''
         };
         
     } catch (error) {
@@ -1380,72 +1386,160 @@ function exportReport(format) {
     }
 }
 
-// ===== FUNCIÓN PARA GENERAR EXCEL REAL CON SHEETJS =====
-function generarExcelProfesional() {
+// ===== GENERAR EXCEL CON FORMATO USANDO EXCELJS =====
+async function generarExcelProfesional() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
         return;
     }
 
-    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
+    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona = '' } = state.lastReport;
 
-    // Preparar datos para la hoja de cálculo
-    const data = [];
+    // Crear libro de trabajo
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '3P Control de Gastos';
+    workbook.lastModifiedBy = '3P';
+    workbook.created = new Date();
+    workbook.modified = new Date();
 
-    // Encabezados
-    data.push([
-        'Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura',
-        'Razón Social', 'Total', 'Facturable', 'Comentarios'
-    ]);
+    // Agregar hoja
+    const worksheet = workbook.addWorksheet('Reporte');
 
-    // Filas de gastos
-    gastos.forEach(g => {
-        data.push([
-            formatDateMexico(g.fecha || g.createdAt),
-            g.viaje?.cliente || 'N/A',
-            g.viaje?.lugarVisita || g.viaje?.destino || 'N/A',
-            TIPOS_GASTO[g.tipo]?.label || g.tipo,
-            g.folioFactura || '-',
-            g.razonSocial || '-',
-            g.monto,
-            g.esFacturable !== false ? 'SÍ' : 'NO',
-            g.comentarios || ''
-        ]);
+    // Título principal (fusionar celdas)
+    worksheet.mergeCells('A1:I1');
+    const titleRow = worksheet.getCell('A1');
+    titleRow.value = '3P SA DE CV';
+    titleRow.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    titleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells('A2:I2');
+    const subtitleRow = worksheet.getCell('A2');
+    subtitleRow.value = 'Reporte de Viáticos y Gastos de Viaje';
+    subtitleRow.font = { size: 14, color: { argb: 'FFFFFFFF' } };
+    subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subtitleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Información del reporte (filas 3-5)
+    worksheet.getCell('A3').value = 'Responsable:';
+    worksheet.getCell('B3').value = responsable;
+    worksheet.getCell('D3').value = 'Zona:';
+    worksheet.getCell('E3').value = zona;
+
+    worksheet.getCell('A4').value = 'Período:';
+    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
+    worksheet.getCell('D4').value = 'No. Reporte:';
+    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
+
+    worksheet.getCell('A5').value = 'Fecha de generación:';
+    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
+    worksheet.getCell('D5').value = 'Total General:';
+    worksheet.getCell('E5').value = formatMoney(total);
+
+    // Aplicar estilo a las celdas de información
+    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
+        worksheet.getCell(addr).font = { bold: true };
     });
 
-    // Totales
-    data.push([]);
-    data.push(['TOTALES', '', '', '', '', '', total, '', '']);
-    data.push(['Total Facturable', '', '', '', '', '', totalFacturable, '', '']);
-    data.push(['Total No Facturable', '', '', '', '', '', total - totalFacturable, '', '']);
+    // Encabezados de la tabla (fila 7)
+    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
+    const headerRow = worksheet.getRow(7);
+    headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i+1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
 
-    // Crear libro y hoja
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
+    // Datos de gastos
+    let rowIndex = 8;
+    gastos.forEach(g => {
+        const row = worksheet.getRow(rowIndex);
+        row.getCell(1).value = formatDateMexico(g.fecha || g.createdAt);
+        row.getCell(2).value = g.viaje?.cliente || 'N/A';
+        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
+        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
+        row.getCell(5).value = g.folioFactura || '-';
+        row.getCell(6).value = g.razonSocial || '-';
+        row.getCell(7).value = g.monto;
+        row.getCell(7).numFmt = '"$"#,##0.00';
+        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
+        if (g.esFacturable !== false) {
+            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
+        } else {
+            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
+        }
+        row.getCell(9).value = g.comentarios || '';
+
+        // Bordes
+        for (let i = 1; i <= 9; i++) {
+            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        }
+        rowIndex++;
+    });
+
+    // Fila de totales
+    const totalRow = worksheet.getRow(rowIndex);
+    totalRow.getCell(6).value = 'TOTALES:';
+    totalRow.getCell(7).value = total;
+    totalRow.getCell(7).numFmt = '"$"#,##0.00';
+    totalRow.font = { bold: true };
+    totalRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const facturableRow = worksheet.getRow(rowIndex);
+    facturableRow.getCell(6).value = 'Total Facturable:';
+    facturableRow.getCell(7).value = totalFacturable;
+    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
+    facturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const noFacturableRow = worksheet.getRow(rowIndex);
+    noFacturableRow.getCell(6).value = 'Total No Facturable:';
+    noFacturableRow.getCell(7).value = total - totalFacturable;
+    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
+    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
 
     // Ajustar ancho de columnas
-    ws['!cols'] = [
-        { wch: 12 }, // Fecha
-        { wch: 20 }, // Cliente
-        { wch: 25 }, // Lugar
-        { wch: 15 }, // Tipo
-        { wch: 15 }, // Folio
-        { wch: 25 }, // Razón Social
-        { wch: 15 }, // Total
-        { wch: 12 }, // Facturable
-        { wch: 30 }  // Comentarios
+    worksheet.columns = [
+        { width: 12 }, // Fecha
+        { width: 20 }, // Cliente
+        { width: 25 }, // Lugar
+        { width: 15 }, // Tipo
+        { width: 15 }, // Folio
+        { width: 25 }, // Razón Social
+        { width: 15 }, // Total
+        { width: 12 }, // Facturable
+        { width: 30 }  // Comentarios
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+    // Generar archivo
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `corte de ${fechaInicio} a ${fechaFin}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
 
-    // Generar archivo y descargar
-    const nombreArchivo = `corte de ${fechaInicio} a ${fechaFin}.xlsx`;
-    XLSX.writeFile(wb, nombreArchivo);
-
-    showToast('📊 Reporte Excel descargado', 'success');
+    showToast('📊 Reporte Excel descargado con formato', 'success');
 }
 
-// ===== FUNCIÓN PARA GENERAR CORTE COMPLETO (ZIP CON EXCEL + FOTOS) =====
+// ===== GENERAR CORTE COMPLETO (ZIP CON EXCEL + FOTOS) =====
 async function generarCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -1454,53 +1548,128 @@ async function generarCorteCompleto() {
 
     showToast('🔄 Preparando corte completo...', 'info');
 
-    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
+    const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona = '' } = state.lastReport;
 
-    // Verificar que JSZip esté disponible
-    if (typeof JSZip === 'undefined') {
-        showToast('Error: JSZip no está cargado', 'error');
-        return;
-    }
-
+    // Crear un objeto JSZip
     const zip = new JSZip();
 
-    // 1. Generar el archivo Excel en memoria
-    const data = [];
-    data.push([
-        'Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura',
-        'Razón Social', 'Total', 'Facturable', 'Comentarios'
-    ]);
-    gastos.forEach(g => {
-        data.push([
-            formatDateMexico(g.fecha || g.createdAt),
-            g.viaje?.cliente || 'N/A',
-            g.viaje?.lugarVisita || g.viaje?.destino || 'N/A',
-            TIPOS_GASTO[g.tipo]?.label || g.tipo,
-            g.folioFactura || '-',
-            g.razonSocial || '-',
-            g.monto,
-            g.esFacturable !== false ? 'SÍ' : 'NO',
-            g.comentarios || ''
-        ]);
+    // 1. Generar el archivo Excel con formato (usando ExcelJS)
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '3P Control de Gastos';
+    const worksheet = workbook.addWorksheet('Reporte');
+
+    // Título
+    worksheet.mergeCells('A1:I1');
+    const titleRow = worksheet.getCell('A1');
+    titleRow.value = '3P SA DE CV';
+    titleRow.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    titleRow.alignment = { horizontal: 'center' };
+
+    worksheet.mergeCells('A2:I2');
+    const subtitleRow = worksheet.getCell('A2');
+    subtitleRow.value = 'Reporte de Viáticos y Gastos de Viaje';
+    subtitleRow.font = { size: 14, color: { argb: 'FFFFFFFF' } };
+    subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subtitleRow.alignment = { horizontal: 'center' };
+
+    // Información
+    worksheet.getCell('A3').value = 'Responsable:';
+    worksheet.getCell('B3').value = responsable;
+    worksheet.getCell('D3').value = 'Zona:';
+    worksheet.getCell('E3').value = zona;
+
+    worksheet.getCell('A4').value = 'Período:';
+    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
+    worksheet.getCell('D4').value = 'No. Reporte:';
+    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
+
+    worksheet.getCell('A5').value = 'Fecha de generación:';
+    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
+    worksheet.getCell('D5').value = 'Total General:';
+    worksheet.getCell('E5').value = formatMoney(total);
+
+    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
+        worksheet.getCell(addr).font = { bold: true };
     });
-    data.push([]);
-    data.push(['TOTALES', '', '', '', '', '', total, '', '']);
-    data.push(['Total Facturable', '', '', '', '', '', totalFacturable, '', '']);
-    data.push(['Total No Facturable', '', '', '', '', '', total - totalFacturable, '', '']);
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [
-        { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 },
-        { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
+    // Encabezados
+    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
+    const headerRow = worksheet.getRow(7);
+    headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i+1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    // Datos
+    let rowIndex = 8;
+    gastos.forEach(g => {
+        const row = worksheet.getRow(rowIndex);
+        row.getCell(1).value = formatDateMexico(g.fecha || g.createdAt);
+        row.getCell(2).value = g.viaje?.cliente || 'N/A';
+        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
+        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
+        row.getCell(5).value = g.folioFactura || '-';
+        row.getCell(6).value = g.razonSocial || '-';
+        row.getCell(7).value = g.monto;
+        row.getCell(7).numFmt = '"$"#,##0.00';
+        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
+        if (g.esFacturable !== false) {
+            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
+        } else {
+            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
+        }
+        row.getCell(9).value = g.comentarios || '';
+        for (let i = 1; i <= 9; i++) {
+            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        }
+        rowIndex++;
+    });
+
+    // Totales
+    const totalRow = worksheet.getRow(rowIndex);
+    totalRow.getCell(6).value = 'TOTALES:';
+    totalRow.getCell(7).value = total;
+    totalRow.getCell(7).numFmt = '"$"#,##0.00';
+    totalRow.font = { bold: true };
+    totalRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const facturableRow = worksheet.getRow(rowIndex);
+    facturableRow.getCell(6).value = 'Total Facturable:';
+    facturableRow.getCell(7).value = totalFacturable;
+    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
+    facturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const noFacturableRow = worksheet.getRow(rowIndex);
+    noFacturableRow.getCell(6).value = 'Total No Facturable:';
+    noFacturableRow.getCell(7).value = total - totalFacturable;
+    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
+    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+
+    worksheet.columns = [
+        { width: 12 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
+        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
     ];
-    XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
 
-    // Convertir libro a blob
-    const excelArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const excelBlob = new Blob([excelArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBlob);
+    const excelBuffer = await workbook.xlsx.writeBuffer();
+    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
 
     // 2. Agregar carpeta de facturas con fotos
     const facturasFolder = zip.folder('facturas_y_fotos');
@@ -1538,7 +1707,6 @@ async function generarCorteCompleto() {
 // Exponer la función globalmente
 window.exportCorteCompleto = generarCorteCompleto;
 
-// ===== FUNCIÓN PARA CARGAR REPORTE GLOBAL (ADMIN) =====
 async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
