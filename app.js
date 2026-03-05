@@ -694,7 +694,7 @@ async function crearViaje() {
     }
 }
 
-// ===== FUNCIÓN EDITAR VIAJE (CORREGIDA) =====
+// ===== FUNCIÓN EDITAR VIAJE =====
 async function editarViaje(viajeId) {
     try {
         const viaje = await db.get('viajes', viajeId);
@@ -703,13 +703,9 @@ async function editarViaje(viajeId) {
             return;
         }
 
-        // Abrir el modal primero
         openModal('editar-viaje');
-
-        // Pequeño retraso para asegurar que el modal se haya renderizado
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Verificar que todos los elementos existan antes de asignar
         const elements = {
             id: document.getElementById('edit-viaje-id'),
             cliente: document.getElementById('edit-viaje-cliente'),
@@ -722,7 +718,6 @@ async function editarViaje(viajeId) {
             estado: document.getElementById('edit-viaje-estado')
         };
 
-        // Verificar si algún elemento no existe
         for (const [key, el] of Object.entries(elements)) {
             if (!el) {
                 console.error(`Elemento faltante: edit-viaje-${key}`);
@@ -732,7 +727,6 @@ async function editarViaje(viajeId) {
             }
         }
 
-        // Asignar valores
         elements.id.value = viaje.id;
         elements.cliente.value = viaje.cliente;
         elements.destino.value = viaje.destino;
@@ -1386,7 +1380,7 @@ function exportReport(format) {
     }
 }
 
-// ===== NUEVA FUNCIÓN: GENERAR EXCEL REAL CON SHEETJS =====
+// ===== FUNCIÓN PARA GENERAR EXCEL REAL CON SHEETJS =====
 function generarExcelProfesional() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -1442,9 +1436,6 @@ function generarExcelProfesional() {
         { wch: 30 }  // Comentarios
     ];
 
-    // Aplicar estilos básicos (negrita en encabezados)
-    // No podemos aplicar colores fácilmente sin librerías adicionales, pero es funcional
-
     XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
 
     // Generar archivo y descargar
@@ -1454,7 +1445,7 @@ function generarExcelProfesional() {
     showToast('📊 Reporte Excel descargado', 'success');
 }
 
-// ===== NUEVA FUNCIÓN: GENERAR CORTE COMPLETO (ZIP CON EXCEL + FOTOS) =====
+// ===== FUNCIÓN PARA GENERAR CORTE COMPLETO (ZIP CON EXCEL + FOTOS) =====
 async function generarCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -1463,9 +1454,14 @@ async function generarCorteCompleto() {
 
     showToast('🔄 Preparando corte completo...', 'info');
 
-    const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona } = state.lastReport;
+    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
 
-    // Crear un objeto JSZip
+    // Verificar que JSZip esté disponible
+    if (typeof JSZip === 'undefined') {
+        showToast('Error: JSZip no está cargado', 'error');
+        return;
+    }
+
     const zip = new JSZip();
 
     // 1. Generar el archivo Excel en memoria
@@ -1501,8 +1497,8 @@ async function generarCorteCompleto() {
     XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
 
     // Convertir libro a blob
-    const excelBlob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], 
-        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const excelArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const excelBlob = new Blob([excelArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
     zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBlob);
 
@@ -1542,6 +1538,7 @@ async function generarCorteCompleto() {
 // Exponer la función globalmente
 window.exportCorteCompleto = generarCorteCompleto;
 
+// ===== FUNCIÓN PARA CARGAR REPORTE GLOBAL (ADMIN) =====
 async function loadGlobalReport() {
     try {
         let allGastos, allViajes, allVendors;
