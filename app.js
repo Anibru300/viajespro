@@ -2025,4 +2025,47 @@ window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
 window.removeFoto = removeFoto;
 
+// ===== MANEJO DEL BOTÓN DE RETROCESO =====
+let backPressedOnce = false;
+let backTimer = null;
+
+window.addEventListener('popstate', (event) => {
+    // Verificar si hay un modal abierto
+    const modalAbierto = document.querySelector('.modal.active');
+    if (modalAbierto) {
+        // Cerrar el modal
+        modalAbierto.classList.remove('active');
+        document.body.style.overflow = '';
+        // Prevenir que el evento continúe
+        event.preventDefault();
+        return;
+    }
+
+    // Si estamos en la pantalla principal de vendedor
+    const appScreen = document.getElementById('app');
+    if (appScreen && !appScreen.classList.contains('hidden')) {
+        // No hay modal, preguntar si quiere salir
+        if (!backPressedOnce) {
+            backPressedOnce = true;
+            showToast('Presiona atrás nuevamente para salir', 'info', 2000);
+            // Reiniciar después de 3 segundos
+            backTimer = setTimeout(() => {
+                backPressedOnce = false;
+            }, 3000);
+        } else {
+            // Segunda vez, salir
+            clearTimeout(backTimer);
+            backPressedOnce = false;
+            // Cerrar sesión
+            logout();
+        }
+    } else {
+        // En otras pantallas (login, admin), permitir el comportamiento normal
+        // (no hacemos nada)
+    }
+});
+
+// Agregar un estado inicial al cargar la app (para que popstate funcione)
+history.pushState({ page: 'app' }, 'App', location.href);
+
 debug('App.js v5.0 cargado completamente');
