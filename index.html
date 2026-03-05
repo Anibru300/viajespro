@@ -82,7 +82,7 @@
                 </button>
             </div>
             
-            <div class="version-info">v5.0.0 - Sistema Profesional</div>
+            <div class="version-info">v5.0.0 - Sistema Offline Profesional</div>
         </div>
     </div>
 
@@ -223,7 +223,6 @@
         <header class="app-header">
             <div class="header-brand">
                 <img src="./assets/images/logo-3p-header.png" alt="3P" class="header-logo">
-                <!-- Área clickeable para abrir perfil -->
                 <div id="perfil-clickeable" class="header-info" style="cursor: pointer;">
                     <h1 id="welcome-text">Hola</h1>
                     <span id="current-user-name" class="user-name"></span>
@@ -263,7 +262,7 @@
                 </div>
                 
                 <div class="filters-bar">
-                    <select id="filter-viaje-status" onchange="loadViajes()">
+                    <select id="filter-viaje-status">
                         <option value="all">Todos</option>
                         <option value="activo">Activos</option>
                         <option value="completado">Completados</option>
@@ -328,7 +327,7 @@
                             <label>Monto *</label>
                             <div class="input-prefix">
                                 <span class="prefix">$</span>
-                                <input type="number" id="monto-gasto" placeholder="0.00" step="0.01" min="0" required>
+                                <input type="text" id="monto-gasto" placeholder="0.00" inputmode="decimal" pattern="[0-9]*\.?[0-9]*" required>
                             </div>
                         </div>
                         <div class="form-group">
@@ -386,9 +385,16 @@
             <section id="gastos-section" class="section">
                 <div class="section-header">
                     <h2>Mis Gastos</h2>
-                    <select id="gastos-viaje-select">
-                        <option value="">Todos los viajes</option>
-                    </select>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <select id="gastos-estado-select">
+                            <option value="all">Todos los estados</option>
+                            <option value="activo">Activos</option>
+                            <option value="completado">Completados</option>
+                        </select>
+                        <select id="gastos-viaje-select">
+                            <option value="">Todos los viajes</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="gastos-resumen" id="gastos-resumen"></div>
@@ -431,7 +437,7 @@
                     </div>
                     
                     <div class="card">
-                        <h3>Tendencia Mensual</h3>
+                        <h3>Tendencia Diaria</h3>
                         <div class="chart-container">
                             <canvas id="trend-chart"></canvas>
                         </div>
@@ -494,7 +500,7 @@
                     <label>Presupuesto estimado</label>
                     <div class="input-prefix">
                         <span class="prefix">$</span>
-                        <input type="number" id="viaje-presupuesto" placeholder="0.00" step="0.01">
+                        <input type="text" id="viaje-presupuesto" placeholder="0.00" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
                     </div>
                 </div>
                 
@@ -548,7 +554,7 @@
                 <label>Presupuesto estimado</label>
                 <div class="input-prefix">
                     <span class="prefix">$</span>
-                    <input type="number" id="edit-viaje-presupuesto" step="0.01">
+                    <input type="text" id="edit-viaje-presupuesto" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
                 </div>
             </div>
             
@@ -615,7 +621,7 @@
         </div>
     </div>
 
-    <!-- Modal: Perfil del Vendedor (autogestión) -->
+    <!-- Modal: Perfil del Vendedor -->
     <div id="modal-perfil" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -669,46 +675,22 @@
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
 
-    <!-- Import map para Firebase -->
+    <!-- Firebase -->
     <script type="importmap">
         {
             "imports": {
                 "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
-                "firebase/analytics": "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js"
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
             }
         }
     </script>
 
-    <!-- Firebase config -->
-    <script type="module">
-        import { initializeApp } from "firebase/app";
-        import { getAnalytics } from "firebase/analytics";
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyAzkggisrJ61xrIEGIqQS4j7Aab0e_XPEA",
-            authDomain: "viajespro-3p.firebaseapp.com",
-            projectId: "viajespro-3p",
-            storageBucket: "viajespro-3p.firebasestorage.app",
-            messagingSenderId: "615680223699",
-            appId: "1:615680223699:web:67dd37d594062eb713e726",
-            measurementId: "G-4KW6PXPQ4L"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        
-        // Guardar la app en window para uso global si es necesario
-        window.firebaseApp = app;
-        console.log("✅ Firebase inicializado");
-    </script>
-
-    <!-- App scripts (db.js y app.js deben ser type="module") -->
-    <script src="./db.js?v=5" type="module"></script>
-    <script src="./app.js?v=5" type="module"></script>
+    <script type="module" src="./firebase-config.js"></script>
+    <script type="module" src="./db.js?v=5"></script>
+    <script type="module" src="./app.js?v=5"></script>
     <script src="./ux-improvements.js?v=5"></script>
     
-    <!-- Detector de actualizaciones (service worker) -->
+    <!-- Service Worker con detección de actualizaciones -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(reg => {
@@ -717,7 +699,6 @@
                     const newWorker = reg.installing;
                     newWorker.addEventListener('statechange', () => {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            // Nueva versión disponible
                             const toast = document.createElement('div');
                             toast.className = 'toast info';
                             toast.innerHTML = '<span>🔄</span><span>Nueva versión disponible. <button onclick="location.reload()">Actualizar</button></span>';
