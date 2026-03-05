@@ -289,30 +289,81 @@ function showAdminTab(tabName) {
     if (tabName === 'reportes') loadGlobalReport();
 }
 
-// ===== LOGIN =====
-function checkSession() {
-    debug('Verificando sesión...');
-    const savedSession = localStorage.getItem('viajespro_session');
+async function login() {
+    debug('Iniciando login...');
     
-    if (savedSession) {
-        try {
-            const session = JSON.parse(savedSession);
-            if (session.remember && session.user) {
-                state.currentUser = session.user;
-                state.currentVendor = session.vendor;
-                
-                if (session.user.type === 'admin') {
-                    showAdminPanel();
-                } else {
-                    showMainApp();
-                }
-                return;
-            }
-        } catch (e) {
-            localStorage.removeItem('viajespro_session');
-        }
+    const username = document.getElementById('login-username').value.trim().toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const remember = document.getElementById('remember-me').checked;
+    const btn = document.querySelector('#login-form .btn-primary');
+    
+    if (!username || !password) {
+        showToast('Ingresa usuario y contraseña', 'warning');
+        return;
     }
-    showLoginScreen();
+    
+    setLoading(btn, true);
+    
+    try {
+        // Verificar si hay conexión a internet
+        if (!navigator.onLine) {
+            // Sin conexión, solo podemos usar la sesión guardada
+            const savedSession = localStorage.getItem('viajespro_session');
+            if (savedSession) {
+                const session = JSON.parse(savedSession);
+                if (session.vendor && session.vendor.username === username) {
+                    // Usar la sesión guardada
+                    state.currentUser = { username, type: 'vendor' };
+                    state.currentVendor = session.vendor;
+                    showToast('¡Bienvenido! (modo offline)', 'success');
+                    showMainApp();
+                    setLoading(btn, false);
+                    return;
+                }
+            }
+            // No hay sesión guardada para este usuario
+            showToast('Sin conexión a internet. No se puede verificar el usuario.', 'error');
+            setLoading(btn, false);
+            return;
+        }
+        
+        // Con conexión, proceder normal
+        debug('Buscando vendedor:', username);
+        const vendor = await db.get('vendedores', username);
+        debug('Vendedor encontrado:', vendor ? 'SÍ' : 'NO');
+        
+        if (!vendor || vendor.password !== password) {
+            showToast('Usuario o contraseña incorrectos', 'error');
+            setLoading(btn, false);
+            return;
+        }
+        
+        if (vendor.status === 'inactive') {
+            showToast('Usuario inactivo', 'warning');
+            setLoading(btn, false);
+            return;
+        }
+        
+        state.currentUser = { username, type: 'vendor' };
+        state.currentVendor = vendor;
+        
+        if (remember) {
+            localStorage.setItem('viajespro_session', JSON.stringify({
+                user: state.currentUser,
+                vendor: vendor,
+                remember: true
+            }));
+        }
+        
+        showToast(`¡Bienvenido, ${vendor.name}!`, 'success');
+        showMainApp();
+        
+    } catch (error) {
+        debug('Error en login:', error);
+        showToast('Error al iniciar sesión: ' + error.message, 'error');
+    } finally {
+        setLoading(btn, false);
+    }
 }
 
 function showLoginScreen() {
