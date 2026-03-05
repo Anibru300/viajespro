@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Perfil editable)
+ * 3P VIAJESPRO - Main Application v5.0 (Perfil editable + manejo de retroceso)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -20,7 +20,9 @@ const state = {
     isOnline: navigator.onLine,
     charts: {},
     filters: { viajes: 'all', gastos: '' },
-    lastReport: null
+    lastReport: null,
+    backPressCount: 0,
+    backPressTimer: null
 };
 
 // ===== ICONOS =====
@@ -87,6 +89,80 @@ function escapeHtml(text) {
     });
 }
 
+// ===== MANEJO DE BOTÓN ATRÁS EN MÓVIL =====
+function setupBackButtonHandler() {
+    // Añadir un estado inicial a la historia
+    history.pushState({ page: 'main' }, '', location.href);
+
+    window.addEventListener('popstate', (event) => {
+        // Verificar si hay algún modal abierto
+        const anyModalOpen = document.querySelector('.modal.active') !== null;
+
+        if (anyModalOpen) {
+            // Cerrar todos los modales
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+            document.body.style.overflow = '';
+            // Reestablecer el contador de retroceso
+            state.backPressCount = 0;
+            if (state.backPressTimer) {
+                clearTimeout(state.backPressTimer);
+                state.backPressTimer = null;
+            }
+            // Volver a añadir un estado para no salir de la app
+            history.pushState({ page: 'main' }, '', location.href);
+            return;
+        }
+
+        // Si no hay modal, verificar en qué sección estamos
+        const currentSection = document.querySelector('.section.active')?.id || 'viajes-section';
+
+        if (currentSection !== 'viajes-section') {
+            // No estamos en la pantalla principal de viajes → ir a viajes
+            showSection('viajes');
+            history.pushState({ page: 'main' }, '', location.href);
+            state.backPressCount = 0;
+            if (state.backPressTimer) {
+                clearTimeout(state.backPressTimer);
+                state.backPressTimer = null;
+            }
+            return;
+        }
+
+        // Estamos en viajes-section, sin modales → manejar doble clic para salir
+        if (state.backPressCount === 0) {
+            // Primer clic
+            state.backPressCount = 1;
+            showToast('Presiona de nuevo para salir', 'info', 2000);
+
+            state.backPressTimer = setTimeout(() => {
+                state.backPressCount = 0;
+                state.backPressTimer = null;
+            }, 2000);
+
+            // Volver a añadir estado para que podamos detectar el segundo clic
+            history.pushState({ page: 'main' }, '', location.href);
+        } else {
+            // Segundo clic dentro del tiempo
+            if (state.backPressTimer) {
+                clearTimeout(state.backPressTimer);
+                state.backPressTimer = null;
+            }
+            state.backPressCount = 0;
+            // Salir de la app (en navegador móvil, cierra la pestaña o minimiza)
+            // No podemos forzar el cierre, pero podemos intentar window.close() (no siempre funciona)
+            // Lo mejor es simplemente ir a una página en blanco o simular salida.
+            // En una PWA, podemos intentar cerrar la ventana:
+            window.close();
+            // Si no funciona, al menos mostramos un mensaje.
+            setTimeout(() => {
+                showToast('Puedes cerrar la pestaña', 'info');
+            }, 500);
+        }
+    });
+}
+
 // ===== INICIALIZACIÓN =====
 document.addEventListener('DOMContentLoaded', async () => {
     debug('DOM cargado, iniciando v5.0...');
@@ -120,6 +196,7 @@ async function initApp() {
     checkSession();
     setupEventListeners();
     updateConnectionStatus();
+    setupBackButtonHandler(); // <-- NUEVO
     
     // Fechas por defecto
     const today = new Date().toISOString().split('T')[0];
@@ -157,6 +234,7 @@ function setupEventListeners() {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.classList.remove('active');
+                document.body.style.overflow = '';
             }
         });
     });
@@ -166,7 +244,6 @@ function setupEventListeners() {
         gastosViajeSelect.addEventListener('change', loadGastosList);
     }
 
-    // Evento para abrir perfil al hacer clic en el nombre
     const perfilClickeable = document.getElementById('perfil-clickeable');
     if (perfilClickeable) {
         perfilClickeable.addEventListener('click', abrirPerfil);
@@ -634,7 +711,6 @@ async function guardarPerfil() {
         
         await db.update('vendedores', vendor);
         
-        // Actualizar estado global y sesión guardada
         state.currentVendor = vendor;
         const savedSession = localStorage.getItem('viajespro_session');
         if (savedSession) {
@@ -1755,6 +1831,12 @@ function openModal(modalId) {
     if (modal) {
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        // Reiniciar contador de retroceso al abrir modal
+        state.backPressCount = 0;
+        if (state.backPressTimer) {
+            clearTimeout(state.backPressTimer);
+            state.backPressTimer = null;
+        }
     }
 }
 
@@ -1763,10 +1845,16 @@ function closeModal(modalId) {
     if (modal) {
         modal.classList.remove('active');
         document.body.style.overflow = '';
+        // Reiniciar contador de retroceso al cerrar modal
+        state.backPressCount = 0;
+        if (state.backPressTimer) {
+            clearTimeout(state.backPressTimer);
+            state.backPressTimer = null;
+        }
     }
 }
 
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
     if (!container) {
         alert(message);
@@ -1790,7 +1878,7 @@ function showToast(message, type = 'info') {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(20px)';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, duration);
 }
 
 function setLoading(btn, loading) {
@@ -1930,8 +2018,8 @@ window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
 window.exportCorteCompleto = generarCorteCompleto;
-window.abrirPerfil = abrirPerfil;          // NUEVA
-window.guardarPerfil = guardarPerfil;      // NUEVA
+window.abrirPerfil = abrirPerfil;
+window.guardarPerfil = guardarPerfil;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
