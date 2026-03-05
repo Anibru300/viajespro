@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Con caché offline y mejoras)
+ * 3P VIAJESPRO - Main Application v5.0 (Offline mejorado con caché)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -415,7 +415,8 @@ function logout() {
         state.currentUser = null;
         state.currentVendor = null;
         state.currentViaje = null;
-        state.gastosCache = []; // Limpiar caché al salir
+        // Limpiar caché al salir
+        state.gastosCache = [];
         state.viajesCache = [];
         location.reload();
     }
@@ -726,7 +727,7 @@ async function loadViajes() {
             viajes = state.viajesCache;
         } else {
             viajes = await db.getViajesByVendedor(state.currentVendor.username);
-            state.viajesCache = viajes; // actualizar caché
+            state.viajesCache = viajes; // Actualizar caché
         }
         
         if (filter !== 'all') {
@@ -749,8 +750,14 @@ async function loadViajes() {
             return;
         }
         
+        // Obtener estadísticas de gastos (pueden venir de caché también)
         const viajesConStats = await Promise.all(viajes.map(async v => {
-            const gastos = await db.getGastosByViaje(v.id);
+            let gastos;
+            if (!navigator.onLine && state.gastosCache.length > 0) {
+                gastos = state.gastosCache.filter(g => g.viajeId === v.id);
+            } else {
+                gastos = await db.getGastosByViaje(v.id);
+            }
             const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
             return { ...v, gastosCount: gastos.length, totalGastos: total };
         }));
@@ -821,10 +828,9 @@ async function crearViaje() {
     
     try {
         await db.add('viajes', viaje);
-        // Actualizar caché si estamos offline
-        if (!navigator.onLine) {
-            state.viajesCache.push(viaje);
-        }
+        // Actualizar caché offline
+        state.viajesCache.push(viaje);
+        
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
         
@@ -897,7 +903,7 @@ async function guardarEdicionViaje() {
     const objetivo = document.getElementById('edit-viaje-objetivo').value.trim();
     const fechaInicioInput = document.getElementById('edit-viaje-fecha-inicio').value;
     const fechaFinInput = document.getElementById('edit-viaje-fecha-fin').value;
-    const presupuesto = parseFloat(document.getElementById('edit-viaje-presupuesto').value) || null;
+    const presupuesto = document.getElementById('edit-viaje-presupuesto').value;
     const estado = document.getElementById('edit-viaje-estado').value;
 
     if (!cliente || !destino || !fechaInicioInput) {
@@ -918,15 +924,14 @@ async function guardarEdicionViaje() {
         viaje.objetivo = objetivo;
         viaje.fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
         viaje.fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
-        viaje.presupuesto = presupuesto;
+        viaje.presupuesto = presupuesto ? parseFloat(presupuesto) : null;
         viaje.estado = estado;
 
         await db.update('viajes', viaje);
         // Actualizar caché
-        if (!navigator.onLine) {
-            const index = state.viajesCache.findIndex(v => v.id === id);
-            if (index !== -1) state.viajesCache[index] = viaje;
-        }
+        const index = state.viajesCache.findIndex(v => v.id === id);
+        if (index !== -1) state.viajesCache[index] = viaje;
+        
         closeModal('editar-viaje');
         showToast('✅ Viaje actualizado', 'success');
         loadViajes();
@@ -944,11 +949,10 @@ async function eliminarViaje(viajeId) {
             await db.delete('gastos', gasto.id);
         }
         await db.delete('viajes', viajeId);
-        // Eliminar de caché
-        if (!navigator.onLine) {
-            state.viajesCache = state.viajesCache.filter(v => v.id !== viajeId);
-            state.gastosCache = state.gastosCache.filter(g => g.viajeId !== viajeId);
-        }
+        // Actualizar caché
+        state.viajesCache = state.viajesCache.filter(v => v.id !== viajeId);
+        state.gastosCache = state.gastosCache.filter(g => g.viajeId !== viajeId);
+        
         showToast('✅ Viaje eliminado', 'success');
         loadViajes();
     } catch (error) {
@@ -969,7 +973,14 @@ async function loadViajesSelect() {
     if (!state.currentVendor) return;
     
     try {
-        const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+        let viajes;
+        if (!navigator.onLine && state.viajesCache.length > 0) {
+            viajes = state.viajesCache;
+        } else {
+            viajes = await db.getViajesByVendedor(state.currentVendor.username);
+            state.viajesCache = viajes;
+        }
+        
         const activos = viajes.filter(v => v.estado === 'activo');
         const todos = viajes;
         
@@ -1087,6 +1098,9 @@ async function guardarGasto() {
     
     const esEdicion = state.currentGasto !== null;
     
+    // Obtener el viaje actual para la caché
+    const viajeActual = state.viajesCache.find(v => v.id === viajeId) || { cliente: 'Desconocido', destino: '' };
+    
     const gastoData = {
         viajeId,
         vendedorId: state.currentVendor.username,
@@ -1112,8 +1126,8 @@ async function guardarGasto() {
                 id: state.currentGasto.id
             };
             await db.update('gastos', gastoActualizado);
-            nuevoGasto = gastoActualizado;
             showToast('✅ Gasto actualizado', 'success');
+            nuevoGasto = gastoActualizado;
         } else {
             nuevoGasto = {
                 ...gastoData,
@@ -1124,15 +1138,17 @@ async function guardarGasto() {
             showToast('✅ Gasto guardado', 'success');
         }
         
-        // Actualizar caché si estamos offline
+        // Actualizar caché offline
         if (!navigator.onLine) {
             if (esEdicion) {
                 const index = state.gastosCache.findIndex(g => g.id === nuevoGasto.id);
-                if (index !== -1) state.gastosCache[index] = nuevoGasto;
-                else state.gastosCache.push(nuevoGasto);
+                if (index !== -1) state.gastosCache[index] = { ...nuevoGasto, viaje: viajeActual };
             } else {
-                state.gastosCache.push(nuevoGasto);
+                state.gastosCache.push({ ...nuevoGasto, viaje: viajeActual });
             }
+        } else {
+            // Si hay conexión, recargar caché completa (opcional)
+            // Podríamos no hacer nada porque ya se guardó en Firestore
         }
         
         resetCapturaForm();
@@ -1164,6 +1180,7 @@ function toggleComentarioRequerido() {
     }
 }
 
+// Versión mejorada de loadGastosList con caché offline
 async function loadGastosList() {
     try {
         const estadoFiltro = document.getElementById('gastos-estado-select')?.value || 'all';
@@ -1171,16 +1188,18 @@ async function loadGastosList() {
         
         let gastos = [];
         
-        // Usar caché si estamos offline
+        // Si estamos offline y tenemos caché, usarla directamente
         if (!navigator.onLine && state.gastosCache.length > 0) {
             gastos = state.gastosCache;
         } else {
+            // Si hay conexión o no hay caché, obtener de Firestore
             const viajes = await db.getViajesByVendedor(state.currentVendor.username);
             for (const viaje of viajes) {
                 const g = await db.getGastosByViaje(viaje.id);
                 gastos = gastos.concat(g.map(item => ({...item, viaje})));
             }
-            state.gastosCache = gastos; // actualizar caché
+            // Guardar en caché para próxima vez offline
+            state.gastosCache = gastos;
         }
         
         // Aplicar filtros
@@ -1193,6 +1212,7 @@ async function loadGastosList() {
         
         gastos.sort((a, b) => new Date(b.fecha || b.createdAt) - new Date(a.fecha || a.createdAt));
         
+        // Calcular resumen
         const resumen = { total: 0, facturable: 0, porTipo: {} };
         gastos.forEach(g => {
             resumen.total += g.monto;
@@ -1391,10 +1411,9 @@ async function eliminarGasto(gastoId) {
     
     try {
         await db.delete('gastos', gastoId);
-        // Eliminar de caché
-        if (!navigator.onLine) {
-            state.gastosCache = state.gastosCache.filter(g => g.id !== gastoId);
-        }
+        // Actualizar caché
+        state.gastosCache = state.gastosCache.filter(g => g.id !== gastoId);
+        
         closeModal('detalle-gasto');
         showToast('Gasto eliminado', 'success');
         loadGastosList();
@@ -1431,7 +1450,7 @@ async function generarReporte() {
             return;
         }
         
-        // Agrupar por día (tendencia diaria)
+        // Agrupar por día
         const porDia = {};
         allGastos.forEach(g => {
             const fecha = new Date(g.fecha || g.createdAt);
@@ -1560,14 +1579,292 @@ function exportReport(format) {
     }
 }
 
+// ===== GENERAR EXCEL CON FORMATO USANDO EXCELJS =====
 async function generarExcelProfesional() {
-    // ... (mantén tu función existente, ya la tienes correcta)
-    // Por brevedad, no la repito aquí, pero asegúrate de que esté presente.
-    // Si no la tienes, puedo incluirla después.
+    if (!state.lastReport) {
+        showToast('Primero genera un reporte', 'warning');
+        return;
+    }
+
+    const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona = '' } = state.lastReport;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '3P Control de Gastos';
+    workbook.lastModifiedBy = '3P';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    const worksheet = workbook.addWorksheet('Reporte');
+
+    worksheet.mergeCells('A1:I1');
+    const titleRow = worksheet.getCell('A1');
+    titleRow.value = '3P SA DE CV';
+    titleRow.font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    titleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells('A2:I2');
+    const subtitleRow = worksheet.getCell('A2');
+    subtitleRow.value = 'Reporte de Viáticos y Gastos de Viaje';
+    subtitleRow.font = { size: 14, color: { argb: 'FFFFFFFF' } };
+    subtitleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    subtitleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.getCell('A3').value = 'Responsable:';
+    worksheet.getCell('B3').value = responsable;
+    worksheet.getCell('D3').value = 'Zona:';
+    worksheet.getCell('E3').value = zona;
+
+    worksheet.getCell('A4').value = 'Período:';
+    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
+    worksheet.getCell('D4').value = 'No. Reporte:';
+    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
+
+    worksheet.getCell('A5').value = 'Fecha de generación:';
+    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
+    worksheet.getCell('D5').value = 'Total General:';
+    worksheet.getCell('E5').value = formatMoney(total);
+
+    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
+        worksheet.getCell(addr).font = { bold: true };
+    });
+
+    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
+    const headerRow = worksheet.getRow(7);
+    headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i+1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    let rowIndex = 8;
+    gastos.forEach(g => {
+        const row = worksheet.getRow(rowIndex);
+        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
+        row.getCell(2).value = g.viaje?.cliente || 'N/A';
+        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
+        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
+        row.getCell(5).value = g.folioFactura || '-';
+        row.getCell(6).value = g.razonSocial || '-';
+        row.getCell(7).value = g.monto;
+        row.getCell(7).numFmt = '"$"#,##0.00';
+        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
+        if (g.esFacturable !== false) {
+            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
+        } else {
+            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
+        }
+        row.getCell(9).value = g.comentarios || '';
+
+        for (let i = 1; i <= 9; i++) {
+            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        }
+        rowIndex++;
+    });
+
+    const totalRow = worksheet.getRow(rowIndex);
+    totalRow.getCell(6).value = 'TOTALES:';
+    totalRow.getCell(7).value = total;
+    totalRow.getCell(7).numFmt = '"$"#,##0.00';
+    totalRow.font = { bold: true };
+    totalRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const facturableRow = worksheet.getRow(rowIndex);
+    facturableRow.getCell(6).value = 'Total Facturable:';
+    facturableRow.getCell(7).value = totalFacturable;
+    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
+    facturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const noFacturableRow = worksheet.getRow(rowIndex);
+    noFacturableRow.getCell(6).value = 'Total No Facturable:';
+    noFacturableRow.getCell(7).value = total - totalFacturable;
+    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
+    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+
+    worksheet.columns = [
+        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
+        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `corte de ${fechaInicio} a ${fechaFin}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+
+    showToast('📊 Reporte Excel descargado con formato', 'success');
 }
 
+// ===== GENERAR CORTE COMPLETO =====
 async function generarCorteCompleto() {
-    // ... (igualmente, mantenla)
+    if (!state.lastReport) {
+        showToast('Primero genera un reporte', 'warning');
+        return;
+    }
+
+    showToast('🔄 Preparando corte completo...', 'info');
+
+    const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona = '' } = state.lastReport;
+
+    const zip = new JSZip();
+
+    // Generar Excel con formato
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '3P Control de Gastos';
+    const worksheet = workbook.addWorksheet('Reporte');
+
+    worksheet.mergeCells('A1:I1');
+    worksheet.getCell('A1').value = '3P SA DE CV';
+    worksheet.getCell('A1').font = { size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+    worksheet.mergeCells('A2:I2');
+    worksheet.getCell('A2').value = 'Reporte de Viáticos y Gastos de Viaje';
+    worksheet.getCell('A2').font = { size: 14, color: { argb: 'FFFFFFFF' } };
+    worksheet.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    worksheet.getCell('A2').alignment = { horizontal: 'center' };
+
+    worksheet.getCell('A3').value = 'Responsable:';
+    worksheet.getCell('B3').value = responsable;
+    worksheet.getCell('D3').value = 'Zona:';
+    worksheet.getCell('E3').value = zona;
+
+    worksheet.getCell('A4').value = 'Período:';
+    worksheet.getCell('B4').value = `${formatDateMexico(fechaInicio)} al ${formatDateMexico(fechaFin)}`;
+    worksheet.getCell('D4').value = 'No. Reporte:';
+    worksheet.getCell('E4').value = `3p-${responsable.trim().substring(0,3).toUpperCase()}-${new Date().getDate().toString().padStart(2,'0')}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getFullYear().toString().slice(-2)}`;
+
+    worksheet.getCell('A5').value = 'Fecha de generación:';
+    worksheet.getCell('B5').value = formatDateTimeMexico(new Date().toISOString());
+    worksheet.getCell('D5').value = 'Total General:';
+    worksheet.getCell('E5').value = formatMoney(total);
+
+    ['A3','A4','A5','D3','D4','D5'].forEach(addr => {
+        worksheet.getCell(addr).font = { bold: true };
+    });
+
+    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
+    const headerRow = worksheet.getRow(7);
+    headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i+1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    let rowIndex = 8;
+    gastos.forEach(g => {
+        const row = worksheet.getRow(rowIndex);
+        row.getCell(1).value = formatDateTimeMexico(g.fecha || g.createdAt);
+        row.getCell(2).value = g.viaje?.cliente || 'N/A';
+        row.getCell(3).value = g.viaje?.lugarVisita || g.viaje?.destino || 'N/A';
+        row.getCell(4).value = TIPOS_GASTO[g.tipo]?.label || g.tipo;
+        row.getCell(5).value = g.folioFactura || '-';
+        row.getCell(6).value = g.razonSocial || '-';
+        row.getCell(7).value = g.monto;
+        row.getCell(7).numFmt = '"$"#,##0.00';
+        row.getCell(8).value = g.esFacturable !== false ? 'SÍ' : 'NO';
+        if (g.esFacturable !== false) {
+            row.getCell(8).font = { color: { argb: 'FF059669' }, bold: true };
+        } else {
+            row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
+        }
+        row.getCell(9).value = g.comentarios || '';
+        for (let i = 1; i <= 9; i++) {
+            row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        }
+        rowIndex++;
+    });
+
+    const totalRow = worksheet.getRow(rowIndex);
+    totalRow.getCell(6).value = 'TOTALES:';
+    totalRow.getCell(7).value = total;
+    totalRow.getCell(7).numFmt = '"$"#,##0.00';
+    totalRow.font = { bold: true };
+    totalRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        totalRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const facturableRow = worksheet.getRow(rowIndex);
+    facturableRow.getCell(6).value = 'Total Facturable:';
+    facturableRow.getCell(7).value = totalFacturable;
+    facturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    facturableRow.font = { bold: true, color: { argb: 'FF059669' } };
+    facturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        facturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+    rowIndex++;
+
+    const noFacturableRow = worksheet.getRow(rowIndex);
+    noFacturableRow.getCell(6).value = 'Total No Facturable:';
+    noFacturableRow.getCell(7).value = total - totalFacturable;
+    noFacturableRow.getCell(7).numFmt = '"$"#,##0.00';
+    noFacturableRow.font = { bold: true, color: { argb: 'FFDC2626' } };
+    noFacturableRow.getCell(6).alignment = { horizontal: 'right' };
+    for (let i = 1; i <= 9; i++) {
+        noFacturableRow.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    }
+
+    worksheet.columns = [
+        { width: 18 }, { width: 20 }, { width: 25 }, { width: 15 }, { width: 15 },
+        { width: 25 }, { width: 15 }, { width: 12 }, { width: 30 }
+    ];
+
+    const excelBuffer = await workbook.xlsx.writeBuffer();
+    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
+
+    const facturasFolder = zip.folder('facturas_y_fotos');
+
+    for (const gasto of gastos) {
+        if (gasto.fotos && gasto.fotos.length > 0) {
+            const folio = gasto.folioFactura ? gasto.folioFactura : 'sin_folio';
+            const viajeNombre = (gasto.viaje?.cliente || 'viaje') + '_' + (gasto.viaje?.destino || 'desconocido');
+            const nombreBase = `${folio}_${viajeNombre}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
+
+            gasto.fotos.forEach((fotoData, idx) => {
+                const base64Data = fotoData.split(',')[1];
+                if (base64Data) {
+                    const nombreArchivo = `${nombreBase}_${idx + 1}.png`;
+                    facturasFolder.file(nombreArchivo, base64Data, { base64: true });
+                }
+            });
+        }
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = zipUrl;
+    link.download = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
+    link.click();
+
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
+    showToast('📦 Corte completo descargado', 'success');
 }
 
 // ===== MANEJO DEL BOTÓN DE RETROCESO =====
