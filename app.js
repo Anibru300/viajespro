@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.0 (Corregido y Mejorado)
+ * 3P VIAJESPRO - Main Application v5.0 (Corregido con XLSX nativo)
  */
 
 // ===== CONFIGURACIÓN =====
@@ -19,7 +19,8 @@ const state = {
     tempFotos: [],
     isOnline: navigator.onLine,
     charts: {},
-    filters: { viajes: 'all', gastos: '' }
+    filters: { viajes: 'all', gastos: '' },
+    lastReport: null
 };
 
 // ===== ICONOS =====
@@ -41,7 +42,6 @@ function getMexicoDateTime() {
 
 function formatDateTimeMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -56,7 +56,6 @@ function formatDateTimeMexico(dateString) {
 
 function formatDateMexico(dateString) {
     if (!dateString) return '-';
-    
     const date = new Date(dateString);
     return date.toLocaleDateString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -1387,158 +1386,70 @@ function exportReport(format) {
     }
 }
 
-// ===== NUEVA FUNCIÓN: GENERAR EXCEL CON NOMBRE PERSONALIZADO =====
+// ===== NUEVA FUNCIÓN: GENERAR EXCEL REAL CON SHEETJS =====
 function generarExcelProfesional() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
         return;
     }
-    
+
     const { gastos, fechaInicio, fechaFin, total, totalFacturable, responsable, zona } = state.lastReport;
-    
-    // Generar número de reporte con formato: 3p-{3 primeras letras del vendedor}-{fecha actual ddmmyy}
-    const primerasLetras = responsable.trim().toUpperCase().substring(0, 3);
-    const hoy = new Date();
-    const dia = String(hoy.getDate()).padStart(2, '0');
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const año = String(hoy.getFullYear()).slice(-2);
-    const fechaStr = dia + mes + año;
-    const numReporte = `3p-${primerasLetras}-${fechaStr}`;
-    
-    const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
 
-    // Función para escapar HTML
-    const escape = (text) => {
-        if (text == null) return '';
-        return String(text).replace(/[&<>"]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            if (m === '"') return '&quot;';
-            return m;
-        });
-    };
+    // Preparar datos para la hoja de cálculo
+    const data = [];
 
-    let html = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-    <meta charset="UTF-8">
-    <title>Reporte 3P Viáticos</title>
-    <!--[if gte mso 9]>
-    <xml>
-        <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-                <x:ExcelWorksheet>
-                    <x:Name>Reporte</x:Name>
-                </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-        </x:ExcelWorkbook>
-    </xml>
-    <![endif]-->
-</head>
-<body>
-    <!-- Encabezado con inline styles -->
-    <table width="100%" cellpadding="10" cellspacing="0" style="font-family: Arial, sans-serif;">
-        <tr>
-            <td style="background-color: #1e3a5f; color: white; text-align: center;" colspan="2">
-                <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
-                <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
-            </td>
-        </tr>
-    </table>
-    
-    <!-- Información del reporte -->
-    <table width="100%" cellpadding="8" cellspacing="0" style="background-color: #f3f4f6; margin-top: 10px; font-family: Arial, sans-serif; border-collapse: collapse;">
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Responsable:</strong> ${escape(responsable)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Zona:</strong> ${escape(zona || 'No especificada')}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Período:</strong> ${escape(formatDateMexico(fechaInicio))} al ${escape(formatDateMexico(fechaFin))}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>No. Reporte:</strong> ${escape(numReporte)}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Fecha de generación:</strong> ${escape(fechaGeneracion)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Total General:</strong> ${escape(formatMoney(total))}</td>
-        </tr>
-    </table>
-    
-    <!-- Tabla de gastos -->
-    <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #1e3a5f; color: white;">
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Tipo Gasto</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Folio Factura</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Razón Social</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: right;">Total</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: center;">Facturable</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Comentarios</th>
-            </tr>
-        </thead>
-        <tbody>
-`;
+    // Encabezados
+    data.push([
+        'Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura',
+        'Razón Social', 'Total', 'Facturable', 'Comentarios'
+    ]);
 
+    // Filas de gastos
     gastos.forEach(g => {
-        const esFacturable = g.esFacturable !== false;
-        html += `
-            <tr>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(formatDateMexico(g.fecha || g.createdAt))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.cliente || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.folioFactura || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.razonSocial || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(g.monto))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center; ${esFacturable ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;'}">${esFacturable ? 'SÍ' : 'NO'}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.comentarios || '')}</td>
-            </tr>
-        `;
+        data.push([
+            formatDateMexico(g.fecha || g.createdAt),
+            g.viaje?.cliente || 'N/A',
+            g.viaje?.lugarVisita || g.viaje?.destino || 'N/A',
+            TIPOS_GASTO[g.tipo]?.label || g.tipo,
+            g.folioFactura || '-',
+            g.razonSocial || '-',
+            g.monto,
+            g.esFacturable !== false ? 'SÍ' : 'NO',
+            g.comentarios || ''
+        ]);
     });
 
-    html += `
-            <tr style="background-color: #e5e7eb; font-weight: bold;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total - totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-        </tbody>
-    </table>
-    
-    <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; font-family: Arial, sans-serif;">
-        <p><strong>Documento generado por 3P ViajesPro v5.0</strong></p>
-        <p>Este reporte es un documento oficial de 3P SA DE CV</p>
-        <p>Fecha y hora: ${escape(formatDateTimeMexico(new Date().toISOString()))}</p>
-    </div>
-</body>
-</html>
-    `;
+    // Totales
+    data.push([]);
+    data.push(['TOTALES', '', '', '', '', '', total, '', '']);
+    data.push(['Total Facturable', '', '', '', '', '', totalFacturable, '', '']);
+    data.push(['Total No Facturable', '', '', '', '', '', total - totalFacturable, '', '']);
 
-    // Agregar BOM para UTF-8
-    const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    
-    // Forzar descarga con nombre personalizado (sin abrir en pestaña)
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `corte de ${fechaInicio} a ${fechaFin}.xls`;
-    link.click();
-    
-    // Liberar memoria después de un tiempo
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    // Crear libro y hoja
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Ajustar ancho de columnas
+    ws['!cols'] = [
+        { wch: 12 }, // Fecha
+        { wch: 20 }, // Cliente
+        { wch: 25 }, // Lugar
+        { wch: 15 }, // Tipo
+        { wch: 15 }, // Folio
+        { wch: 25 }, // Razón Social
+        { wch: 15 }, // Total
+        { wch: 12 }, // Facturable
+        { wch: 30 }  // Comentarios
+    ];
+
+    // Aplicar estilos básicos (negrita en encabezados)
+    // No podemos aplicar colores fácilmente sin librerías adicionales, pero es funcional
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+
+    // Generar archivo y descargar
+    const nombreArchivo = `corte de ${fechaInicio} a ${fechaFin}.xlsx`;
+    XLSX.writeFile(wb, nombreArchivo);
 
     showToast('📊 Reporte Excel descargado', 'success');
 }
@@ -1552,161 +1463,61 @@ async function generarCorteCompleto() {
 
     showToast('🔄 Preparando corte completo...', 'info');
 
-    const { gastos, fechaInicio, fechaFin, responsable } = state.lastReport;
+    const { gastos, fechaInicio, fechaFin, responsable, total, totalFacturable, zona } = state.lastReport;
 
     // Crear un objeto JSZip
     const zip = new JSZip();
 
-    // 1. Agregar el reporte Excel
-    const excelBlob = await new Promise((resolve) => {
-        // Reutilizamos la lógica de generarExcelProfesional pero capturamos el blob
-        const primerasLetras = responsable.trim().toUpperCase().substring(0, 3);
-        const hoy = new Date();
-        const dia = String(hoy.getDate()).padStart(2, '0');
-        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-        const año = String(hoy.getFullYear()).slice(-2);
-        const fechaStr = dia + mes + año;
-        const numReporte = `3p-${primerasLetras}-${fechaStr}`;
-        const fechaGeneracion = formatDateTimeMexico(new Date().toISOString());
-
-        const escape = (text) => {
-            if (text == null) return '';
-            return String(text).replace(/[&<>"]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                if (m === '"') return '&quot;';
-                return m;
-            });
-        };
-
-        let html = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-    <meta charset="UTF-8">
-    <title>Reporte 3P Viáticos</title>
-    <!--[if gte mso 9]>
-    <xml>
-        <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-                <x:ExcelWorksheet>
-                    <x:Name>Reporte</x:Name>
-                </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-        </x:ExcelWorkbook>
-    </xml>
-    <![endif]-->
-</head>
-<body>
-    <table width="100%" cellpadding="10" cellspacing="0" style="font-family: Arial, sans-serif;">
-        <tr>
-            <td style="background-color: #1e3a5f; color: white; text-align: center;" colspan="2">
-                <h1 style="margin: 0; color: white;">3P SA DE CV</h1>
-                <h2 style="margin: 5px 0 0 0; color: white; font-weight: normal;">Reporte de Viáticos y Gastos de Viaje</h2>
-            </td>
-        </tr>
-    </table>
-    
-    <table width="100%" cellpadding="8" cellspacing="0" style="background-color: #f3f4f6; margin-top: 10px; font-family: Arial, sans-serif; border-collapse: collapse;">
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Responsable:</strong> ${escape(responsable)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Zona:</strong> ${escape(zona || 'No especificada')}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Período:</strong> ${escape(formatDateMexico(fechaInicio))} al ${escape(formatDateMexico(fechaFin))}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>No. Reporte:</strong> ${escape(numReporte)}</td>
-        </tr>
-        <tr>
-            <td style="border: 1px solid #d1d5db;"><strong>Fecha de generación:</strong> ${escape(fechaGeneracion)}</td>
-            <td style="border: 1px solid #d1d5db;"><strong>Total General:</strong> ${escape(formatMoney(total))}</td>
-        </tr>
-    </table>
-    
-    <table width="100%" cellpadding="8" cellspacing="0" style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 12px; border-collapse: collapse;">
-        <thead>
-            <tr style="background-color: #1e3a5f; color: white;">
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Fecha</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Cliente</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Lugar de Visita</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Tipo Gasto</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Folio Factura</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Razón Social</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: right;">Total</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: center;">Facturable</th>
-                <th style="border: 1px solid #0f1f33; padding: 12px; text-align: left;">Comentarios</th>
-            </tr>
-        </thead>
-        <tbody>
-`;
-
-        gastos.forEach(g => {
-            const esFacturable = g.esFacturable !== false;
-            html += `
-            <tr>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(formatDateMexico(g.fecha || g.createdAt))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.cliente || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.viaje?.lugarVisita || g.viaje?.destino || 'N/A')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(TIPOS_GASTO[g.tipo]?.label || g.tipo)}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.folioFactura || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.razonSocial || '-')}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(g.monto))}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: center; ${esFacturable ? 'color: #059669; font-weight: bold;' : 'color: #dc2626; font-weight: bold;'}">${esFacturable ? 'SÍ' : 'NO'}</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px;">${escape(g.comentarios || '')}</td>
-            </tr>
-        `;
-        });
-
-        html += `
-            <tr style="background-color: #e5e7eb; font-weight: bold;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">TOTALES:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #059669;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-            <tr style="background-color: #e5e7eb; font-weight: bold; color: #dc2626;">
-                <td colspan="6" style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">Total No Facturable:</td>
-                <td style="border: 1px solid #d1d5db; padding: 10px; text-align: right;">${escape(formatMoney(total - totalFacturable))}</td>
-                <td colspan="2" style="border: 1px solid #d1d5db; padding: 10px;"></td>
-            </tr>
-        </tbody>
-    </table>
-    
-    <div style="margin-top: 20px; text-align: center; color: #6b7280; font-size: 11px; font-family: Arial, sans-serif;">
-        <p><strong>Documento generado por 3P ViajesPro v5.0</strong></p>
-        <p>Este reporte es un documento oficial de 3P SA DE CV</p>
-        <p>Fecha y hora: ${escape(formatDateTimeMexico(new Date().toISOString()))}</p>
-    </div>
-</body>
-</html>
-        `;
-
-        const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-        resolve(blob);
+    // 1. Generar el archivo Excel en memoria
+    const data = [];
+    data.push([
+        'Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura',
+        'Razón Social', 'Total', 'Facturable', 'Comentarios'
+    ]);
+    gastos.forEach(g => {
+        data.push([
+            formatDateMexico(g.fecha || g.createdAt),
+            g.viaje?.cliente || 'N/A',
+            g.viaje?.lugarVisita || g.viaje?.destino || 'N/A',
+            TIPOS_GASTO[g.tipo]?.label || g.tipo,
+            g.folioFactura || '-',
+            g.razonSocial || '-',
+            g.monto,
+            g.esFacturable !== false ? 'SÍ' : 'NO',
+            g.comentarios || ''
+        ]);
     });
+    data.push([]);
+    data.push(['TOTALES', '', '', '', '', '', total, '', '']);
+    data.push(['Total Facturable', '', '', '', '', '', totalFacturable, '', '']);
+    data.push(['Total No Facturable', '', '', '', '', '', total - totalFacturable, '', '']);
 
-    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xls`, excelBlob);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [
+        { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 },
+        { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+
+    // Convertir libro a blob
+    const excelBlob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], 
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    zip.file(`Reporte_${fechaInicio}_a_${fechaFin}.xlsx`, excelBlob);
 
     // 2. Agregar carpeta de facturas con fotos
     const facturasFolder = zip.folder('facturas_y_fotos');
 
-    // Recorrer todos los gastos y agregar sus fotos
     let fotoIndex = 1;
     for (const gasto of gastos) {
         if (gasto.fotos && gasto.fotos.length > 0) {
-            // Determinar nombre de archivo: folio (si existe) + viaje + número
             const folio = gasto.folioFactura ? gasto.folioFactura : 'sin_folio';
             const viajeNombre = (gasto.viaje?.cliente || 'viaje') + '_' + (gasto.viaje?.destino || 'desconocido');
-            // Limpiar caracteres no válidos para nombres de archivo
             const nombreBase = `${folio}_${viajeNombre}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
 
             gasto.fotos.forEach((fotoData, idx) => {
-                // fotoData es un base64 data URL
-                const base64Data = fotoData.split(',')[1]; // Quitar el prefijo "data:image/png;base64,"
+                const base64Data = fotoData.split(',')[1];
                 if (base64Data) {
                     const nombreArchivo = `${nombreBase}_${idx + 1}.png`;
                     facturasFolder.file(nombreArchivo, base64Data, { base64: true });
@@ -2048,7 +1859,7 @@ window.eliminarGasto = eliminarGasto;
 window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
-window.exportCorteCompleto = generarCorteCompleto; // NUEVO
+window.exportCorteCompleto = generarCorteCompleto;
 window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
