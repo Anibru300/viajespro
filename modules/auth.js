@@ -47,46 +47,44 @@ class AuthService {
         });
     }
 
-    // Login de vendedor (con email) o admin
-    async login(email, password, remember = false) {
-        try {
-            // Verificar si es admin primero
-            if (email === 'admin' || email === ADMIN_CONFIG.email) {
-                if (password === ADMIN_CONFIG.password) {
-                    this.isAdmin = true;
-                    this.currentVendor = { 
-                        name: 'Administrador', 
-                        email: ADMIN_CONFIG.email,
-                        role: 'admin',
-                        zone: 'Todas'
-                    };
-                    return { success: true, isAdmin: true };
-                }
-                throw new Error('Credenciales de administrador incorrectas');
-            }
-
-            // Login normal con Firebase Auth
-            // Convertir username a email si es necesario
-            const userEmail = email.includes('@') ? email : `${email}@3p-vendedor.com`;
-            
-            const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
-            this.currentUser = userCredential.user;
-            
-            // Cargar datos del vendedor desde Firestore
-            await this.loadVendorData(this.currentUser.uid);
-            
-            // Guardar sesión en localStorage si remember
-            if (remember) {
-                localStorage.setItem('viajespro_remember', 'true');
-            }
-            
-            return { success: true, isAdmin: false, vendor: this.currentVendor };
-        } catch (error) {
-            console.error('Error en login:', error);
-            throw this.translateAuthError(error);
+   async login(email, password, remember = false) {
+    try {
+        // Determinar el email real para Firebase Auth
+        let userEmail = email;
+        if (email === 'admin') {
+            userEmail = 'admin@3p.com'; // Ajusta si tu admin tiene otro email
+        } else if (!email.includes('@')) {
+            userEmail = `${email}@3p-vendedor.com`;
         }
-    }
+        
+        // Autenticar con Firebase Auth
+        const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+        this.currentUser = userCredential.user;
 
+        // Verificar si es admin (existe en colección administradores)
+        const adminDoc = await getDoc(doc(db, 'administradores', this.currentUser.uid));
+        if (adminDoc.exists()) {
+            this.isAdmin = true;
+            this.currentVendor = {
+                name: 'Administrador',
+                email: this.currentUser.email,
+                role: 'admin',
+                zone: 'Todas'
+            };
+            return { success: true, isAdmin: true };
+        } else {
+            // Es vendedor: cargar datos desde Firestore usando su UID
+            await this.loadVendorData(this.currentUser.uid);
+            if (!this.currentVendor) {
+                throw new Error('Vendedor no encontrado en Firestore');
+            }
+            return { success: true, isAdmin: false, vendor: this.currentVendor };
+        }
+    } catch (error) {
+        console.error('Error en login:', error);
+        throw this.translateAuthError(error);
+    }
+}
     // Cargar datos del vendedor desde Firestore
     async loadVendorData(uid) {
         try {
