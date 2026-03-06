@@ -3,7 +3,7 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 // Crear vendedor
-exports.createVendor = functions.https.onCall(async (data, context) => {
+exports.createVendor = functions.region('us-central1').https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
   const adminUid = context.auth.uid;
   const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
@@ -27,7 +27,7 @@ exports.createVendor = functions.https.onCall(async (data, context) => {
 });
 
 // Actualizar vendedor
-exports.updateVendor = functions.https.onCall(async (data, context) => {
+exports.updateVendor = functions.region('us-central1').https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
   const adminUid = context.auth.uid;
   const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
@@ -48,7 +48,7 @@ exports.updateVendor = functions.https.onCall(async (data, context) => {
 });
 
 // Eliminar vendedor
-exports.deleteVendor = functions.https.onCall(async (data, context) => {
+exports.deleteVendor = functions.region('us-central1').https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
   const adminUid = context.auth.uid;
   const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();

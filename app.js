@@ -11,9 +11,32 @@ import { app } from './firebase-config.js';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 
 // Inicializar Functions (región us-central1 donde están desplegadas las Cloud Functions)
+import { auth } from './firebase-config.js';
 const functions = getFunctions(app, 'us-central1');
 // Descomentar para desarrollo local con emulador:
 // connectFunctionsEmulator(functions, "localhost", 5001);
+
+// Helper para llamar Cloud Functions con autenticación asegurada
+async function callWithAuth(functionName, data) {
+    // Verificar que hay un usuario autenticado
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('No hay usuario autenticado. Inicia sesión nuevamente.');
+    }
+    
+    // Forzar refresh del token para asegurar que está vigente
+    try {
+        await currentUser.getIdToken(true);
+        debug(`Token refrescado para llamada a ${functionName}`);
+    } catch (tokenError) {
+        debug('Error refrescando token:', tokenError);
+        throw new Error('Error al verificar sesión. Inicia sesión nuevamente.');
+    }
+    
+    // Hacer la llamada
+    const callable = httpsCallable(functions, functionName);
+    return callable(data);
+}
 
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
@@ -470,11 +493,9 @@ async function registerVendor() {
     
     try {
         // Llamar a la Cloud Function
-        const createVendorFunction = httpsCallable(functions, 'createVendor');
-        
         debug('Llamando Cloud Function createVendor:', { name, username, email, zone });
         
-        const result = await createVendorFunction({
+        const result = await callWithAuth('createVendor', {
             name: name,
             username: username,
             password: password,
@@ -637,8 +658,6 @@ async function saveVendorChanges() {
         }
         
         // Llamar a la Cloud Function
-        const updateVendorFunction = httpsCallable(functions, 'updateVendor');
-        
         debug('Llamando Cloud Function updateVendor para UID:', vendor.uid || id);
         
         const updateData = {
@@ -658,7 +677,7 @@ async function saveVendorChanges() {
             return;
         }
         
-        await updateVendorFunction(updateData);
+        await callWithAuth('updateVendor', updateData);
         
         closeModal('editar-vendedor');
         showToast('✅ Vendedor actualizado', 'success');
@@ -697,11 +716,9 @@ async function deleteVendor(username, btnElement) {
         if (btn) setLoading(btn, true);
         
         // Llamar a la Cloud Function
-        const deleteVendorFunction = httpsCallable(functions, 'deleteVendor');
-        
         debug('Llamando Cloud Function deleteVendor para UID:', vendor.uid || username);
         
-        await deleteVendorFunction({
+        await callWithAuth('deleteVendor', {
             uid: vendor.uid || username
         });
         
