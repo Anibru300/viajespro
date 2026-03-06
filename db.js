@@ -1,99 +1,97 @@
 /**
- * 3P VIAJESPRO - Database Module v5.0 (Firestore)
+ * 3P VIAJESPRO - Database Module v5.1 (Compatibilidad hacia atrás)
+ * Ahora usa los nuevos módulos modularizados
  */
 
-console.log('🚀 db.js v5.0 (Firestore) cargando...');
+console.log('🚀 db.js v5.1 cargando...');
 
-import { 
-    collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, where 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { db } from './firebase-config.js'; // Asegúrate de que firebase-config.js exporte db
+import databaseService from './modules/database.js';
 
+// Mantener compatibilidad con código existente
+// Esta clase envuelve el nuevo servicio con la API antigua
 class ViajesProDB {
     constructor() {
-        this.initialized = true; // Firestore ya está listo
+        this.service = databaseService;
+        this.initialized = true;
     }
 
     async init() {
-        console.log('✅ Firestore listo (modo online/offline)');
+        console.log('✅ DB Service listo');
         return true;
     }
 
-    // Agregar un documento con ID personalizado
+    // API antigua - delega al nuevo servicio
     async add(collectionName, data) {
-        const docRef = doc(db, collectionName, data.id);
-        const dataToSave = {
-            ...data,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        await setDoc(docRef, dataToSave);
-        console.log(`💾 Guardado en Firestore: ${collectionName}/${data.id}`);
-        return dataToSave;
+        return this.service.add(collectionName, data, data.id);
     }
 
-    // Obtener un documento por ID
     async get(collectionName, id) {
-        const docRef = doc(db, collectionName, id);
-        const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data() : null;
+        return this.service.get(collectionName, id);
     }
 
-    // Obtener todos los documentos de una colección
     async getAll(collectionName) {
-        const querySnapshot = await getDocs(collection(db, collectionName));
-        const results = [];
-        querySnapshot.forEach((doc) => {
-            results.push(doc.data());
-        });
-        return results;
+        const result = await this.service.query(collectionName, []);
+        return result.data;
     }
 
-    // Actualizar un documento (merge)
     async update(collectionName, data) {
-        const docRef = doc(db, collectionName, data.id);
-        const dataToUpdate = {
-            ...data,
-            updatedAt: new Date().toISOString()
-        };
-        await setDoc(docRef, dataToUpdate, { merge: true });
-        console.log(`💾 Actualizado en Firestore: ${collectionName}/${data.id}`);
-        return dataToUpdate;
+        return this.service.update(collectionName, data.id, data);
     }
 
-    // Eliminar un documento
     async delete(collectionName, id) {
-        const docRef = doc(db, collectionName, id);
-        await deleteDoc(docRef);
-        console.log(`🗑️ Eliminado de Firestore: ${collectionName}/${id}`);
-        return id;
+        return this.service.delete(collectionName, id);
     }
 
-    // Consulta por índice (campo igual a valor)
     async queryByIndex(collectionName, field, value) {
-        const q = query(collection(db, collectionName), where(field, '==', value));
-        const querySnapshot = await getDocs(q);
-        const results = [];
-        querySnapshot.forEach((doc) => {
-            results.push(doc.data());
-        });
-        return results;
+        const result = await this.service.query(
+            collectionName, 
+            [where(field, '==', value)]
+        );
+        return result.data;
     }
 
-    // Métodos específicos
-    getViajesByVendedor(vendedorId) {
-        return this.queryByIndex('viajes', 'vendedorId', vendedorId);
+    // Métodos específicos (mantener API antigua)
+    getViajesByVendedor(vendedorId, options = {}) {
+        return this.service.getViajesByVendedor(vendedorId, options)
+            .then(r => r.data);
     }
 
-    getGastosByViaje(viajeId) {
-        return this.queryByIndex('gastos', 'viajeId', viajeId);
+    getGastosByViaje(viajeId, options = {}) {
+        return this.service.getGastosByViaje(viajeId, options)
+            .then(r => r.data);
+    }
+
+    // Nuevos métodos (API v5.1)
+    searchGastos(vendedorId, searchText) {
+        return this.service.searchGastos(vendedorId, searchText)
+            .then(r => r.data);
+    }
+
+    getDashboardStats(vendedorId, dias = 30) {
+        return this.service.getDashboardStats(vendedorId, dias);
+    }
+
+    deleteViajeCompleto(viajeId) {
+        return this.service.deleteViajeCompleto(viajeId);
+    }
+
+    // Utilidades
+    generateId(prefix = 'doc') {
+        return this.service.generateId(prefix);
     }
 }
 
+// Importar where para queryByIndex
+import { where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// Singleton global (mantener compatibilidad)
 const dbInstance = new ViajesProDB();
 window.db = dbInstance;
 
-// Inicializar al cargar la página
+// También exportar el nuevo servicio para código nuevo
+export { databaseService };
+
+// Inicializar
 document.addEventListener('DOMContentLoaded', () => {
     dbInstance.init().catch(err => console.error('❌ Error al inicializar db:', err));
 });

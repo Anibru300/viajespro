@@ -1,6 +1,8 @@
 // firebase-config.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAzkggisrJ61xrIEGIqQS4j7Aab0e_XPEA",
@@ -14,8 +16,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
 
-// Habilitar persistencia offline
+// Habilitar persistencia offline para Firestore
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
         console.warn('Persistencia offline no disponible: múltiples pestañas abiertas');
@@ -24,4 +28,9 @@ enableIndexedDbPersistence(db).catch((err) => {
     }
 });
 
-export { db };
+// Habilitar persistencia local para Auth (recordar sesión)
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('Error al configurar persistencia de auth:', err);
+});
+
+export { db, auth, storage };

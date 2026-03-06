@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#dc2626" id="theme-color-meta">
-    <title>3P - Control de Gastos v5.1</title>
+    <meta name="theme-color" content="#dc2626">
+    <title>3P - Control de Gastos v5</title>
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -22,7 +22,6 @@
     
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./ux-improvements.css">
-    <link rel="stylesheet" href="./modules/darkmode.css">
     
     <!-- Prevenir caché -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -230,18 +229,13 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button class="btn btn-icon" onclick="toggleDarkMode()" title="Modo oscuro/claro" style="margin-right: 0.5rem;">🌙</button>
                 <span id="connection-status" class="status-indicator online">●</span>
                 <button class="btn btn-icon" onclick="logout()" title="Cerrar sesión">🚪</button>
             </div>
         </header>
         
         <nav class="bottom-nav">
-            <button class="nav-item active" onclick="showSection('dashboard')" data-section="dashboard">
-                <span class="nav-icon">🏠</span>
-                <span class="nav-label">Inicio</span>
-            </button>
-            <button class="nav-item" onclick="showSection('viajes')" data-section="viajes">
+            <button class="nav-item active" onclick="showSection('viajes')" data-section="viajes">
                 <span class="nav-icon">🚗</span>
                 <span class="nav-label">Viajes</span>
             </button>
@@ -260,44 +254,8 @@
         </nav>
         
         <main class="app-content with-bottom-nav">
-            <!-- Dashboard Section -->
-            <section id="dashboard-section" class="section active">
-                <div class="section-header">
-                    <h2>Resumen</h2>
-                </div>
-                
-                <div id="dashboard-stats" class="dashboard-stats">
-                    <div class="loading-spinner">Cargando...</div>
-                </div>
-                
-                <div class="card">
-                    <h3>Distribución de Gastos (30 días)</h3>
-                    <div class="chart-container small" style="height: 200px;">
-                        <canvas id="dashboard-chart"></canvas>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h3>Accesos Rápidos</h3>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
-                        <button class="btn btn-primary btn-large" onclick="showSection('captura')">
-                            📸 Nuevo Gasto
-                        </button>
-                        <button class="btn btn-secondary btn-large" onclick="openModal('nuevo-viaje')">
-                            🚗 Nuevo Viaje
-                        </button>
-                        <button class="btn btn-secondary btn-large" onclick="showSection('gastos')">
-                            💰 Ver Gastos
-                        </button>
-                        <button class="btn btn-secondary btn-large" onclick="showSection('reportes')">
-                            📊 Reportes
-                        </button>
-                    </div>
-                </div>
-            </section>
-            
             <!-- Viajes Section -->
-            <section id="viajes-section" class="section">
+            <section id="viajes-section" class="section active">
                 <div class="section-header">
                     <h2>Mis Viajes</h2>
                     <button class="btn btn-primary btn-fab" onclick="openModal('nuevo-viaje')">+</button>
@@ -437,10 +395,6 @@
                             <option value="">Todos los viajes</option>
                         </select>
                     </div>
-                </div>
-                
-                <div class="search-container">
-                    <input type="text" id="search-gastos" placeholder="Buscar por lugar, folio, concepto...">
                 </div>
                 
                 <div class="gastos-resumen" id="gastos-resumen"></div>
@@ -731,14 +685,10 @@
         }
     </script>
 
-    <!-- Firebase Config -->
     <script type="module" src="./firebase-config.js"></script>
-    <!-- Database (compatibility layer) -->
-    <script type="module" src="./db.js?v=5.1"></script>
-    <!-- Main App v5.1 -->
-    <script type="module" src="./app.js?v=5.1"></script>
-    <!-- UX Improvements -->
-    <script src="./ux-improvements.js?v=5.1"></script>
+    <script type="module" src="./db.js?v=5"></script>
+    <script type="module" src="./app.js?v=5"></script>
+    <script src="./ux-improvements.js?v=5"></script>
     
     <!-- Service Worker con detección de actualizaciones -->
     <script>
