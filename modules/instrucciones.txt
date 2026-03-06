@@ -1,0 +1,96 @@
+Kimi, necesito tu ayuda urgente para corregir un error en las Cloud Functions.
+
+Cuando ejecuto `firebase deploy --only functions` desde la raíz del proyecto, obtengo este error:
+RangeError: Maximum call stack size exceeded
+at extractStack (C:\Users\Importaciones-3P\Desktop\APP VIATICOS\viajespro\functions\node_modules\firebase-functions\lib\runtime\loader.js:30:22)
+at extractStack (C:\Users\Importaciones-3P\Desktop\APP VIATICOS\viajespro\functions\node_modules\firebase-functions\lib\runtime\loader.js:55:4)
+... (se repite muchas veces)
+Error: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error
+
+text
+
+El problema está en `functions/index.js`. Por favor:
+
+1. **Lee el archivo `functions/index.js`** para ver su contenido actual.
+2. **Identifica la causa del error**. Las causas más comunes son:
+   - Una función que se llama a sí misma recursivamente (sin caso base).
+   - Exportación incorrecta o dependencia circular.
+   - Error de sintaxis (llaves, paréntesis, comas, etc.).
+   - Uso de `import` en lugar de `require` (en Node.js CommonJS se usa `require`).
+3. **Compara con el código correcto** que debería tener tres funciones: `createVendor`, `updateVendor` y `deleteVendor`. Aquí te dejo la versión correcta de referencia (cópiala si es necesario):
+
+```javascript
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+admin.initializeApp();
+
+// Crear vendedor
+exports.createVendor = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
+  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
+
+  const { email, password, name, username, zone } = data;
+  if (!email || !password || !name || !username) {
+    throw new functions.https.HttpsError('invalid-argument', 'Faltan datos obligatorios');
+  }
+
+  try {
+    const user = await admin.auth().createUser({ email, password, displayName: name });
+    await admin.firestore().collection('vendedores').doc(user.uid).set({
+      name, username, email, zone: zone || 'Bajío', status: 'active',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { success: true, uid: user.uid };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Actualizar vendedor
+exports.updateVendor = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
+  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
+
+  const { uid, name, username, zone, status } = data;
+  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'Falta UID');
+
+  const updateData = {};
+  if (name) updateData.name = name;
+  if (username) updateData.username = username;
+  if (zone) updateData.zone = zone;
+  if (status) updateData.status = status;
+  updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+  await admin.firestore().collection('vendedores').doc(uid).update(updateData);
+  return { success: true };
+});
+
+// Eliminar vendedor
+exports.deleteVendor = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
+  const adminUid = context.auth.uid;
+  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
+  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
+
+  const { uid } = data;
+  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'Falta UID');
+
+  try {
+    await admin.auth().deleteUser(uid);
+    await admin.firestore().collection('vendedores').doc(uid).delete();
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+Corrige los errores que encuentres en el archivo actual. Si es necesario, reemplaza todo el contenido con la versión correcta.
+
+Muéstrame los cambios que realizaste (puedes usar un diff o explicarlos brevemente).
+
+Confirma que el archivo ahora no tiene errores de sintaxis (puedes probar ejecutando node functions/index.js en la terminal local).
+
+Una vez que hayas corregido el archivo, volveré a intentar el despliegue con firebase deploy --only functions. ¡Gracias!

@@ -1,6 +1,7 @@
 /**
  * 3P VIAJESPRO - Módulo de Autenticación v5.1
  * Seguridad mejorada con Firebase Auth
+ * Ahora el admin también se autentica con Firebase y se valida contra la colección "administradores"
  */
 
 import { auth, db } from '../firebase-config.js';
@@ -13,12 +14,6 @@ import {
     reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-// Admin credentials (en producción usar Cloud Functions)
-const ADMIN_CONFIG = {
-    email: 'admin@3p.com',
-    password: 'admin123'  // En producción, esto debe manejarse diferente
-};
 
 class AuthService {
     constructor() {
@@ -34,8 +29,26 @@ class AuthService {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     this.currentUser = user;
-                    await this.loadVendorData(user.uid);
-                    this.notifyListeners('auth_changed', { user: this.currentUser, vendor: this.currentVendor, isAdmin: this.isAdmin });
+                    // Verificar si es admin (existe en colección administradores)
+                    const adminDoc = await getDoc(doc(db, 'administradores', user.uid));
+                    this.isAdmin = adminDoc.exists();
+                    
+                    if (this.isAdmin) {
+                        this.currentVendor = {
+                            name: 'Administrador',
+                            email: user.email,
+                            role: 'admin',
+                            zone: 'Todas'
+                        };
+                    } else {
+                        await this.loadVendorData(user.uid);
+                    }
+                    
+                    this.notifyListeners('auth_changed', { 
+                        user: this.currentUser, 
+                        vendor: this.currentVendor, 
+                        isAdmin: this.isAdmin 
+                    });
                 } else {
                     this.currentUser = null;
                     this.currentVendor = null;
@@ -47,47 +60,49 @@ class AuthService {
         });
     }
 
-    // Login de vendedor (con email) o admin
+    // Login unificado: admin y vendedores
     async login(email, password, remember = false) {
         try {
-            // Verificar si es admin primero
-            if (email === 'admin' || email === ADMIN_CONFIG.email) {
-                if (password === ADMIN_CONFIG.password) {
-                    this.isAdmin = true;
-                    this.currentVendor = { 
-                        name: 'Administrador', 
-                        email: ADMIN_CONFIG.email,
-                        role: 'admin',
-                        zone: 'Todas'
-                    };
-                    return { success: true, isAdmin: true };
-                }
-                throw new Error('Credenciales de administrador incorrectas');
+            // Determinar el email real para Firebase Auth
+            let userEmail = email;
+            // Si es 'admin', usamos el email que definimos para el admin (debe coincidir con el de Authentication)
+            if (email === 'admin') {
+                userEmail = 'admin@3p.com'; // Ajusta este email según el que usaste en Authentication
+            } else if (!email.includes('@')) {
+                // Si no tiene @, asumimos que es un nombre de usuario de vendedor y le agregamos el dominio
+                userEmail = `${email}@3p-vendedor.com`;
             }
-
-            // Login normal con Firebase Auth
-            // Convertir username a email si es necesario
-            const userEmail = email.includes('@') ? email : `${email}@3p-vendedor.com`;
             
+            // Autenticar con Firebase Auth
             const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
             this.currentUser = userCredential.user;
-            
-            // Cargar datos del vendedor desde Firestore
-            await this.loadVendorData(this.currentUser.uid);
-            
-            // Guardar sesión en localStorage si remember
-            if (remember) {
-                localStorage.setItem('viajespro_remember', 'true');
+
+            // Verificar si es admin (existe en colección administradores)
+            const adminDoc = await getDoc(doc(db, 'administradores', this.currentUser.uid));
+            if (adminDoc.exists()) {
+                this.isAdmin = true;
+                this.currentVendor = {
+                    name: 'Administrador',
+                    email: this.currentUser.email,
+                    role: 'admin',
+                    zone: 'Todas'
+                };
+                return { success: true, isAdmin: true };
+            } else {
+                // Es vendedor: cargar datos desde Firestore usando su UID
+                await this.loadVendorData(this.currentUser.uid);
+                if (!this.currentVendor) {
+                    throw new Error('Vendedor no encontrado en Firestore');
+                }
+                return { success: true, isAdmin: false, vendor: this.currentVendor };
             }
-            
-            return { success: true, isAdmin: false, vendor: this.currentVendor };
         } catch (error) {
             console.error('Error en login:', error);
             throw this.translateAuthError(error);
         }
     }
 
-    // Cargar datos del vendedor desde Firestore
+    // Cargar datos del vendedor desde Firestore usando su UID
     async loadVendorData(uid) {
         try {
             const vendorDoc = await getDoc(doc(db, 'vendedores', uid));
@@ -95,82 +110,13 @@ class AuthService {
                 this.currentVendor = vendorDoc.data();
                 this.currentVendor.uid = uid;
             } else {
-                // Crear perfil básico si no existe
-                this.currentVendor = {
-                    uid: uid,
-                    email: this.currentUser.email,
-                    name: this.currentUser.displayName || 'Vendedor',
-                    zone: 'Bajío',
-                    status: 'active',
-                    createdAt: new Date().toISOString()
-                };
+                // Si no existe, podría ser un error de configuración
+                console.warn('Vendedor no encontrado en Firestore:', uid);
+                this.currentVendor = null;
             }
         } catch (error) {
             console.error('Error cargando datos del vendedor:', error);
             this.currentVendor = null;
-        }
-    }
-
-    // Registrar nuevo vendedor (solo admin)
-    async registerVendor(vendorData, password) {
-        try {
-            // En una implementación real, esto debería ser una Cloud Function
-            // para evitar exponcer la creación de usuarios
-            const { email, name, zone } = vendorData;
-            
-            // Crear documento del vendedor (el auth se crearía por separado o por admin SDK)
-            const vendorRef = doc(db, 'vendedores', email.replace('@3p-vendedor.com', ''));
-            await setDoc(vendorRef, {
-                ...vendorData,
-                createdAt: new Date().toISOString(),
-                status: 'active'
-            });
-            
-            return { success: true };
-        } catch (error) {
-            console.error('Error registrando vendedor:', error);
-            throw error;
-        }
-    }
-
-    // Actualizar perfil del vendedor
-    async updateProfile(updates) {
-        if (!this.currentUser) throw new Error('No hay sesión activa');
-        
-        try {
-            const vendorRef = doc(db, 'vendedores', this.currentUser.uid);
-            await updateDoc(vendorRef, {
-                ...updates,
-                updatedAt: new Date().toISOString()
-            });
-            
-            // Actualizar local
-            this.currentVendor = { ...this.currentVendor, ...updates };
-            return { success: true };
-        } catch (error) {
-            console.error('Error actualizando perfil:', error);
-            throw error;
-        }
-    }
-
-    // Cambiar contraseña
-    async changePassword(currentPassword, newPassword) {
-        if (!this.currentUser) throw new Error('No hay sesión activa');
-        
-        try {
-            // Reautenticar
-            const credential = EmailAuthProvider.credential(
-                this.currentUser.email, 
-                currentPassword
-            );
-            await reauthenticateWithCredential(this.currentUser, credential);
-            
-            // Cambiar contraseña
-            await updatePassword(this.currentUser, newPassword);
-            return { success: true };
-        } catch (error) {
-            console.error('Error cambiando contraseña:', error);
-            throw this.translateAuthError(error);
         }
     }
 
@@ -191,7 +137,7 @@ class AuthService {
 
     // Verificar si hay sesión activa
     isAuthenticated() {
-        return !!this.currentUser || this.isAdmin;
+        return !!this.currentUser;
     }
 
     // Obtener usuario actual
@@ -237,6 +183,31 @@ class AuthService {
         };
         
         return new Error(errorMessages[error.code] || error.message || 'Error de autenticación');
+    }
+
+    // Métodos para cambio de contraseña (si se necesitan)
+    async changePassword(currentPassword, newPassword) {
+        if (!this.currentUser) throw new Error('No hay sesión activa');
+        
+        try {
+            const credential = EmailAuthProvider.credential(
+                this.currentUser.email, 
+                currentPassword
+            );
+            await reauthenticateWithCredential(this.currentUser, credential);
+            await updatePassword(this.currentUser, newPassword);
+            return { success: true };
+        } catch (error) {
+            console.error('Error cambiando contraseña:', error);
+            throw this.translateAuthError(error);
+        }
+    }
+
+    // Registrar nuevo vendedor (solo admin) – Nota: esto solo crea el documento en Firestore,
+    // el usuario en Authentication debe crearse por separado (manual o mediante Cloud Function)
+    async registerVendor(vendorData, password) {
+        // Este método podría implementarse en el futuro con una Cloud Function
+        throw new Error('El registro de vendedores debe hacerse manualmente desde Firebase Console o mediante Cloud Function');
     }
 }
 

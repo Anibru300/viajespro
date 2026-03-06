@@ -33,4 +33,4 @@ setPersistence(auth, browserLocalPersistence).catch((err) => {
     console.warn('Error al configurar persistencia de auth:', err);
 });
 
-export { db, auth, storage };
+export { app, db, auth, storage };

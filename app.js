@@ -7,6 +7,13 @@
 import authService from './modules/auth.js';
 import storageService from './modules/storage.js';
 import utils from './modules/utils.js';
+import { app } from './firebase-config.js';
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
+
+// Inicializar Functions
+const functions = getFunctions(app);
+// Descomentar para desarrollo local con emulador:
+// connectFunctionsEmulator(functions, "localhost", 5001);
 
 // ===== CONFIGURACIÓN =====
 const CONFIG = {
@@ -413,9 +420,9 @@ function showAdminPanel() {
     loadVendorsList();
 }
 
-// ===== REGISTRO VENDEDOR (admin) =====
+// ===== REGISTRO VENDEDOR (admin) - Usa Cloud Function =====
 async function registerVendor() {
-    debug('=== REGISTRO DE VENDEDOR ===');
+    debug('=== REGISTRO DE VENDEDOR VIA CLOUD FUNCTION ===');
     
     const nameInput = document.getElementById('new-vendor-name');
     const usernameInput = document.getElementById('new-vendor-username');
@@ -423,6 +430,7 @@ async function registerVendor() {
     const emailInput = document.getElementById('new-vendor-email');
     const zoneInput = document.getElementById('new-vendor-zone');
     const errorDiv = document.getElementById('register-error');
+    const btn = document.querySelector('#admin-tab-vendedores .btn-primary');
     
     if (!nameInput || !usernameInput || !passwordInput) {
         console.error('No se encontraron campos del formulario');
@@ -444,6 +452,13 @@ async function registerVendor() {
         return;
     }
     
+    if (password.length < 6) {
+        const msg = 'La contraseña debe tener al menos 6 caracteres';
+        if (errorDiv) errorDiv.textContent = msg;
+        showToast(msg, 'warning');
+        return;
+    }
+    
     if (!/^[a-z0-9.]+$/.test(username)) {
         const msg = 'Usuario solo puede contener letras minúsculas, números y puntos';
         if (errorDiv) errorDiv.textContent = msg;
@@ -451,34 +466,27 @@ async function registerVendor() {
         return;
     }
     
+    setLoading(btn, true);
+    
     try {
-        debug('Verificando si existe:', username);
-        const existing = await db.get('vendedores', username);
+        // Llamar a la Cloud Function
+        const createVendorFunction = httpsCallable(functions, 'createVendor');
         
-        if (existing) {
-            const msg = 'Este nombre de usuario ya existe';
-            if (errorDiv) errorDiv.textContent = msg;
-            showToast(msg, 'warning');
-            return;
-        }
+        debug('Llamando Cloud Function createVendor:', { name, username, email, zone });
         
-        const vendor = {
-            id: username,
+        const result = await createVendorFunction({
             name: name,
             username: username,
-            // Ya no guardamos contraseña en Firestore, se maneja en Auth
-            email: email || `${username}@3p-vendedor.com`,
-            zone: zone,
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            createdBy: 'admin'
-        };
+            password: password,
+            email: email || undefined,  // Si está vacío, la función usará el default
+            zone: zone
+        });
         
-        debug('Guardando vendedor:', vendor);
-        await db.add('vendedores', vendor);
+        debug('Respuesta Cloud Function:', result.data);
         
         showToast('✅ Vendedor registrado exitosamente', 'success');
         
+        // Limpiar formulario
         nameInput.value = '';
         usernameInput.value = '';
         passwordInput.value = '';
@@ -488,15 +496,33 @@ async function registerVendor() {
         
     } catch (error) {
         debug('Error al registrar:', error);
-        const msg = 'Error al registrar: ' + error.message;
-        if (errorDiv) errorDiv.textContent = msg;
-        showToast(msg, 'error');
+        
+        // Traducir errores comunes de Cloud Functions
+        let errorMsg = 'Error al registrar vendedor';
+        
+        if (error.code === 'functions/permission-denied' || error.code === 'functions/unauthenticated') {
+            errorMsg = 'No tienes permisos para crear vendedores. Inicia sesión nuevamente.';
+        } else if (error.code === 'functions/already-exists') {
+            errorMsg = 'Ya existe un vendedor con este nombre de usuario o email';
+        } else if (error.code === 'functions/invalid-argument') {
+            errorMsg = error.message || 'Datos inválidos';
+        } else if (error.details?.message) {
+            errorMsg = error.details.message;
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+        
+        if (errorDiv) errorDiv.textContent = errorMsg;
+        showToast(errorMsg, 'error');
+    } finally {
+        setLoading(btn, false);
     }
 }
 
 // ===== CARGAR VENDEDORES (admin) =====
 let lastVendorsLoad = 0;
 const VENDORS_LOAD_COOLDOWN = 2000;
+let vendorsCache = []; // Cache de vendedores para búsquedas
 
 async function loadVendorsList() {
     const now = Date.now();
@@ -512,6 +538,9 @@ async function loadVendorsList() {
         const vendors = await db.getAll('vendedores');
         debug('Vendedores encontrados:', vendors.length);
         
+        // Guardar en cache con su UID
+        vendorsCache = vendors.map(v => ({ ...v, _docId: v.id }));
+        
         const container = document.getElementById('vendors-list');
         if (!container) return;
         
@@ -521,7 +550,7 @@ async function loadVendorsList() {
         }
         
         container.innerHTML = vendors.map(v => `
-            <div class="vendor-card" data-username="${v.username}">
+            <div class="vendor-card" data-uid="${v.uid || v.id}" data-username="${v.username}">
                 <div class="vendor-info">
                     <h4>${escapeHtml(v.name)}</h4>
                     <p>
@@ -530,7 +559,7 @@ async function loadVendorsList() {
                     </p>
                 </div>
                 <div class="vendor-actions">
-                    <button class="btn btn-small btn-primary" onclick="editVendor('${v.username}')">Editar</button>
+                    <button class="btn btn-small btn-primary" onclick="editVendorByUid('${v.uid || v.id}')">Editar</button>
                     <button class="btn btn-small btn-secondary" onclick="deleteVendor('${v.username}')">Eliminar</button>
                 </div>
             </div>
@@ -550,25 +579,36 @@ function filterVendors() {
     });
 }
 
-async function editVendor(username) {
+async function editVendorByUid(uid) {
     try {
-        const vendor = await db.get('vendedores', username);
+        const vendor = await db.get('vendedores', uid);
         if (!vendor) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
         
-        document.getElementById('edit-vendor-id').value = vendor.id;
+        document.getElementById('edit-vendor-id').value = uid;  // Usar el UID (doc ID)
         document.getElementById('edit-vendor-name').value = vendor.name;
         document.getElementById('edit-vendor-username').value = vendor.username;
         document.getElementById('edit-vendor-password').value = '';
         document.getElementById('edit-vendor-email').value = vendor.email || '';
-        document.getElementById('edit-vendor-zone').value = vendor.zone;
-        document.getElementById('edit-vendor-status').value = vendor.status;
+        document.getElementById('edit-vendor-zone').value = vendor.zone || 'Bajío';
+        document.getElementById('edit-vendor-status').value = vendor.status || 'active';
         
         openModal('editar-vendedor');
     } catch (error) {
+        debug('Error al cargar datos del vendedor:', error);
         showToast('Error al cargar datos', 'error');
+    }
+}
+
+// Función legacy para compatibilidad (busca por username en cache)
+async function editVendor(username) {
+    const vendor = vendorsCache.find(v => v.username === username);
+    if (vendor) {
+        editVendorByUid(vendor._docId);
+    } else {
+        showToast('Vendedor no encontrado', 'error');
     }
 }
 
@@ -585,36 +625,98 @@ async function saveVendorChanges() {
         return;
     }
 
+    const btn = document.querySelector('#editar-vendedor .btn-primary');
+    setLoading(btn, true);
+
     try {
+        // Obtener el vendedor para tener su UID
         const vendor = await db.get('vendedores', id);
         if (!vendor) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
         
-        vendor.name = name;
-        vendor.email = email;
-        vendor.zone = zone;
-        vendor.status = status;
-
-        await db.update('vendedores', vendor);
+        // Llamar a la Cloud Function
+        const updateVendorFunction = httpsCallable(functions, 'updateVendor');
+        
+        debug('Llamando Cloud Function updateVendor para UID:', vendor.uid || id);
+        
+        const updateData = {
+            uid: vendor.uid || id,
+            name: name,
+            email: email || undefined,
+            zone: zone,
+            status: status
+        };
+        
+        // Solo incluir password si se proporcionó uno nuevo
+        if (password && password.length >= 6) {
+            updateData.password = password;
+        } else if (password) {
+            showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+            setLoading(btn, false);
+            return;
+        }
+        
+        await updateVendorFunction(updateData);
+        
         closeModal('editar-vendedor');
         showToast('✅ Vendedor actualizado', 'success');
         loadVendorsList();
     } catch (error) {
-        showToast('Error al guardar: ' + error.message, 'error');
+        debug('Error al actualizar vendedor:', error);
+        
+        let errorMsg = 'Error al guardar';
+        if (error.code === 'functions/permission-denied') {
+            errorMsg = 'No tienes permisos para actualizar vendedores';
+        } else if (error.code === 'functions/invalid-argument') {
+            errorMsg = error.message || 'Datos inválidos';
+        } else if (error.details?.message) {
+            errorMsg = error.details.message;
+        }
+        
+        showToast(errorMsg, 'error');
+    } finally {
+        setLoading(btn, false);
     }
 }
 
 async function deleteVendor(username) {
-    if (!confirm(`¿Eliminar al vendedor ${username}?`)) return;
-    
+    // Primero necesitamos obtener el UID del vendedor
     try {
-        await db.delete('vendedores', username);
+        const vendor = await db.get('vendedores', username);
+        if (!vendor) {
+            showToast('Vendedor no encontrado', 'error');
+            return;
+        }
+        
+        if (!confirm(`¿Eliminar al vendedor ${vendor.name} (${username})?\n\nEsta acción eliminará tanto el usuario como todos sus datos.`)) return;
+        
+        const btn = event.target;
+        setLoading(btn, true);
+        
+        // Llamar a la Cloud Function
+        const deleteVendorFunction = httpsCallable(functions, 'deleteVendor');
+        
+        debug('Llamando Cloud Function deleteVendor para UID:', vendor.uid || username);
+        
+        await deleteVendorFunction({
+            uid: vendor.uid || username
+        });
+        
         showToast('✅ Vendedor eliminado', 'success');
         loadVendorsList();
     } catch (error) {
-        showToast('Error al eliminar', 'error');
+        debug('Error al eliminar vendedor:', error);
+        
+        let errorMsg = 'Error al eliminar vendedor';
+        if (error.code === 'functions/permission-denied') {
+            errorMsg = 'No tienes permisos para eliminar vendedores';
+        } else if (error.details?.message) {
+            errorMsg = error.details.message;
+        }
+        
+        showToast(errorMsg, 'error');
     }
 }
 
