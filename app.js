@@ -10,8 +10,8 @@ import utils from './modules/utils.js';
 import { app } from './firebase-config.js';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 
-// Inicializar Functions
-const functions = getFunctions(app);
+// Inicializar Functions (región us-central1 donde están desplegadas las Cloud Functions)
+const functions = getFunctions(app, 'us-central1');
 // Descomentar para desarrollo local con emulador:
 // connectFunctionsEmulator(functions, "localhost", 5001);
 
@@ -560,7 +560,7 @@ async function loadVendorsList() {
                 </div>
                 <div class="vendor-actions">
                     <button class="btn btn-small btn-primary" onclick="editVendorByUid('${v.uid || v.id}')">Editar</button>
-                    <button class="btn btn-small btn-secondary" onclick="deleteVendor('${v.username}')">Eliminar</button>
+                    <button class="btn btn-small btn-secondary" onclick="deleteVendor('${v.username}', this)">Eliminar</button>
                 </div>
             </div>
         `).join('');
@@ -681,8 +681,9 @@ async function saveVendorChanges() {
     }
 }
 
-async function deleteVendor(username) {
+async function deleteVendor(username, btnElement) {
     // Primero necesitamos obtener el UID del vendedor
+    let btn = null;
     try {
         const vendor = await db.get('vendedores', username);
         if (!vendor) {
@@ -692,8 +693,8 @@ async function deleteVendor(username) {
         
         if (!confirm(`¿Eliminar al vendedor ${vendor.name} (${username})?\n\nEsta acción eliminará tanto el usuario como todos sus datos.`)) return;
         
-        const btn = event.target;
-        setLoading(btn, true);
+        btn = btnElement || document.activeElement;
+        if (btn) setLoading(btn, true);
         
         // Llamar a la Cloud Function
         const deleteVendorFunction = httpsCallable(functions, 'deleteVendor');
@@ -712,11 +713,15 @@ async function deleteVendor(username) {
         let errorMsg = 'Error al eliminar vendedor';
         if (error.code === 'functions/permission-denied') {
             errorMsg = 'No tienes permisos para eliminar vendedores';
+        } else if (error.code === 'functions/unauthenticated') {
+            errorMsg = 'Debes iniciar sesión como administrador';
         } else if (error.details?.message) {
             errorMsg = error.details.message;
         }
         
         showToast(errorMsg, 'error');
+    } finally {
+        if (btn) setLoading(btn, false);
     }
 }
 

@@ -1,96 +1,26 @@
-Kimi, necesito tu ayuda urgente para corregir un error en las Cloud Functions.
+Kimi, necesito que revises y corrijas dos problemas:
 
-Cuando ejecuto `firebase deploy --only functions` desde la raíz del proyecto, obtengo este error:
-RangeError: Maximum call stack size exceeded
-at extractStack (C:\Users\Importaciones-3P\Desktop\APP VIATICOS\viajespro\functions\node_modules\firebase-functions\lib\runtime\loader.js:30:22)
-at extractStack (C:\Users\Importaciones-3P\Desktop\APP VIATICOS\viajespro\functions\node_modules\firebase-functions\lib\runtime\loader.js:55:4)
-... (se repite muchas veces)
-Error: Functions codebase could not be analyzed successfully. It may have a syntax or runtime error
+1. En app.js, la función deleteVendor está causando "Cannot read properties of undefined (reading 'target')". Por favor, corrige esa función para que use la Cloud Function deleteVendor correctamente.
 
-text
+2. Las llamadas a las Cloud Functions createVendor y deleteVendor fallan con error 401 (Debes iniciar sesión) a pesar de que el admin está autenticado. Por favor, verifica que la instancia de Functions esté correctamente inicializada con la app de Firebase que tiene la sesión activa. Si es necesario, modifica la inicialización de Functions en app.js para usar la app exportada de firebase-config.js y especifica la región 'us-central1'.
 
-El problema está en `functions/index.js`. Por favor:
+Aquí están las funciones actuales en app.js para referencia:
 
-1. **Lee el archivo `functions/index.js`** para ver su contenido actual.
-2. **Identifica la causa del error**. Las causas más comunes son:
-   - Una función que se llama a sí misma recursivamente (sin caso base).
-   - Exportación incorrecta o dependencia circular.
-   - Error de sintaxis (llaves, paréntesis, comas, etc.).
-   - Uso de `import` en lugar de `require` (en Node.js CommonJS se usa `require`).
-3. **Compara con el código correcto** que debería tener tres funciones: `createVendor`, `updateVendor` y `deleteVendor`. Aquí te dejo la versión correcta de referencia (cópiala si es necesario):
+// Función deleteVendor actual (con error)
+async function deleteVendor(username) {
+    if (!confirm(`¿Eliminar al vendedor ${username}?`)) return;
+    try {
+        await db.delete('vendedores', username);
+        showToast('✅ Vendedor eliminado', 'success');
+        loadVendorsList();
+    } catch (error) {
+        showToast('Error al eliminar', 'error');
+    }
+}
 
-```javascript
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-admin.initializeApp();
+// Necesita ser reemplazada por una que llame a la Cloud Function deleteVendor.
 
-// Crear vendedor
-exports.createVendor = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
-  const adminUid = context.auth.uid;
-  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
-  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
+// Inicialización de Functions actual (probablemente incorrecta)
+// (dime cómo está actualmente si puedes verla)
 
-  const { email, password, name, username, zone } = data;
-  if (!email || !password || !name || !username) {
-    throw new functions.https.HttpsError('invalid-argument', 'Faltan datos obligatorios');
-  }
-
-  try {
-    const user = await admin.auth().createUser({ email, password, displayName: name });
-    await admin.firestore().collection('vendedores').doc(user.uid).set({
-      name, username, email, zone: zone || 'Bajío', status: 'active',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    return { success: true, uid: user.uid };
-  } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
-  }
-});
-
-// Actualizar vendedor
-exports.updateVendor = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
-  const adminUid = context.auth.uid;
-  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
-  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
-
-  const { uid, name, username, zone, status } = data;
-  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'Falta UID');
-
-  const updateData = {};
-  if (name) updateData.name = name;
-  if (username) updateData.username = username;
-  if (zone) updateData.zone = zone;
-  if (status) updateData.status = status;
-  updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
-
-  await admin.firestore().collection('vendedores').doc(uid).update(updateData);
-  return { success: true };
-});
-
-// Eliminar vendedor
-exports.deleteVendor = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Debes iniciar sesión');
-  const adminUid = context.auth.uid;
-  const adminDoc = await admin.firestore().collection('administradores').doc(adminUid).get();
-  if (!adminDoc.exists) throw new functions.https.HttpsError('permission-denied', 'No eres administrador');
-
-  const { uid } = data;
-  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'Falta UID');
-
-  try {
-    await admin.auth().deleteUser(uid);
-    await admin.firestore().collection('vendedores').doc(uid).delete();
-    return { success: true };
-  } catch (error) {
-    throw new functions.https.HttpsError('internal', error.message);
-  }
-});
-Corrige los errores que encuentres en el archivo actual. Si es necesario, reemplaza todo el contenido con la versión correcta.
-
-Muéstrame los cambios que realizaste (puedes usar un diff o explicarlos brevemente).
-
-Confirma que el archivo ahora no tiene errores de sintaxis (puedes probar ejecutando node functions/index.js en la terminal local).
-
-Una vez que hayas corregido el archivo, volveré a intentar el despliegue con firebase deploy --only functions. ¡Gracias!
+Por favor, corrige estos archivos y luego probaremos nuevamente.
