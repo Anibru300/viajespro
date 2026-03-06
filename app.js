@@ -13,29 +13,72 @@ import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://w
 // Inicializar Functions (región us-central1 donde están desplegadas las Cloud Functions)
 import { auth } from './firebase-config.js';
 const functions = getFunctions(app, 'us-central1');
+
+// Nota: Para funciones v2, la región se configura principalmente en el servidor,
+// pero el SDK del cliente necesita saber la región para construir la URL correcta.
 // Descomentar para desarrollo local con emulador:
 // connectFunctionsEmulator(functions, "localhost", 5001);
 
 // Helper para llamar Cloud Functions con autenticación asegurada
 async function callWithAuth(functionName, data) {
-    // Verificar que hay un usuario autenticado
+    // Verificar que hay un usuario autenticado en Firebase Auth
     const currentUser = auth.currentUser;
     if (!currentUser) {
+        debug('Error: No hay usuario autenticado (auth.currentUser es null)');
+        // Intentar obtener el usuario del authService como fallback
+        const authState = authService.getCurrentUser();
+        if (authState.user) {
+            debug('Usuario encontrado en authService, pero no en auth.currentUser');
+        }
         throw new Error('No hay usuario autenticado. Inicia sesión nuevamente.');
     }
     
+    debug(`Llamando a ${functionName} con usuario UID:`, currentUser.uid);
+    
     // Forzar refresh del token para asegurar que está vigente
+    let token;
     try {
-        await currentUser.getIdToken(true);
-        debug(`Token refrescado para llamada a ${functionName}`);
+        token = await currentUser.getIdToken(true);
+        debug(`Token obtenido para llamada a ${functionName}, longitud:`, token ? token.length : 0);
     } catch (tokenError) {
         debug('Error refrescando token:', tokenError);
         throw new Error('Error al verificar sesión. Inicia sesión nuevamente.');
     }
     
-    // Hacer la llamada
-    const callable = httpsCallable(functions, functionName);
-    return callable(data);
+    // Hacer la llamada con manejo de errores mejorado
+    try {
+        debug(`Iniciando llamada httpsCallable a '${functionName}'`);
+        const callable = httpsCallable(functions, functionName);
+        const result = await callable(data);
+        debug(`Respuesta exitosa de ${functionName}:`, result.data);
+        return result;
+    } catch (error) {
+        debug(`Error en ${functionName}:`, {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            customData: error.customData
+        });
+        // Mapear errores de functions a mensajes amigables
+        if (error.code === 'unauthenticated') {
+            throw new Error('Sesión expirada. Cierra sesión y vuelve a entrar.');
+        } else if (error.code === 'permission-denied') {
+            throw new Error('No tienes permisos para realizar esta acción.');
+        } else if (error.code === 'invalid-argument') {
+            throw new Error(error.message || 'Datos inválidos. Verifica la información.');
+        } else if (error.code === 'internal') {
+            throw new Error('Error del servidor. Intenta nuevamente.');
+        } else if (error.code === 'not-found') {
+            throw new Error('Función no encontrada. Contacta al administrador.');
+        } else if (error.code === 'cancelled') {
+            throw new Error('La operación fue cancelada.');
+        } else if (error.code === 'unknown' || error.code === 'deadline-exceeded') {
+            throw new Error('Error de conexión. Verifica tu internet e intenta nuevamente.');
+        } else if (error.code === 'functions/unauthenticated' || error.code === 'functions/unauthorized') {
+            throw new Error('Error de autenticación con Cloud Functions. Intenta cerrar sesión y entrar nuevamente.');
+        }
+        throw error;
+    }
 }
 
 // ===== CONFIGURACIÓN =====
