@@ -2452,20 +2452,51 @@ Enviado desde ViajesPro v6.0`,
         }
     }
     
-    // OPCIÓN 2: mailto: (funciona en todos lados, abre app de correo)
-    // El archivo debe adjuntarse manualmente, pero el asunto y cuerpo vienen llenos
-    const mailtoUrl = `mailto:?subject=${encodeURIComponent(asunto)}&body=${cuerpo}`;
+    // OPCIÓN 2: Descargar ZIP + Copiar texto al portapapeles
+    // Esto evita el problema de la pantalla en blanco del mailto:
     
-    // Abrir cliente de correo
-    window.open(mailtoUrl, '_blank');
-    
-    showToast('📧 Cliente de correo abierto. El archivo se descargó, adjúntalo manualmente.', 'info');
-    
-    // También descargar el ZIP para que lo adjunte
+    // 1. Descargar el ZIP primero
     if (lastZipBlob) {
-        setTimeout(() => descargarArchivo(lastZipBlob, lastZipFileName), 500);
+        descargarArchivo(lastZipBlob, lastZipFileName);
     }
-}
+    
+    // 2. Intentar copiar el asunto y cuerpo al portapapeles
+    const textoCorreo = `Asunto: ${asunto}
+
+Buen día,
+
+Por medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.
+
+Favor de revisar y confirmar recepción.
+
+Quedo atento a sus comentarios.
+
+Saludos cordiales,
+${responsable || ''}
+
+---
+Enviado desde ViajesPro v6.0`;
+    
+    // Intentar copiar al portapapeles
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textoCorreo).then(() => {
+            showToast('📧 ZIP descargado y texto copiado al portapapeles', 'success');
+            setTimeout(() => {
+                alert('📧 Instrucciones para enviar por correo:\n\n1️⃣ El ZIP ya se descargó\n2️⃣ El texto del correo se copió al portapapeles\n3️⃣ Abre tu app de correo (Gmail, Outlook, etc.)\n4️⃣ Pega el texto y adjunta el archivo ZIP\n\nAsunto: ' + asunto);
+            }, 500);
+        }).catch(() => {
+            showToast('📧 ZIP descargado. Abre tu correo y adjunta el archivo.', 'info');
+        });
+    } else {
+        showToast('📧 ZIP descargado. Abre tu correo y adjunta el archivo.', 'info');
+        // Mostrar el texto en un alert para que lo copien manualmente
+        setTimeout(() => {
+            const confirmar = confirm('📧 Instrucciones:\n\nEl archivo ZIP ya se descargó.\n\n¿Quieres ver el texto del correo para copiarlo?\n\nAsunto: ' + asunto);
+            if (confirmar) {
+                prompt('Copia este texto y pégalo en tu correo:', textoCorreo);
+            }
+        }, 500);
+    }
 
 // Función auxiliar para formatear fechas
 function formatearFecha(fechaStr) {
