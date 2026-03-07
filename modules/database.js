@@ -131,30 +131,72 @@ class DatabaseService {
      * Obtiene viajes de un vendedor con paginación
      */
     async getViajesByVendedor(vendedorId, options = {}) {
+        // Consulta simple: solo filtra por vendedorId
+        // Firestore tiene índice automático para campos de documento
         const conditions = [where('vendedorId', '==', vendedorId)];
         
+        // Sin orderBy para evitar requerir índice compuesto
+        // Ordenamos en memoria después
+        const result = await this.query('viajes', conditions, {
+            orderByField: '__name__',  // Ordenar por ID de documento (siempre existe)
+            orderDirection: 'desc',
+            limitCount: options.limit || 100
+        });
+        
+        // Filtrar por estado en memoria si es necesario
+        let data = result.data;
         if (options.estado) {
-            conditions.push(where('estado', '==', options.estado));
+            data = data.filter(v => v.estado === options.estado);
         }
         
-        return this.query('viajes', conditions, {
-            orderByField: options.orderBy || 'fechaInicio',
-            orderDirection: options.order || 'desc',
-            limitCount: options.limit || 20,
-            startAfterDoc: options.startAfter || null
+        // Ordenar por fecha en memoria
+        data.sort((a, b) => {
+            const dateA = new Date(a.fechaInicio || a.createdAt || 0);
+            const dateB = new Date(b.fechaInicio || b.createdAt || 0);
+            return (options.order === 'asc' ? dateA - dateB : dateB - dateA);
         });
+        
+        return { data, lastDoc: result.lastDoc, hasMore: result.hasMore };
     }
 
     /**
      * Obtiene gastos de un viaje
+     * Nota: Si se proporciona vendedorId, se usa para filtrar por seguridad
      */
     async getGastosByViaje(viajeId, options = {}) {
-        const conditions = [where('viajeId', '==', viajeId)];
-        return this.query('gastos', conditions, {
-            orderByField: 'fecha',
+        // Estrategia: Si tenemos vendedorId, filtramos por él primero (más seguro)
+        // Si no, filtramos solo por viajeId y confiamos en las reglas
+        const conditions = [];
+        
+        if (options.vendedorId) {
+            // Consulta por vendedorId (usa índice automático)
+            conditions.push(where('vendedorId', '==', options.vendedorId));
+        }
+        
+        // Nota: No podemos filtrar por viajeId en la consulta si ya filtramos por vendedorId
+        // porque requeriría índice compuesto. Filtramos en memoria.
+        
+        // Consulta simple sin orderBy para evitar índices
+        const result = await this.query('gastos', conditions.length > 0 ? conditions : [where('viajeId', '==', viajeId)], {
+            orderByField: options.vendedorId ? '__name__' : 'fecha',
             orderDirection: 'desc',
-            limitCount: options.limit || 50
+            limitCount: options.limit || 100
         });
+        
+        // Filtrar por viajeId en memoria si filtramos por vendedorId
+        let data = result.data;
+        if (options.vendedorId) {
+            data = data.filter(g => g.viajeId === viajeId);
+        }
+        
+        // Ordenar por fecha en memoria
+        data.sort((a, b) => {
+            const dateA = new Date(a.fecha || a.createdAt || 0);
+            const dateB = new Date(b.fecha || b.createdAt || 0);
+            return dateB - dateA; // Descendente
+        });
+        
+        return { data, lastDoc: result.lastDoc, hasMore: result.hasMore };
     }
 
     /**
@@ -207,10 +249,34 @@ class DatabaseService {
         const fechaInicio = new Date();
         fechaInicio.setDate(fechaInicio.getDate() - dias);
         
+        // Obtener gastos del período
         const { data: gastos } = await this.getGastosByVendedor(vendedorId, {
             fechaInicio: fechaInicio.toISOString(),
             fechaFin: new Date().toISOString(),
             limit: 1000
+        });
+        
+        // Obtener TODOS los viajes del vendedor (sin filtro de fecha para contar correctamente)
+        const viajesResult = await this.getViajesByVendedor(vendedorId, { limit: 100 });
+        const viajes = viajesResult.data || [];
+        
+        // Contar viajes por estado
+        const viajesActivos = viajes.filter(v => v.estado === 'activo').length;
+        const viajesCompletados = viajes.filter(v => v.estado === 'completado').length;
+        const totalViajes = viajes.length;
+        
+        // Contar viajes únicos que tienen gastos en el período
+        const viajesUnicos = new Set();
+        gastos.forEach(g => {
+            if (g.viajeId) {
+                viajesUnicos.add(g.viajeId);
+            }
+        });
+        
+        // También contar viajes creados en el período (últimos 30 días)
+        const viajesEnPeriodo = viajes.filter(v => {
+            const fechaViaje = new Date(v.createdAt || v.fechaInicio || Date.now());
+            return fechaViaje >= fechaInicio;
         });
         
         const stats = {
@@ -219,7 +285,12 @@ class DatabaseService {
             noFacturable: 0,
             porTipo: {},
             porDia: {},
-            count: gastos.length
+            count: gastos.length,
+            viajesCount: totalViajes,              // Total de viajes del vendedor
+            viajesActivos: viajesActivos,          // Viajes activos
+            viajesCompletados: viajesCompletados,  // Viajes completados
+            viajesEnPeriodo: viajesEnPeriodo.length, // Viajes creados en los últimos 30 días
+            viajesConGastos: viajesUnicos.size     // Viajes que tienen gastos
         };
         
         gastos.forEach(g => {
@@ -280,9 +351,12 @@ class DatabaseService {
     /**
      * Elimina un viaje y todos sus gastos asociados
      */
-    async deleteViajeCompleto(viajeId) {
-        // Obtener gastos del viaje
-        const { data: gastos } = await this.getGastosByViaje(viajeId, { limit: 1000 });
+    async deleteViajeCompleto(viajeId, vendedorId = null) {
+        // Obtener gastos del viaje (pasando vendedorId para permisos)
+        const { data: gastos } = await this.getGastosByViaje(viajeId, { 
+            limit: 1000,
+            vendedorId: vendedorId 
+        });
         
         const batch = writeBatch(db);
         

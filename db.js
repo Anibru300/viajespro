@@ -57,8 +57,9 @@ class ViajesProDB {
     }
 
     getGastosByViaje(viajeId, options = {}) {
-        return this.service.getGastosByViaje(viajeId, options)
-            .then(r => r.data);
+        return this.service.getGastosByViaje(viajeId, options);
+            // Nota: Ahora devuelve el objeto completo {data, lastDoc, hasMore}
+            // para consistencia con otras funciones
     }
 
     // Nuevos métodos (API v5.1)
@@ -71,8 +72,8 @@ class ViajesProDB {
         return this.service.getDashboardStats(vendedorId, dias);
     }
 
-    deleteViajeCompleto(viajeId) {
-        return this.service.deleteViajeCompleto(viajeId);
+    deleteViajeCompleto(viajeId, vendedorId) {
+        return this.service.deleteViajeCompleto(viajeId, vendedorId);
     }
 
     // Utilidades

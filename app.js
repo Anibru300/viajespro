@@ -943,12 +943,24 @@ function actualizarEncabezado() {
 
 // ===== DASHBOARD v5.1 =====
 async function loadDashboard() {
-    if (!state.currentVendor) return;
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        debug('Error: No hay usuario autenticado al cargar dashboard');
+        return;
+    }
+    
+    // Usar UID de Firebase Auth como fuente de verdad
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) {
+        debug('Error: No se pudo obtener UID del vendedor');
+        return;
+    }
     
     try {
         showLoading('dashboard-stats', true);
         
-        const stats = await db.getDashboardStats(state.currentVendor.uid, 30);
+        const stats = await db.getDashboardStats(vendedorUid, 30);
         
         const container = document.getElementById('dashboard-stats');
         if (!container) return;
@@ -970,9 +982,9 @@ async function loadDashboard() {
                 <div class="stat-label">Gastos</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-icon">📊</div>
-                <div class="stat-value">${Object.keys(stats.porTipo).length}</div>
-                <div class="stat-label">Categorías</div>
+                <div class="stat-icon">🚗</div>
+                <div class="stat-value">${stats.viajesCount}</div>
+                <div class="stat-label">Mis Viajes</div>
             </div>
         `;
         
@@ -1141,7 +1153,19 @@ async function guardarPerfil() {
 
 // ===== VIAJES =====
 async function loadViajes() {
-    if (!state.currentVendor) return;
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        debug('Error: No hay usuario autenticado al cargar viajes');
+        return;
+    }
+    
+    // Usar UID de Firebase Auth como fuente de verdad
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) {
+        debug('Error: No se pudo obtener UID del vendedor');
+        return;
+    }
     
     try {
         const filter = document.getElementById('filter-viaje-status')?.value || 'all';
@@ -1151,8 +1175,21 @@ async function loadViajes() {
             options.estado = filter;
         }
         
-        const viajes = await db.getViajesByVendedor(state.currentVendor.uid, options);
+        debug('Consultando viajes para vendedorId:', vendedorUid);
+        const viajes = await db.getViajesByVendedor(vendedorUid, options);
+        debug('Viajes encontrados:', viajes?.length || 0);
         
+        // Si no hay viajes, mostrar mensaje vacío
+        if (!viajes || !Array.isArray(viajes)) {
+            debug('Error: No se recibieron datos válidos de viajes');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🚗</div>
+                    <p>Error al cargar viajes. Intenta recargar la página.</p>
+                </div>
+            `;
+            return;
+        }
         const container = document.getElementById('viajes-list');
         if (!container) return;
         
@@ -1168,10 +1205,17 @@ async function loadViajes() {
         }
         
         // Obtener estadísticas de gastos
+        // Pasamos vendedorUid para que la consulta funcione con las reglas de seguridad
         const viajesConStats = await Promise.all(viajes.map(async v => {
-            const gastos = await db.getGastosByViaje(v.id);
-            const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
-            return { ...v, gastosCount: gastos.length, totalGastos: total };
+            try {
+                const result = await db.getGastosByViaje(v.id, { vendedorId: vendedorUid });
+                const gastos = result.data || [];
+                const total = gastos.reduce((sum, g) => sum + (parseFloat(g.monto) || 0), 0);
+                return { ...v, gastosCount: gastos.length, totalGastos: total };
+            } catch (err) {
+                debug('Error cargando gastos del viaje', v.id, err.message);
+                return { ...v, gastosCount: 0, totalGastos: 0 };
+            }
         }));
         
         container.innerHTML = viajesConStats.map(v => `
@@ -1199,11 +1243,44 @@ async function loadViajes() {
         `).join('');
         
     } catch (error) {
-        showToast('Error al cargar viajes: ' + error.message, 'error');
+        debug('Error al cargar viajes:', error);
+        if (error.message?.includes('permission')) {
+            showToast('Error de permisos: Verifica que tu sesión esté activa', 'error');
+        } else {
+            showToast('Error al cargar viajes: ' + error.message, 'error');
+        }
     }
 }
 
 async function crearViaje() {
+    // Validar autenticación primero
+    const currentUser = auth.currentUser;
+    debug('=== CREAR VIAJE ===');
+    debug('auth.currentUser:', currentUser?.uid);
+    debug('state.currentVendor:', state.currentVendor);
+    
+    if (!currentUser) {
+        showToast('Error: No hay sesión activa. Por favor inicia sesión nuevamente.', 'error');
+        return;
+    }
+    
+    // Verificar que tenemos el UID correcto
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    debug('vendedorUid a usar:', vendedorUid);
+    debug('auth.uid:', currentUser.uid);
+    debug('¿Coinciden?', vendedorUid === currentUser.uid);
+    
+    if (!vendedorUid) {
+        showToast('Error: No se pudo obtener el identificador del vendedor.', 'error');
+        return;
+    }
+    
+    // Advertencia si los UIDs no coinciden
+    if (vendedorUid !== currentUser.uid) {
+        debug('⚠️ ADVERTENCIA: vendedorUid !== auth.uid');
+        showToast('Advertencia: IDs de usuario no coinciden. Contacta al administrador.', 'warning');
+    }
+    
     const cliente = document.getElementById('viaje-cliente').value.trim();
     const destino = document.getElementById('viaje-destino').value.trim();
     const lugarVisita = document.getElementById('viaje-lugar-visita').value.trim();
@@ -1219,13 +1296,13 @@ async function crearViaje() {
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
-        vendedorId: state.currentVendor.uid,
+        vendedorId: vendedorUid,
         cliente: cliente.toUpperCase(),
         destino: destino.toUpperCase(),
         lugarVisita: lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase(),
         objetivo: objetivo,
-        responsable: state.currentVendor.name,
-        zona: state.currentVendor.zone || 'Bajío',
+        responsable: state.currentVendor?.name || 'Vendedor',
+        zona: state.currentVendor?.zone || 'Bajío',
         fechaInicio: new Date(fechaInicioInput + 'T12:00:00').toISOString(),
         fechaFin: fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null,
         presupuesto: presupuesto,
@@ -1235,6 +1312,7 @@ async function crearViaje() {
     };
     
     try {
+        debug('Guardando viaje:', viaje);
         await db.add('viajes', viaje);
         closeModal('nuevo-viaje');
         showToast('✅ Viaje creado exitosamente', 'success');
@@ -1249,7 +1327,15 @@ async function crearViaje() {
         
         loadViajes();
     } catch (error) {
-        showToast('Error al crear viaje: ' + error.message, 'error');
+        debug('Error completo al crear viaje:', error);
+        debug('Error code:', error.code);
+        debug('Error message:', error.message);
+        
+        if (error.message?.includes('permission') || error.code?.includes('permission')) {
+            showToast('Error de permisos: El ID de vendedor no coincide con tu sesión. Contacta al administrador.', 'error');
+        } else {
+            showToast('Error al crear viaje: ' + error.message, 'error');
+        }
     }
 }
 
@@ -1323,12 +1409,25 @@ async function guardarEdicionViaje() {
 async function eliminarViaje(viajeId) {
     if (!confirm('¿Eliminar este viaje permanentemente? También se eliminarán todos los gastos asociados.')) return;
     
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        showToast('Error: No hay sesión activa', 'error');
+        return;
+    }
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    
     try {
-        const result = await db.deleteViajeCompleto(viajeId);
+        const result = await db.deleteViajeCompleto(viajeId, vendedorUid);
         showToast(`✅ Viaje eliminado (${result.deletedGastos} gastos)`, 'success');
         loadViajes();
     } catch (error) {
-        showToast('Error al eliminar: ' + error.message, 'error');
+        debug('Error al eliminar viaje:', error);
+        if (error.message?.includes('permission')) {
+            showToast('Error de permisos: No puedes eliminar este viaje', 'error');
+        } else {
+            showToast('Error al eliminar: ' + error.message, 'error');
+        }
     }
 }
 
@@ -1342,10 +1441,22 @@ function selectViaje(viajeId) {
 
 // ===== GASTOS =====
 async function loadViajesSelect() {
-    if (!state.currentVendor) return;
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        debug('Error: No hay usuario autenticado al cargar selects');
+        return;
+    }
+    
+    // Usar UID de Firebase Auth como fuente de verdad
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) {
+        debug('Error: No se pudo obtener UID del vendedor');
+        return;
+    }
     
     try {
-        const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
+        const viajes = await db.getViajesByVendedor(vendedorUid);
         const activos = viajes.filter(v => v.estado === 'activo');
         
         const selects = [
@@ -1474,6 +1585,20 @@ function loadDraftGasto() {
 
 // ===== GUARDAR GASTO MEJORADO v5.1 =====
 async function guardarGasto() {
+    // Validar autenticación primero
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        showToast('Error: No hay sesión activa. Por favor inicia sesión nuevamente.', 'error');
+        return;
+    }
+    
+    // Verificar que tenemos el UID correcto
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) {
+        showToast('Error: No se pudo obtener el identificador del vendedor.', 'error');
+        return;
+    }
+    
     const viajeId = document.getElementById('captura-viaje-select').value;
     const tipoCard = document.querySelector('.tipo-card.selected');
     const monto = parseFloat(document.getElementById('monto-gasto').value) || 0;
@@ -1522,7 +1647,7 @@ async function guardarGasto() {
             
             const uploadResults = await storageService.uploadMultipleImages(
                 state.tempFotos,
-                `gastos/${state.currentVendor.username}/${viajeId}`
+                `gastos/${state.currentVendor?.username || vendedorUid}/${viajeId}`
             );
             
             imageUrls = uploadResults.map(r => r.url);
@@ -1536,7 +1661,7 @@ async function guardarGasto() {
         
         const gastoData = {
             viajeId,
-            vendedorId: state.currentVendor.uid,
+            vendedorId: vendedorUid,
             tipo: tipoCard.dataset.tipo,
             monto: monto,
             lugar: lugar || 'Sin lugar',
@@ -1611,10 +1736,15 @@ async function searchGastos(query) {
         return;
     }
     
-    if (!state.currentVendor) return;
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) return;
     
     try {
-        const gastos = await db.searchGastos(state.currentVendor.uid, query);
+        const gastos = await db.searchGastos(vendedorUid, query);
         renderGastosList(gastos);
     } catch (error) {
         debug('Error en búsqueda:', error);
@@ -1624,21 +1754,38 @@ async function searchGastos(query) {
 // ===== LISTA DE GASTOS =====
 async function loadGastosList() {
     try {
+        // Validar autenticación
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            debug('Error: No hay usuario autenticado al cargar gastos');
+            return;
+        }
+        
+        // Usar UID de Firebase Auth como fuente de verdad
+        const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+        if (!vendedorUid) {
+            debug('Error: No se pudo obtener UID del vendedor');
+            return;
+        }
+        
         const estadoFiltro = document.getElementById('gastos-estado-select')?.value || 'all';
         const viajeId = document.getElementById('gastos-viaje-select')?.value;
         
         let gastos = [];
         
         if (viajeId) {
-            gastos = await db.getGastosByViaje(viajeId);
+            const result = await db.getGastosByViaje(viajeId, { vendedorId: vendedorUid });
+            gastos = result.data || [];
             // Agregar info del viaje
             const viaje = await db.get('viajes', viajeId);
             gastos = gastos.map(g => ({...g, viaje}));
         } else {
             // Obtener gastos de todos los viajes del vendedor
-            const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
+            const viajesResult = await db.getViajesByVendedor(vendedorUid);
+            const viajes = viajesResult.data || viajesResult || [];
             for (const viaje of viajes) {
-                const g = await db.getGastosByViaje(viaje.id);
+                const gResult = await db.getGastosByViaje(viaje.id, { vendedorId: vendedorUid });
+                const g = gResult.data || [];
                 gastos = gastos.concat(g.map(item => ({...item, viaje})));
             }
         }
@@ -1880,12 +2027,22 @@ async function generarReporte() {
         return;
     }
     
+    // Validar autenticación
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        showToast('Error: No hay sesión activa', 'error');
+        return;
+    }
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    
     try {
-        const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
+        const viajesResult = await db.getViajesByVendedor(vendedorUid);
+        const viajes = viajesResult.data || viajesResult || [];
         let allGastos = [];
         
         for (const viaje of viajes) {
-            const gastos = await db.getGastosByViaje(viaje.id);
+            const result = await db.getGastosByViaje(viaje.id, { vendedorId: vendedorUid });
+            const gastos = result.data || [];
             const gastosFiltrados = gastos.filter(g => {
                 const fecha = new Date(g.fecha || g.createdAt);
                 return fecha >= new Date(fechaInicio) && fecha <= new Date(fechaFin + 'T23:59:59');
@@ -2473,7 +2630,339 @@ window.searchGastos = searchGastos;
 
 // Exporar servicios para acceso global si es necesario
 window.authService = authService;
+// ===== FUNCIÓN DE DIAGNÓSTICO =====
+window.diagnosticarSession = function() {
+    console.log('=== DIAGNÓSTICO DE SESIÓN ===');
+    
+    const authUser = auth.currentUser;
+    const vendor = state.currentVendor;
+    
+    console.log('1. Firebase Auth:');
+    console.log('   - UID:', authUser?.uid || 'NO HAY');
+    console.log('   - Email:', authUser?.email || 'NO HAY');
+    console.log('   - DisplayName:', authUser?.displayName || 'NO HAY');
+    
+    console.log('\n2. State.currentVendor:');
+    console.log('   - UID:', vendor?.uid || 'NO HAY');
+    console.log('   - Name:', vendor?.name || 'NO HAY');
+    console.log('   - Username:', vendor?.username || 'NO HAY');
+    console.log('   - Email:', vendor?.email || 'NO HAY');
+    
+    console.log('\n3. Comparación:');
+    if (authUser?.uid && vendor?.uid) {
+        const coinciden = authUser.uid === vendor.uid;
+        console.log('   - ¿UIDs coinciden?', coinciden ? '✅ SÍ' : '❌ NO');
+        if (!coinciden) {
+            console.log('   - ⚠️ PROBLEMA: Los UIDs no coinciden');
+            console.log('   - auth.uid:', authUser.uid);
+            console.log('   - vendor.uid:', vendor.uid);
+        }
+    } else {
+        console.log('   - ⚠️ FALTAN DATOS: No se pueden comparar');
+    }
+    
+    console.log('\n4. Solución:');
+    if (!authUser) {
+        console.log('   - Debes iniciar sesión nuevamente');
+    } else if (!vendor?.uid) {
+        console.log('   - El vendedor no tiene UID asignado');
+        console.log('   - Contacta al admin para recrear tu usuario');
+    } else if (authUser.uid !== vendor?.uid) {
+        console.log('   - El UID del documento no coincide con Auth');
+        console.log('   - El admin debe eliminar y recrear tu usuario');
+    } else {
+        console.log('   - Todo parece correcto. Si hay errores de permisos,');
+        console.log('     podrían ser las Firestore Rules.');
+    }
+    
+    console.log('=== FIN DIAGNÓSTICO ===');
+    
+    // Mostrar en pantalla
+    const info = `
+🔍 Diagnóstico de Sesión:
+
+Auth UID: ${authUser?.uid?.substring(0, 15) || 'NO HAY'}...
+Vendor UID: ${vendor?.uid?.substring(0, 15) || 'NO HAY'}...
+
+${authUser?.uid === vendor?.uid ? '✅ UIDs coinciden' : '❌ UIDs NO coinciden'}
+
+${authUser?.uid !== vendor?.uid ? 
+  '⚠️ SOLUCIÓN: El admin debe eliminar y recrear tu usuario con el UID correcto.' : 
+  'Si hay errores de permisos, verifica las Firestore Rules.'}
+    `.trim();
+    
+    alert(info);
+    
+    return {
+        authUid: authUser?.uid,
+        vendorUid: vendor?.uid,
+        coinciden: authUser?.uid === vendor?.uid
+    };
+};
+
+// ===== MAPA DE GASTOS =====
+let mapaGastos = null;
+let mapaMarkers = [];
+
+window.abrirMapaGastos = async function() {
+    openModal('mapa-gastos');
+    await cargarSelectViajesMapa();
+    await cargarMapaGastos();
+};
+
+async function cargarSelectViajesMapa() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    if (!vendedorUid) return;
+    
+    try {
+        const viajes = await db.getViajesByVendedor(vendedorUid);
+        const select = document.getElementById('mapa-viaje-select');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">Todos los viajes</option>' + 
+            viajes.map(v => `<option value="${v.id}">${escapeHtml(v.cliente)} - ${escapeHtml(v.destino)}</option>`).join('');
+    } catch (error) {
+        debug('Error cargando viajes para mapa:', error);
+    }
+}
+
+window.cargarMapaGastos = async function() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        showToast('Error: No hay sesión activa', 'error');
+        return;
+    }
+    
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    const viajeId = document.getElementById('mapa-viaje-select')?.value;
+    
+    try {
+        // Obtener gastos con ubicación
+        let gastosConUbicacion = [];
+        
+        if (viajeId) {
+            // Gastos de un viaje específico
+            const result = await db.getGastosByViaje(viajeId, { vendedorId: vendedorUid });
+            const gastos = result.data || [];
+            gastosConUbicacion = gastos.filter(g => g.ubicacion && g.ubicacion.lat && g.ubicacion.lng);
+        } else {
+            // Todos los gastos con ubicación (últimos 100)
+            const viajes = await db.getViajesByVendedor(vendedorUid);
+            for (const viaje of viajes) {
+                const result = await db.getGastosByViaje(viaje.id, { vendedorId: vendedorUid });
+                const gastos = result.data || [];
+                const conUbicacion = gastos.filter(g => g.ubicacion && g.ubicacion.lat && g.ubicacion.lng);
+                gastosConUbicacion = gastosConUbicacion.concat(conUbicacion.map(g => ({...g, viaje})));
+            }
+            // Limitar a los últimos 50 para performance
+            gastosConUbicacion = gastosConUbicacion.slice(-50);
+        }
+        
+        // Inicializar o actualizar mapa
+        inicializarMapa(gastosConUbicacion);
+        
+    } catch (error) {
+        debug('Error cargando mapa:', error);
+        showToast('Error al cargar mapa: ' + error.message, 'error');
+    }
+};
+
+function inicializarMapa(gastos) {
+    const container = document.getElementById('mapa-gastos-container');
+    if (!container) return;
+    
+    // Limpiar contenedor
+    container.innerHTML = '';
+    
+    if (gastos.length === 0) {
+        container.innerHTML = `
+            <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #6b7280; flex-direction: column; padding: 2rem; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📍</div>
+                <p>No hay gastos con ubicación registrada.</p>
+                <p style="font-size: 0.875rem; margin-top: 0.5rem;">
+                    Los gastos capturados con el permiso de ubicación aparecerán aquí.
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Remover mapa anterior si existe (para evitar "Map container is already initialized")
+    if (mapaGastos) {
+        mapaGastos.remove();
+        mapaGastos = null;
+    }
+    
+    // Limpiar contenedor completamente
+    container.innerHTML = '';
+    
+    // Crear nuevo mapa
+    mapaGastos = L.map('mapa-gastos-container');
+    
+    // Agregar capa de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(mapaGastos);
+    
+    // Limpiar marcadores anteriores
+    mapaMarkers = [];
+    
+    // Colores por tipo de gasto
+    const colores = {
+        gasolina: '#dc2626',
+        comida: '#f59e0b',
+        hotel: '#3b82f6',
+        transporte: '#10b981',
+        casetas: '#6366f1',
+        otros: '#6b7280'
+    };
+    
+    // Iconos por tipo
+    const iconos = {
+        gasolina: '⛽',
+        comida: '🍔',
+        hotel: '🏨',
+        transporte: '🚌',
+        casetas: '🛣️',
+        otros: '📦'
+    };
+    
+    // Agregar marcadores
+    const bounds = [];
+    
+    gastos.forEach(gasto => {
+        if (!gasto.ubicacion) return;
+        
+        const { lat, lng } = gasto.ubicacion;
+        const tipo = gasto.tipo || 'otros';
+        const color = colores[tipo] || '#6b7280';
+        const icono = iconos[tipo] || '📦';
+        
+        // Crear marcador personalizado
+        const customIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+                background: ${color}; 
+                width: 32px; 
+                height: 32px; 
+                border-radius: 50%; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                border: 3px solid white; 
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                font-size: 16px;
+            ">${icono}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+        
+        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(mapaGastos);
+        
+        // Popup con información
+        const popupContent = `
+            <div style="font-family: system-ui, sans-serif; min-width: 200px;">
+                <h4 style="margin: 0 0 0.5rem 0; color: ${color};">${icono} ${TIPOS_GASTO[tipo]?.label || tipo}</h4>
+                <p style="margin: 0.25rem 0; font-size: 1.1rem; font-weight: 600;">${formatMoney(gasto.monto)}</p>
+                <p style="margin: 0.25rem 0; color: #6b7280; font-size: 0.875rem;">${escapeHtml(gasto.lugar || 'Sin lugar')}</p>
+                <p style="margin: 0.25rem 0; color: #9ca3af; font-size: 0.75rem;">${formatDate(gasto.fecha || gasto.createdAt)}</p>
+                ${gasto.folioFactura ? `<p style="margin: 0.25rem 0; color: #059669; font-size: 0.75rem;">📄 Folio: ${escapeHtml(gasto.folioFactura)}</p>` : ''}
+            </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        mapaMarkers.push(marker);
+        bounds.push([lat, lng]);
+    });
+    
+    // Ajustar vista para mostrar todos los marcadores
+    if (bounds.length > 0) {
+        mapaGastos.fitBounds(bounds, { padding: [50, 50] });
+    } else {
+        // Centro por defecto (México)
+        mapaGastos.setView([23.6345, -102.5528], 5);
+    }
+}
+
+window.exportarMapaRuta = async function() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    
+    const vendedorUid = state.currentVendor?.uid || currentUser.uid;
+    const viajeId = document.getElementById('mapa-viaje-select')?.value;
+    
+    try {
+        let gastosConUbicacion = [];
+        let nombreArchivo = 'ruta-gastos';
+        
+        if (viajeId) {
+            const viaje = await db.get('viajes', viajeId);
+            nombreArchivo = `ruta-${viaje?.cliente || 'viaje'}-${formatDate(viaje?.fechaInicio)}`;
+            
+            const result = await db.getGastosByViaje(viajeId, { vendedorId: vendedorUid });
+            const gastos = result.data || [];
+            gastosConUbicacion = gastos.filter(g => g.ubicacion && g.ubicacion.lat && g.ubicacion.lng);
+        } else {
+            // Todos los gastos recientes
+            const viajes = await db.getViajesByVendedor(vendedorUid);
+            for (const viaje of viajes.slice(-5)) { // Últimos 5 viajes
+                const result = await db.getGastosByViaje(viaje.id, { vendedorId: vendedorUid });
+                const gastos = result.data || [];
+                const conUbicacion = gastos.filter(g => g.ubicacion && g.ubicacion.lat && g.ubicacion.lng);
+                gastosConUbicacion = gastosConUbicacion.concat(conUbicacion.map(g => ({...g, viaje})));
+            }
+            nombreArchivo = `ruta-completa-${new Date().toISOString().split('T')[0]}`;
+        }
+        
+        if (gastosConUbicacion.length === 0) {
+            showToast('No hay gastos con ubicación para exportar', 'warning');
+            return;
+        }
+        
+        // Crear contenido KML (para Google Earth) o GeoJSON
+        const geoJSON = {
+            type: 'FeatureCollection',
+            features: gastosConUbicacion.map(g => ({
+                type: 'Feature',
+                properties: {
+                    tipo: g.tipo,
+                    monto: g.monto,
+                    lugar: g.lugar,
+                    fecha: g.fecha || g.createdAt,
+                    folio: g.folioFactura || '',
+                    descripcion: `${TIPOS_GASTO[g.tipo]?.label || g.tipo}: ${formatMoney(g.monto)} - ${g.lugar || 'Sin lugar'}`
+                },
+                geometry: {
+                    type: 'Point',
+                    coordinates: [g.ubicacion.lng, g.ubicacion.lat]
+                }
+            }))
+        };
+        
+        // Descargar archivo
+        const blob = new Blob([JSON.stringify(geoJSON, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.geojson`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        showToast('📍 Ruta exportada correctamente', 'success');
+        
+    } catch (error) {
+        debug('Error exportando ruta:', error);
+        showToast('Error al exportar ruta', 'error');
+    }
+};
+
 window.storageService = storageService;
 window.utils = utils;
+
+// Exponer funciones del mapa globalmente
+window.cargarMapaGastos = cargarMapaGastos;
 
 debug('App.js v5.1 cargado completamente');

@@ -20,6 +20,10 @@
     <!-- JSZip necesario para ExcelJS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
+    <!-- Leaflet para mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./ux-improvements.css">
     <link rel="stylesheet" href="./modules/darkmode.css">
@@ -471,6 +475,17 @@
                     <h2>Reportes</h2>
                 </div>
                 
+                <div class="card" style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: white;">
+                    <h3 style="color: white;">🗺️ Mapa de Gastos</h3>
+                    <p style="margin-bottom: 1rem; opacity: 0.9;">
+                        Visualiza en un mapa todos los gastos con ubicación registrada. 
+                        Útil para verificar rutas y justificar gastos de casetas/gasolina.
+                    </p>
+                    <button class="btn btn-large" style="background: white; color: #1e3a5f;" onclick="abrirMapaGastos()">
+                        🗺️ VER MAPA DE GASTOS
+                    </button>
+                </div>
+                
                 <div class="card">
                     <h3>Resumen por Período</h3>
                     <div class="form-row">
@@ -710,6 +725,16 @@
                 <input type="text" id="perfil-usuario" readonly class="readonly">
             </div>
             
+            <div class="form-group" style="background: #f3f4f6; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                <label style="font-size: 0.8rem; color: #6b7280;">🔍 Diagnóstico Técnico</label>
+                <p style="font-size: 0.75rem; color: #6b7280; margin: 0.5rem 0;">
+                    Si tienes problemas para crear viajes o gastos, usa esta herramienta de diagnóstico.
+                </p>
+                <button type="button" class="btn btn-small" style="background: #e5e7eb; color: #374151;" onclick="diagnosticarSession()">
+                    🔍 Verificar Sesión
+                </button>
+            </div>
+            
             <div class="form-group">
                 <label>Contraseña actual (requerida para cambiar contraseña)</label>
                 <input type="password" id="perfil-current-password" placeholder="••••••••">
@@ -732,6 +757,45 @@
                 <button class="btn btn-icon" onclick="closeModal('detalle-gasto')">✕</button>
             </div>
             <div id="detalle-gasto-content"></div>
+        </div>
+    </div>
+
+    <!-- Modal: Mapa de Gastos -->
+    <div id="modal-mapa-gastos" class="modal">
+        <div class="modal-content" style="max-width: 95vw; max-height: 90vh; width: 800px;">
+            <div class="modal-header">
+                <h3>🗺️ Mapa de Gastos</h3>
+                <button class="btn btn-icon" onclick="closeModal('mapa-gastos')">✕</button>
+            </div>
+            <div style="padding: 1rem;">
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <select id="mapa-viaje-select" style="flex: 1; min-width: 200px;">
+                        <option value="">Todos los viajes</option>
+                    </select>
+                    <button class="btn btn-primary btn-small" onclick="cargarMapaGastos()">
+                        🔄 Actualizar
+                    </button>
+                    <button class="btn btn-secondary btn-small" onclick="exportarMapaRuta()">
+                        📥 Exportar Ruta
+                    </button>
+                </div>
+                <div id="mapa-gastos-container" style="height: 500px; border-radius: 12px; overflow: hidden; background: #f3f4f6;">
+                    <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #6b7280;">
+                        <p>🗺️ Cargando mapa...</p>
+                    </div>
+                </div>
+                <div id="mapa-leyenda" style="margin-top: 1rem; padding: 0.75rem; background: #f9fafb; border-radius: 8px; font-size: 0.875rem;">
+                    <p style="margin: 0; color: #6b7280;">
+                        💡 <strong>Leyenda:</strong> 
+                        <span style="color: #dc2626;">⛽ Gasolina</span> | 
+                        <span style="color: #f59e0b;">🍔 Comida</span> | 
+                        <span style="color: #3b82f6;">🏨 Hotel</span> | 
+                        <span style="color: #10b981;">🚌 Transporte</span> | 
+                        <span style="color: #6366f1;">🛣️ Casetas</span> | 
+                        <span style="color: #6b7280;">📦 Otros</span>
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
