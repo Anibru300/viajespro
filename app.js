@@ -2391,44 +2391,41 @@ async function generarCorteCompleto() {
 async function compartirCortePorCorreo() {
     // Si no hay ZIP generado, primero generarlo
     if (!lastZipBlob) {
-        showToast('🔄 Primero generando el corte...', 'info');
+        showToast('🔄 Generando corte primero...', 'info');
         await generarCorteCompleto();
         // Si después de generar sigue sin haber ZIP, hubo un error
         if (!lastZipBlob) {
             showToast('❌ Error al generar el corte', 'error');
             return;
         }
+        // Después de generar, intentar compartir nuevamente (con delay para evitar error de permisos)
+        setTimeout(() => compartirCortePorCorreoIntento(), 100);
+        return;
     }
+    
+    // Si ya existe el ZIP, compartir directamente
+    await compartirCortePorCorreoIntento();
+}
 
+async function compartirCortePorCorreoIntento() {
     const { fechaInicio, fechaFin, responsable } = state.lastReport;
     
     // Formatear fechas para el asunto (de YYYY-MM-DD a DD/MM/YYYY)
     const fechaInicioFormateada = formatearFecha(fechaInicio);
     const fechaFinFormateada = formatearFecha(fechaFin);
+    
+    const asunto = `Corte de viático, ${fechaInicioFormateada} a ${fechaFinFormateada}`;
+    const cuerpo = `Buen día,%0D%0A%0D%0APor medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.%0D%0A%0D%0AFavor de revisar y confirmar recepción.%0D%0A%0D%0AQuedo atento a sus comentarios.%0D%0A%0D%0ASaludos cordiales,%0D%0A${encodeURIComponent(responsable || '')}%0D%0A%0D%0A---%0D%0AEnviado desde ViajesPro v6.0`;
 
-    // Verificar si el navegador soporta compartir archivos
-    if (!navigator.canShare) {
-        showToast('⚠️ Tu navegador no soporta compartir archivos. Descargando...', 'warning');
-        descargarArchivo(lastZipBlob, lastZipFileName);
-        return;
-    }
-
-    // Crear el archivo para compartir
-    const archivo = new File([lastZipBlob], lastZipFileName, {
-        type: 'application/zip'
-    });
-
-    // Verificar si se puede compartir este archivo específico
-    if (!navigator.canShare({ files: [archivo] })) {
-        showToast('⚠️ No se puede compartir este tipo de archivo. Descargando...', 'warning');
-        descargarArchivo(lastZipBlob, lastZipFileName);
-        return;
-    }
-
-    // Configurar el mensaje de correo
-    const shareData = {
-        title: `Corte de viático, ${fechaInicioFormateada} a ${fechaFinFormateada}`,
-        text: `Buen día,
+    // OPCIÓN 1: Intentar Web Share API con archivos (mejor experiencia en móviles)
+    if (navigator.canShare && lastZipBlob) {
+        try {
+            const archivo = new File([lastZipBlob], lastZipFileName, { type: 'application/zip' });
+            
+            if (navigator.canShare({ files: [archivo] })) {
+                await navigator.share({
+                    title: asunto,
+                    text: `Buen día,
 
 Por medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.
 
@@ -2441,21 +2438,32 @@ ${responsable || ''}
 
 ---
 Enviado desde ViajesPro v6.0`,
-        files: [archivo]
-    };
-
-    try {
-        await navigator.share(shareData);
-        showToast('📧 Correo preparado correctamente', 'success');
-    } catch (error) {
-        // El usuario canceló o hubo error
-        if (error.name === 'AbortError') {
-            showToast('❌ Envío cancelado', 'info');
-        } else {
-            console.error('Error al compartir:', error);
-            showToast('⚠️ Error al compartir. Descargando...', 'warning');
-            descargarArchivo(lastZipBlob, lastZipFileName);
+                    files: [archivo]
+                });
+                showToast('📧 Correo preparado correctamente', 'success');
+                return;
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                showToast('❌ Envío cancelado', 'info');
+                return;
+            }
+            console.log('Web Share API falló, intentando alternativa:', error);
         }
+    }
+    
+    // OPCIÓN 2: mailto: (funciona en todos lados, abre app de correo)
+    // El archivo debe adjuntarse manualmente, pero el asunto y cuerpo vienen llenos
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(asunto)}&body=${cuerpo}`;
+    
+    // Abrir cliente de correo
+    window.open(mailtoUrl, '_blank');
+    
+    showToast('📧 Cliente de correo abierto. El archivo se descargó, adjúntalo manualmente.', 'info');
+    
+    // También descargar el ZIP para que lo adjunte
+    if (lastZipBlob) {
+        setTimeout(() => descargarArchivo(lastZipBlob, lastZipFileName), 500);
     }
 }
 
@@ -2719,6 +2727,7 @@ window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
 window.exportCorteCompleto = generarCorteCompleto;
 window.compartirCortePorCorreo = compartirCortePorCorreo;
+window.compartirCortePorCorreoIntento = compartirCortePorCorreoIntento;
 window.abrirPerfil = abrirPerfil;
 window.guardarPerfil = guardarPerfil;
 window.togglePassword = togglePassword;
