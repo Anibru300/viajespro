@@ -2326,10 +2326,6 @@ async function generarExcelProfesional() {
 }
 
 // ===== CORTE COMPLETO CON IMÁGENES =====
-// Variable para guardar el último ZIP generado (para compartir por correo)
-let lastZipBlob = null;
-let lastZipFileName = '';
-
 async function generarCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -2372,150 +2368,14 @@ async function generarCorteCompleto() {
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    
-    // Guardar para compartir después
-    lastZipBlob = zipBlob;
-    lastZipFileName = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
-    
     const zipUrl = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
     link.href = zipUrl;
-    link.download = lastZipFileName;
+    link.download = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
     link.click();
 
     setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
     showToast('📦 Corte completo descargado', 'success');
-}
-
-// ===== COMPARTIR CORTE POR CORREO =====
-async function compartirCortePorCorreo() {
-    // Si no hay ZIP generado, primero generarlo
-    if (!lastZipBlob) {
-        showToast('🔄 Generando corte primero...', 'info');
-        await generarCorteCompleto();
-        // Si después de generar sigue sin haber ZIP, hubo un error
-        if (!lastZipBlob) {
-            showToast('❌ Error al generar el corte', 'error');
-            return;
-        }
-        // Después de generar, intentar compartir nuevamente (con delay para evitar error de permisos)
-        setTimeout(() => compartirCortePorCorreoIntento(), 100);
-        return;
-    }
-    
-    // Si ya existe el ZIP, compartir directamente
-    await compartirCortePorCorreoIntento();
-}
-
-async function compartirCortePorCorreoIntento() {
-    const { fechaInicio, fechaFin, responsable } = state.lastReport;
-    
-    // Formatear fechas para el asunto (de YYYY-MM-DD a DD/MM/YYYY)
-    const fechaInicioFormateada = formatearFecha(fechaInicio);
-    const fechaFinFormateada = formatearFecha(fechaFin);
-    
-    const asunto = `Corte de viático, ${fechaInicioFormateada} a ${fechaFinFormateada}`;
-    const cuerpo = `Buen día,%0D%0A%0D%0APor medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.%0D%0A%0D%0AFavor de revisar y confirmar recepción.%0D%0A%0D%0AQuedo atento a sus comentarios.%0D%0A%0D%0ASaludos cordiales,%0D%0A${encodeURIComponent(responsable || '')}%0D%0A%0D%0A---%0D%0AEnviado desde ViajesPro v6.0`;
-
-    // OPCIÓN 1: Intentar Web Share API con archivos (mejor experiencia en móviles)
-    if (navigator.canShare && lastZipBlob) {
-        try {
-            const archivo = new File([lastZipBlob], lastZipFileName, { type: 'application/zip' });
-            
-            if (navigator.canShare({ files: [archivo] })) {
-                await navigator.share({
-                    title: asunto,
-                    text: `Buen día,
-
-Por medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.
-
-Favor de revisar y confirmar recepción.
-
-Quedo atento a sus comentarios.
-
-Saludos cordiales,
-${responsable || ''}
-
----
-Enviado desde ViajesPro v6.0`,
-                    files: [archivo]
-                });
-                showToast('📧 Correo preparado correctamente', 'success');
-                return;
-            }
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                showToast('❌ Envío cancelado', 'info');
-                return;
-            }
-            console.log('Web Share API falló, intentando alternativa:', error);
-        }
-    }
-    
-    // OPCIÓN 2: Descargar ZIP + Copiar texto al portapapeles
-    // Esto evita el problema de la pantalla en blanco del mailto:
-    
-    // 1. Descargar el ZIP primero
-    if (lastZipBlob) {
-        descargarArchivo(lastZipBlob, lastZipFileName);
-    }
-    
-    // 2. Intentar copiar el asunto y cuerpo al portapapeles
-    const textoCorreo = `Asunto: ${asunto}
-
-Buen día,
-
-Por medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.
-
-Favor de revisar y confirmar recepción.
-
-Quedo atento a sus comentarios.
-
-Saludos cordiales,
-${responsable || ''}
-
----
-Enviado desde ViajesPro v6.0`;
-    
-    // Intentar copiar al portapapeles
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(textoCorreo).then(() => {
-            showToast('📧 ZIP descargado y texto copiado al portapapeles', 'success');
-            setTimeout(() => {
-                alert('📧 Instrucciones para enviar por correo:\n\n1️⃣ El ZIP ya se descargó\n2️⃣ El texto del correo se copió al portapapeles\n3️⃣ Abre tu app de correo (Gmail, Outlook, etc.)\n4️⃣ Pega el texto y adjunta el archivo ZIP\n\nAsunto: ' + asunto);
-            }, 500);
-        }).catch(() => {
-            showToast('📧 ZIP descargado. Abre tu correo y adjunta el archivo.', 'info');
-        });
-    } else {
-        showToast('📧 ZIP descargado. Abre tu correo y adjunta el archivo.', 'info');
-        // Mostrar el texto en un alert para que lo copien manualmente
-        setTimeout(() => {
-            const confirmar = confirm('📧 Instrucciones:\n\nEl archivo ZIP ya se descargó.\n\n¿Quieres ver el texto del correo para copiarlo?\n\nAsunto: ' + asunto);
-            if (confirmar) {
-                prompt('Copia este texto y pégalo en tu correo:', textoCorreo);
-            }
-        }, 500);
-    }
-}
-
-// Función auxiliar para formatear fechas
-function formatearFecha(fechaStr) {
-    if (!fechaStr) return '';
-    const [anio, mes, dia] = fechaStr.split('-');
-    return `${dia}/${mes}/${anio}`;
-}
-
-// Función auxiliar para descargar archivo (fallback)
-function descargarArchivo(blob, nombreArchivo) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = nombreArchivo;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
 }
 
 // ===== MANEJO DE BOTÓN ATRÁS =====
@@ -2758,8 +2618,6 @@ window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
 window.exportCorteCompleto = generarCorteCompleto;
-window.compartirCortePorCorreo = compartirCortePorCorreo;
-window.compartirCortePorCorreoIntento = compartirCortePorCorreoIntento;
 window.abrirPerfil = abrirPerfil;
 window.guardarPerfil = guardarPerfil;
 window.togglePassword = togglePassword;
