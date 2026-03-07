@@ -159,6 +159,44 @@ function getMexicoDateTimeLocal() {
     return date.toISOString().slice(0, 16);
 }
 
+// Obtener fecha actual en México como YYYY-MM-DD (para inputs tipo date)
+function getMexicoDateString() {
+    const mexicoTime = new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" });
+    const date = new Date(mexicoTime);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Convertir fecha y hora a ISO string con zona horaria de México
+function toMexicoISOString(dateInput, timeInput = '12:00') {
+    // Crear fecha combinando el input con la hora especificada en zona de México
+    const [year, month, day] = dateInput.split('-');
+    const [hours, minutes] = timeInput.split(':');
+    
+    // Crear fecha en UTC pero representando la hora de México
+    // Restamos 6 horas (CST) para almacenar en UTC equivalente
+    const date = new Date(Date.UTC(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours) + 6, // Ajuste para CST (UTC-6)
+        parseInt(minutes)
+    ));
+    
+    return date.toISOString();
+}
+
+// Obtener timestamp actual en formato ISO con hora de México
+function getMexicoISOString() {
+    const mexicoTime = new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" });
+    const date = new Date(mexicoTime);
+    // Ajustar a UTC sumando el offset
+    const utcDate = new Date(date.getTime() + (6 * 60 * 60 * 1000));
+    return utcDate.toISOString();
+}
+
 function debug(msg, data) {
     console.log(`[DEBUG v6.0] ${msg}`, data || '');
 }
@@ -224,8 +262,8 @@ async function initApp() {
     setupEventListeners();
     updateConnectionStatus();
     
-    // Configurar fechas por defecto
-    const today = new Date().toISOString().split('T')[0];
+    // Configurar fechas por defecto (hora de Ciudad de México)
+    const today = getMexicoDateString();
     if (document.getElementById('viaje-fecha-inicio')) {
         document.getElementById('viaje-fecha-inicio').value = today;
     }
@@ -233,10 +271,11 @@ async function initApp() {
         document.getElementById('fecha-gasto').value = getMexicoDateTimeLocal();
     }
     
-    const firstDay = new Date();
+    const firstDay = getMexicoDateTime();
     firstDay.setDate(1);
+    const firstDayStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-${String(firstDay.getDate()).padStart(2, '0')}`;
     if (document.getElementById('reporte-fecha-inicio')) {
-        document.getElementById('reporte-fecha-inicio').value = firstDay.toISOString().split('T')[0];
+        document.getElementById('reporte-fecha-inicio').value = firstDayStr;
     }
     if (document.getElementById('reporte-fecha-fin')) {
         document.getElementById('reporte-fecha-fin').value = today;
@@ -1303,11 +1342,11 @@ async function crearViaje() {
         objetivo: objetivo,
         responsable: state.currentVendor?.name || 'Vendedor',
         zona: state.currentVendor?.zone || 'Bajío',
-        fechaInicio: new Date(fechaInicioInput + 'T12:00:00').toISOString(),
-        fechaFin: fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null,
+        fechaInicio: toMexicoISOString(fechaInicioInput, '12:00'),
+        fechaFin: fechaFinInput ? toMexicoISOString(fechaFinInput, '12:00') : null,
         presupuesto: presupuesto,
         estado: 'activo',
-        createdAt: new Date().toISOString(),
+        createdAt: getMexicoISOString(),
         version: 6
     };
     
@@ -1392,8 +1431,8 @@ async function guardarEdicionViaje() {
         viaje.destino = destino.toUpperCase();
         viaje.lugarVisita = lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase();
         viaje.objetivo = objetivo;
-        viaje.fechaInicio = new Date(fechaInicioInput + 'T12:00:00').toISOString();
-        viaje.fechaFin = fechaFinInput ? new Date(fechaFinInput + 'T12:00:00').toISOString() : null;
+        viaje.fechaInicio = toMexicoISOString(fechaInicioInput, '12:00');
+        viaje.fechaFin = fechaFinInput ? toMexicoISOString(fechaFinInput, '12:00') : null;
         viaje.presupuesto = presupuesto ? parseFloat(presupuesto) : null;
         viaje.estado = estado;
 
@@ -1665,7 +1704,7 @@ async function guardarGasto() {
             tipo: tipoCard.dataset.tipo,
             monto: monto,
             lugar: lugar || 'Sin lugar',
-            fecha: fecha || new Date().toISOString(),
+            fecha: fecha ? toMexicoISOString(fecha.split('T')[0], fecha.split('T')[1]?.slice(0,5) || '12:00') : getMexicoISOString(),
             folioFactura,
             razonSocial,
             comentarios,
@@ -1674,7 +1713,7 @@ async function guardarGasto() {
             fotos: imageUrls,
             imagePaths: imagePaths, // Para poder eliminar después
             ubicacion: state.currentPosition, // v6.0: Geolocalización
-            updatedAt: new Date().toISOString()
+            updatedAt: getMexicoISOString()
         };
         
         if (esEdicion) {
@@ -1689,7 +1728,7 @@ async function guardarGasto() {
             const nuevoGasto = {
                 ...gastoData,
                 id: 'GASTO_' + Date.now(),
-                createdAt: new Date().toISOString()
+                createdAt: getMexicoISOString()
             };
             await db.add('gastos', nuevoGasto);
             showToast('✅ Gasto guardado', 'success');
