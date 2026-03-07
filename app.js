@@ -2326,6 +2326,10 @@ async function generarExcelProfesional() {
 }
 
 // ===== CORTE COMPLETO CON IMÁGENES =====
+// Variable para guardar el último ZIP generado (para compartir por correo)
+let lastZipBlob = null;
+let lastZipFileName = '';
+
 async function generarCorteCompleto() {
     if (!state.lastReport) {
         showToast('Primero genera un reporte', 'warning');
@@ -2368,14 +2372,110 @@ async function generarCorteCompleto() {
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
+    
+    // Guardar para compartir después
+    lastZipBlob = zipBlob;
+    lastZipFileName = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
+    
     const zipUrl = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
     link.href = zipUrl;
-    link.download = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
+    link.download = lastZipFileName;
     link.click();
 
     setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
     showToast('📦 Corte completo descargado', 'success');
+}
+
+// ===== COMPARTIR CORTE POR CORREO =====
+async function compartirCortePorCorreo() {
+    // Si no hay ZIP generado, primero generarlo
+    if (!lastZipBlob) {
+        showToast('🔄 Primero generando el corte...', 'info');
+        await generarCorteCompleto();
+        // Si después de generar sigue sin haber ZIP, hubo un error
+        if (!lastZipBlob) {
+            showToast('❌ Error al generar el corte', 'error');
+            return;
+        }
+    }
+
+    const { fechaInicio, fechaFin, responsable } = state.lastReport;
+    
+    // Formatear fechas para el asunto (de YYYY-MM-DD a DD/MM/YYYY)
+    const fechaInicioFormateada = formatearFecha(fechaInicio);
+    const fechaFinFormateada = formatearFecha(fechaFin);
+
+    // Verificar si el navegador soporta compartir archivos
+    if (!navigator.canShare) {
+        showToast('⚠️ Tu navegador no soporta compartir archivos. Descargando...', 'warning');
+        descargarArchivo(lastZipBlob, lastZipFileName);
+        return;
+    }
+
+    // Crear el archivo para compartir
+    const archivo = new File([lastZipBlob], lastZipFileName, {
+        type: 'application/zip'
+    });
+
+    // Verificar si se puede compartir este archivo específico
+    if (!navigator.canShare({ files: [archivo] })) {
+        showToast('⚠️ No se puede compartir este tipo de archivo. Descargando...', 'warning');
+        descargarArchivo(lastZipBlob, lastZipFileName);
+        return;
+    }
+
+    // Configurar el mensaje de correo
+    const shareData = {
+        title: `Corte de viático, ${fechaInicioFormateada} a ${fechaFinFormateada}`,
+        text: `Buen día,
+
+Por medio de la presente adjunto el corte de viático correspondiente al periodo del ${fechaInicioFormateada} al ${fechaFinFormateada}.
+
+Favor de revisar y confirmar recepción.
+
+Quedo atento a sus comentarios.
+
+Saludos cordiales,
+${responsable || ''}
+
+---
+Enviado desde ViajesPro v6.0`,
+        files: [archivo]
+    };
+
+    try {
+        await navigator.share(shareData);
+        showToast('📧 Correo preparado correctamente', 'success');
+    } catch (error) {
+        // El usuario canceló o hubo error
+        if (error.name === 'AbortError') {
+            showToast('❌ Envío cancelado', 'info');
+        } else {
+            console.error('Error al compartir:', error);
+            showToast('⚠️ Error al compartir. Descargando...', 'warning');
+            descargarArchivo(lastZipBlob, lastZipFileName);
+        }
+    }
+}
+
+// Función auxiliar para formatear fechas
+function formatearFecha(fechaStr) {
+    if (!fechaStr) return '';
+    const [anio, mes, dia] = fechaStr.split('-');
+    return `${dia}/${mes}/${anio}`;
+}
+
+// Función auxiliar para descargar archivo (fallback)
+function descargarArchivo(blob, nombreArchivo) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // ===== MANEJO DE BOTÓN ATRÁS =====
@@ -2618,6 +2718,7 @@ window.generarReporte = generarReporte;
 window.exportReport = exportReport;
 window.generarExcelProfesional = generarExcelProfesional;
 window.exportCorteCompleto = generarCorteCompleto;
+window.compartirCortePorCorreo = compartirCortePorCorreo;
 window.abrirPerfil = abrirPerfil;
 window.guardarPerfil = guardarPerfil;
 window.togglePassword = togglePassword;
