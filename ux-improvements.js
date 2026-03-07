@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - UX Improvements JavaScript v5.0
+ * 3P VIAJESPRO - UX Improvements JavaScript v6.0
  * Mejoras de experiencia de usuario y utilidades
  */
 
@@ -150,7 +150,7 @@ function autoUppercase(input) {
 // ===== INICIALIZACIÓN =====
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('UX Improvements v5.0 loaded');
+    console.log('UX Improvements v6.0 loaded');
     
     // Mejorar accesibilidad
     enhanceKeyboardAccessibility();

@@ -1,9 +1,9 @@
 /**
- * 3P VIAJESPRO - Service Worker v5.1
+ * 3P VIAJESPRO - Service Worker v6.0
  * Con actualización automática y caché mejorado
  */
 
-const CACHE_NAME = 'viajespro-v5.1.0';
+const CACHE_NAME = 'viajespro-v6.0.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -23,11 +23,11 @@ const STATIC_ASSETS = [
 
 // Instalar y cachear recursos estáticos
 self.addEventListener('install', (event) => {
-  console.log('[SW v5.1] Instalando...');
+  console.log('[SW v6.0] Instalando...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW v5.1] Cacheando recursos estáticos');
+        console.log('[SW v6.0] Cacheando recursos estáticos');
         return cache.addAll(STATIC_ASSETS);
       })
       .then(() => self.skipWaiting())
@@ -36,14 +36,14 @@ self.addEventListener('install', (event) => {
 
 // Activar y limpiar cachés antiguos
 self.addEventListener('activate', (event) => {
-  console.log('[SW v5.1] Activando...');
+  console.log('[SW v6.0] Activando...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => {
-            console.log('[SW v5.1] Eliminando caché antigua:', name);
+            console.log('[SW v6.0] Eliminando caché antigua:', name);
             return caches.delete(name);
           })
       );
@@ -122,7 +122,7 @@ self.addEventListener('message', (event) => {
 // Sincronización en segundo plano (para cuando vuelva la conexión)
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-gastos') {
-    console.log('[SW v5.1] Sincronizando gastos pendientes...');
+    console.log('[SW v6.0] Sincronizando gastos pendientes...');
     // Aquí se podría implementar lógica de sincronización
   }
 });

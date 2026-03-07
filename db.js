@@ -1,9 +1,9 @@
 /**
- * 3P VIAJESPRO - Database Module v5.1 (Compatibilidad hacia atrás)
+ * 3P VIAJESPRO - Database Module v6.0 (Compatibilidad hacia atrás)
  * Ahora usa los nuevos módulos modularizados
  */
 
-console.log('🚀 db.js v5.1 cargando...');
+console.log('🚀 db.js v6.0 cargando...');
 
 import databaseService from './modules/database.js';
 
@@ -62,7 +62,7 @@ class ViajesProDB {
             // para consistencia con otras funciones
     }
 
-    // Nuevos métodos (API v5.1)
+    // Nuevos métodos (API v6.0)
     searchGastos(vendedorId, searchText) {
         return this.service.searchGastos(vendedorId, searchText)
             .then(r => r.data);

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#dc2626" id="theme-color-meta">
-    <title>3P - Control de Gastos v5.1</title>
+    <title>3P - Control de Gastos v6.0</title>
     
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -40,7 +40,7 @@
         <div class="splash-content">
             <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
-            <p class="splash-text">Cargando v5.0...</p>
+            <p class="splash-text">Cargando v6.0...</p>
         </div>
     </div>
 
@@ -51,7 +51,7 @@
                 <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Control de Gastos</h1>
                 <p class="login-subtitle">Sistema de Gestión de Gastos de Viaje</p>
-                <span class="version-badge">v5.0 Pro</span>
+                <span class="version-badge">v6.0 Pro</span>
             </div>
             
             <form id="login-form" onsubmit="event.preventDefault(); login();">
@@ -87,7 +87,7 @@
                 </button>
             </div>
             
-            <div class="version-info">v5.0.0 - Sistema Offline Profesional</div>
+            <div class="version-info">v6.0.0 - Sistema Offline Profesional</div>
         </div>
     </div>
 
@@ -815,30 +815,47 @@
     <!-- Firebase Config -->
     <script type="module" src="./firebase-config.js"></script>
     <!-- Database (compatibility layer) -->
-    <script type="module" src="./db.js?v=5.1"></script>
-    <!-- Main App v5.1 -->
-    <script type="module" src="./app.js?v=5.1"></script>
+    <script type="module" src="./db.js?v=6.0"></script>
+    <!-- Main App v6.0 -->
+    <script type="module" src="./app.js?v=6.0"></script>
     <!-- UX Improvements -->
-    <script src="./ux-improvements.js?v=5.1"></script>
+    <script src="./ux-improvements.js?v=6.0"></script>
     
-    <!-- Service Worker con detección de actualizaciones -->
+    <!-- Service Worker v6.0 con actualización automática -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(reg => {
-                console.log('✅ SW registrado');
+            navigator.serviceWorker.register('./sw.js?v=6.0').then(reg => {
+                console.log('[SW v6.0] Registrado correctamente');
+                
+                // Detectar cuando hay una nueva versión disponible
                 reg.addEventListener('updatefound', () => {
                     const newWorker = reg.installing;
+                    console.log('[SW v6.0] Nueva versión detectada, instalando...');
+                    
                     newWorker.addEventListener('statechange', () => {
+                        // Cuando el nuevo SW está instalado y hay uno activo controlando la página
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('[SW v6.0] Nueva versión lista, forzando actualización...');
+                            
+                            // FORZAR al nuevo SW a activarse inmediatamente (skipWaiting)
+                            newWorker.postMessage('skipWaiting');
+                            
+                            // Mostrar notificación al usuario
                             const toast = document.createElement('div');
                             toast.className = 'toast info';
-                            toast.innerHTML = '<span>🔄</span><span>Nueva versión disponible. <button onclick="location.reload()">Actualizar</button></span>';
-                            document.getElementById('toast-container').appendChild(toast);
-                            setTimeout(() => toast.remove(), 10000);
+                            toast.innerHTML = '<span>🔄</span><span>Actualizando a v6.0...</span>';
+                            toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#3b82f6;color:white;padding:1rem 1.5rem;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.3);display:flex;align-items:center;gap:0.75rem;font-weight:500;';
+                            document.body.appendChild(toast);
                         }
                     });
                 });
-            }).catch(err => console.log('❌ SW error:', err));
+            }).catch(err => console.log('[SW v6.0] Error:', err));
+            
+            // Recargar automáticamente cuando el nuevo SW tome control
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('[SW v6.0] Nuevo controlador activo, recargando...');
+                window.location.reload();
+            });
         }
     </script>
 </body>

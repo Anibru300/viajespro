@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Módulo de Autenticación v5.1
+ * 3P VIAJESPRO - Módulo de Autenticación v6.0
  * Seguridad mejorada con Firebase Auth
  * Ahora el admin también se autentica con Firebase y se valida contra la colección "administradores"
  */

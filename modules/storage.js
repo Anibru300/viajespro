@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Módulo de Storage v5.1
+ * 3P VIAJESPRO - Módulo de Storage v6.0
  * Manejo de imágenes en Firebase Storage
  */
 

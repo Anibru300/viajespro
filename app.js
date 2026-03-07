@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Main Application v5.1
+ * 3P VIAJESPRO - Main Application v6.0
  * Con módulos de seguridad, storage y UX mejorada
  */
 
@@ -87,7 +87,7 @@ async function callWithAuth(functionName, data) {
 const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
-    VERSION: '5.1.0',
+    VERSION: '6.0.0',
     APP_NAME: '3P Control de Gastos',
     ENABLE_STORAGE: true,  // Usar Firebase Storage para imágenes
     ENABLE_GEOLOCATION: true,
@@ -160,7 +160,7 @@ function getMexicoDateTimeLocal() {
 }
 
 function debug(msg, data) {
-    console.log(`[DEBUG v5.1] ${msg}`, data || '');
+    console.log(`[DEBUG v6.0] ${msg}`, data || '');
 }
 
 // ===== ESCAPE HTML =====
@@ -175,9 +175,9 @@ function escapeHtml(text) {
     });
 }
 
-// ===== INICIALIZACIÓN MEJORADA v5.1 =====
+// ===== INICIALIZACIÓN MEJORADA v6.0 =====
 document.addEventListener('DOMContentLoaded', async () => {
-    debug('DOM cargado, iniciando v5.1...');
+    debug('DOM cargado, iniciando v6.0...');
     
     // Inicializar modo oscuro
     utils.initDarkMode();
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initApp() {
-    debug('Iniciando app v5.1...');
+    debug('Iniciando app v6.0...');
     
     // Verificar que window.db esté disponible (ViajesProDB desde db.js)
     if (typeof window.db === 'undefined') {
@@ -245,7 +245,7 @@ async function initApp() {
     // Cargar borrador si existe
     loadDraftGasto();
     
-    debug('App v5.1 iniciada correctamente');
+    debug('App v6.0 iniciada correctamente');
 }
 
 function setupEventListeners() {
@@ -373,9 +373,9 @@ function showAdminTab(tabName) {
     if (tabName === 'reportes') loadGlobalReport();
 }
 
-// ===== LOGIN MEJORADO v5.1 =====
+// ===== LOGIN MEJORADO v6.0 =====
 async function login() {
-    debug('Iniciando login v5.1...');
+    debug('Iniciando login v6.0...');
     
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
@@ -924,7 +924,7 @@ function showMainApp() {
     showScreen('app');
     actualizarEncabezado();
     
-    // Mostrar dashboard primero (nuevo en v5.1)
+    // Mostrar dashboard primero (nuevo en v6.0)
     showSection('dashboard');
     
     // Actualizar navegación
@@ -941,7 +941,7 @@ function actualizarEncabezado() {
     if (welcomeEl) welcomeEl.textContent = `Hola, ${state.currentVendor?.name?.split(' ')[0] || 'Vendedor'}`;
 }
 
-// ===== DASHBOARD v5.1 =====
+// ===== DASHBOARD v6.0 =====
 async function loadDashboard() {
     // Validar autenticación
     const currentUser = auth.currentUser;
@@ -1308,7 +1308,7 @@ async function crearViaje() {
         presupuesto: presupuesto,
         estado: 'activo',
         createdAt: new Date().toISOString(),
-        version: 5
+        version: 6
     };
     
     try {
@@ -1522,7 +1522,7 @@ function resetCapturaForm() {
     if (btnGuardar) btnGuardar.textContent = '💾 GUARDAR GASTO';
 }
 
-// ===== GEOLOCALIZACIÓN v5.1 =====
+// ===== GEOLOCALIZACIÓN v6.0 =====
 async function obtenerUbicacion() {
     if (!CONFIG.ENABLE_GEOLOCATION) return;
     
@@ -1546,7 +1546,7 @@ async function obtenerUbicacion() {
     }
 }
 
-// ===== AUTO-GUARDADO v5.1 =====
+// ===== AUTO-GUARDADO v6.0 =====
 function setupAutoSaveGasto() {
     const getFormData = () => ({
         viajeId: document.getElementById('captura-viaje-select')?.value,
@@ -1583,7 +1583,7 @@ function loadDraftGasto() {
     showToast('💾 Borrador recuperado', 'info');
 }
 
-// ===== GUARDAR GASTO MEJORADO v5.1 =====
+// ===== GUARDAR GASTO MEJORADO v6.0 =====
 async function guardarGasto() {
     // Validar autenticación primero
     const currentUser = auth.currentUser;
@@ -1670,10 +1670,10 @@ async function guardarGasto() {
             razonSocial,
             comentarios,
             esFacturable,
-            // v5.1: Usar URLs de Storage en lugar de base64
+            // v6.0: Usar URLs de Storage en lugar de base64
             fotos: imageUrls,
             imagePaths: imagePaths, // Para poder eliminar después
-            ubicacion: state.currentPosition, // v5.1: Geolocalización
+            ubicacion: state.currentPosition, // v6.0: Geolocalización
             updatedAt: new Date().toISOString()
         };
         
@@ -1729,7 +1729,7 @@ function toggleComentarioRequerido() {
     }
 }
 
-// ===== BÚSQUEDA FUZZY v5.1 =====
+// ===== BÚSQUEDA FUZZY v6.0 =====
 async function searchGastos(query) {
     if (!query || query.length < 2) {
         loadGastosList();
@@ -2965,4 +2965,4 @@ window.utils = utils;
 // Exponer funciones del mapa globalmente
 window.cargarMapaGastos = cargarMapaGastos;
 
-debug('App.js v5.1 cargado completamente');
+debug('App.js v6.0 cargado completamente');

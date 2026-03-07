@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Módulo de Base de Datos v5.1
+ * 3P VIAJESPRO - Módulo de Base de Datos v6.0
  * Mejorado con paginación, índices y performance
  */
 

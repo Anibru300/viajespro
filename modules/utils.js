@@ -1,5 +1,5 @@
 /**
- * 3P VIAJESPRO - Módulo de Utilidades UX v5.1
+ * 3P VIAJESPRO - Módulo de Utilidades UX v6.0
  * Funciones helper y mejoras de experiencia
  */
 
@@ -113,7 +113,7 @@ class UtilsService {
             const draft = {
                 data,
                 timestamp: new Date().toISOString(),
-                version: '5.1'
+                version: '6.0'
             };
             localStorage.setItem(`viajespro_draft_${key}`, JSON.stringify(draft));
         } catch (error) {
@@ -251,7 +251,7 @@ class UtilsService {
                 `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
                 {
                     headers: {
-                        'User-Agent': 'ViajesPro/5.1'
+                        'User-Agent': 'ViajesPro/6.0'
                     }
                 }
             );
