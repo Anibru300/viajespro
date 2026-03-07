@@ -2497,6 +2497,7 @@ Enviado desde ViajesPro v6.0`;
             }
         }, 500);
     }
+}
 
 // Función auxiliar para formatear fechas
 function formatearFecha(fechaStr) {
