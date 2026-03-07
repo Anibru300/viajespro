@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Función auxiliar para verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Colección: vendedores
+    match /vendedores/{vendorId} {
+      // Permitir lectura si:
+      // 1. Es el propio documento del usuario
+      // 2. Es administrador (tiene entrada en colección administradores)
+      allow read: if isAuthenticated() && (
+        request.auth.uid == vendorId ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir escritura bajo las mismas condiciones
+      allow write: if isAuthenticated() && (
+        request.auth.uid == vendorId ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+    }
+
+    // Colección: administradores
+    // Permitir que cualquier usuario autenticado verifique si es admin
+    match /administradores/{adminId} {
+      // Permitir leer tu propio documento de admin
+      allow read: if isAuthenticated() && request.auth.uid == adminId;
+      
+      // Permitir crear/escribir solo si ya eres admin
+      allow write: if isAuthenticated() && 
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid));
+    }
+
+    // Colección: viajes
+    match /viajes/{viajeId} {
+      // Permitir lectura si es tu viaje o eres admin
+      allow read: if isAuthenticated() && (
+        resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir creación si es tu viaje o eres admin
+      allow create: if isAuthenticated() && (
+        request.resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir actualización si es tu viaje o eres admin
+      allow update: if isAuthenticated() && (
+        (resource.data.vendedorId == request.auth.uid && 
+         request.resource.data.vendedorId == request.auth.uid) ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir eliminación si es tu viaje o eres admin
+      allow delete: if isAuthenticated() && (
+        resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+    }
+
+    // Colección: gastos
+    match /gastos/{gastoId} {
+      // Permitir lectura si es tu gasto o eres admin
+      allow read: if isAuthenticated() && (
+        resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir creación si es tu gasto o eres admin
+      allow create: if isAuthenticated() && (
+        request.resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir actualización si es tu gasto o eres admin
+      allow update: if isAuthenticated() && (
+        (resource.data.vendedorId == request.auth.uid && 
+         request.resource.data.vendedorId == request.auth.uid) ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+      
+      // Permitir eliminación si es tu gasto o eres admin
+      allow delete: if isAuthenticated() && (
+        resource.data.vendedorId == request.auth.uid ||
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid))
+      );
+    }
+
+    // Colección: app_config
+    match /app_config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid));
+    }
+  }
+}

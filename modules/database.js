@@ -118,7 +118,7 @@ class DatabaseService {
         let lastDoc = null;
         
         snapshot.forEach((doc) => {
-            results.push(doc.data());
+            results.push({ ...doc.data(), id: doc.id });
             lastDoc = doc;
         });
         

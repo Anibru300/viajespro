@@ -7,8 +7,10 @@
 import authService from './modules/auth.js';
 import storageService from './modules/storage.js';
 import utils from './modules/utils.js';
-import { app } from './firebase-config.js';
+import databaseService from './modules/database.js';
+import { app, db as firestoreDb } from './firebase-config.js';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
+import { where, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // Inicializar Functions (región us-central1 donde están desplegadas las Cloud Functions)
 import { auth } from './firebase-config.js';
@@ -206,12 +208,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initApp() {
     debug('Iniciando app v5.1...');
     
-    if (typeof db === 'undefined') {
-        throw new Error('La base de datos no está cargada');
+    // Verificar que window.db esté disponible (ViajesProDB desde db.js)
+    if (typeof window.db === 'undefined') {
+        throw new Error('La base de datos (window.db) no está cargada. Verifica que db.js se cargó correctamente.');
     }
     
-    await db.init();
-    debug('DB inicializada correctamente');
+    debug('DB lista (ViajesProDB)');
     
     // Inicializar auth
     await authService.init();
@@ -390,6 +392,11 @@ async function login() {
     try {
         const result = await authService.login(username, password, remember);
         
+        // Asegurar que el vendor tenga el uid
+        if (result.vendor && !result.vendor.uid) {
+            result.vendor.uid = auth.currentUser?.uid;
+        }
+        
         if (result.isAdmin) {
             state.currentUser = { type: 'admin' };
             state.currentVendor = result.vendor;
@@ -401,6 +408,8 @@ async function login() {
             showToast(`¡Bienvenido, ${result.vendor.name}!`, 'success');
             showMainApp();
         }
+        
+        debug('Login exitoso - currentVendor:', state.currentVendor);
         
     } catch (error) {
         debug('Error en login:', error);
@@ -498,7 +507,7 @@ async function registerVendor() {
     const errorDiv = document.getElementById('register-error');
     const btn = document.querySelector('#admin-tab-vendedores .btn-primary');
     
-    if (!nameInput || !usernameInput || !passwordInput) {
+    if (!nameInput || !usernameInput || !passwordInput || !emailInput) {
         console.error('No se encontraron campos del formulario');
         return;
     }
@@ -506,13 +515,23 @@ async function registerVendor() {
     const name = nameInput.value.trim();
     const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
-    const email = emailInput ? emailInput.value.trim() : '';
+    const email = emailInput.value.trim();
     const zone = zoneInput ? zoneInput.value : 'Bajío';
     
     if (errorDiv) errorDiv.textContent = '';
     
-    if (!name || !username || !password) {
-        const msg = 'Nombre, usuario y contraseña son obligatorios';
+    // Validación de campos obligatorios
+    if (!name || !username || !password || !email) {
+        const msg = 'Nombre, usuario, correo y contraseña son obligatorios';
+        if (errorDiv) errorDiv.textContent = msg;
+        showToast(msg, 'warning');
+        return;
+    }
+    
+    // Validación de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        const msg = 'El formato del correo electrónico no es válido';
         if (errorDiv) errorDiv.textContent = msg;
         showToast(msg, 'warning');
         return;
@@ -542,34 +561,38 @@ async function registerVendor() {
             name: name,
             username: username,
             password: password,
-            email: email || undefined,  // Si está vacío, la función usará el default
+            email: email,
             zone: zone
         });
         
         debug('Respuesta Cloud Function:', result.data);
         
-        showToast('✅ Vendedor registrado exitosamente', 'success');
+        showToast(`✅ ${result.data?.message || 'Vendedor registrado exitosamente'}`, 'success');
         
         // Limpiar formulario
         nameInput.value = '';
         usernameInput.value = '';
         passwordInput.value = '';
-        if (emailInput) emailInput.value = '';
+        emailInput.value = '';
         
         await loadVendorsList();
         
     } catch (error) {
         debug('Error al registrar:', error);
         
-        // Traducir errores comunes de Cloud Functions
+        // Traducir errores específicos de Cloud Functions
         let errorMsg = 'Error al registrar vendedor';
         
         if (error.code === 'functions/permission-denied' || error.code === 'functions/unauthenticated') {
             errorMsg = 'No tienes permisos para crear vendedores. Inicia sesión nuevamente.';
         } else if (error.code === 'functions/already-exists') {
-            errorMsg = 'Ya existe un vendedor con este nombre de usuario o email';
+            errorMsg = error.message || 'Ya existe un vendedor con este correo o nombre de usuario';
         } else if (error.code === 'functions/invalid-argument') {
-            errorMsg = error.message || 'Datos inválidos';
+            errorMsg = error.message || 'Datos inválidos. Verifica la información ingresada.';
+        } else if (error.code === 'functions/internal') {
+            errorMsg = error.message || 'Error del servidor. Intenta nuevamente.';
+        } else if (error.code === 'functions/not-found') {
+            errorMsg = error.message || 'Recurso no encontrado.';
         } else if (error.details?.message) {
             errorMsg = error.details.message;
         } else if (error.message) {
@@ -614,7 +637,7 @@ async function loadVendorsList() {
         }
         
         container.innerHTML = vendors.map(v => `
-            <div class="vendor-card" data-uid="${v.uid || v.id}" data-username="${v.username}">
+            <div class="vendor-card" data-uid="${v.id}" data-username="${v.username}">
                 <div class="vendor-info">
                     <h4>${escapeHtml(v.name)}</h4>
                     <p>
@@ -623,7 +646,7 @@ async function loadVendorsList() {
                     </p>
                 </div>
                 <div class="vendor-actions">
-                    <button class="btn btn-small btn-primary" onclick="editVendorByUid('${v.uid || v.id}')">Editar</button>
+                    <button class="btn btn-small btn-primary" onclick="editVendor('${v.username}')">Editar</button>
                     <button class="btn btn-small btn-secondary" onclick="deleteVendor('${v.username}', this)">Eliminar</button>
                 </div>
             </div>
@@ -643,17 +666,118 @@ function filterVendors() {
     });
 }
 
-async function editVendorByUid(uid) {
+// ===== LIMPIAR TODOS LOS VIAJES Y GASTOS (SOLO ADMIN) =====
+async function limpiarTodosLosDatos() {
+    // Verificar que sea admin
+    if (!state.currentUser || state.currentUser.type !== 'admin') {
+        showToast('Solo administradores pueden ejecutar esta acción', 'error');
+        return;
+    }
+    
+    if (!confirm('⚠️ ATENCIÓN ⚠️\n\nEsta acción ELIMINARÁ TODOS los viajes y gastos de la base de datos.\n\nLos vendedores NO se eliminarán.\n\n¿Estás seguro de continuar?')) {
+        return;
+    }
+    
+    if (!confirm('ÚLTIMA CONFIRMACIÓN:\n\n¿Realmente quieres borrar TODOS los viajes y gastos?\n\nEsta acción no se puede deshacer.')) {
+        return;
+    }
+    
     try {
-        const vendor = await db.get('vendedores', uid);
-        if (!vendor) {
+        debug('Iniciando limpieza de datos...');
+        showToast('⏳ Eliminando datos... Esto puede tomar un momento', 'info');
+        
+        let viajesEliminados = 0;
+        let gastosEliminados = 0;
+        const BATCH_SIZE = 400; // Máximo 500 operaciones por batch
+        
+        // 1. Obtener y eliminar todos los gastos usando databaseService.query
+        debug('Obteniendo gastos...');
+        const { data: todosGastos } = await databaseService.query('gastos', [], { limitCount: 10000 });
+        
+        if (todosGastos && todosGastos.length > 0) {
+            debug(`Encontrados ${todosGastos.length} gastos para eliminar`);
+            
+            // Procesar en batches
+            for (let i = 0; i < todosGastos.length; i += BATCH_SIZE) {
+                const batch = writeBatch(firestoreDb);
+                const chunk = todosGastos.slice(i, i + BATCH_SIZE);
+                
+                chunk.forEach((gasto) => {
+                    if (gasto.id) {
+                        batch.delete(doc(firestoreDb, 'gastos', gasto.id));
+                        gastosEliminados++;
+                    }
+                });
+                
+                await batch.commit();
+                debug(`Eliminados ${Math.min(i + BATCH_SIZE, todosGastos.length)} de ${todosGastos.length} gastos...`);
+            }
+        }
+        
+        // 2. Obtener y eliminar todos los viajes usando databaseService.query
+        debug('Obteniendo viajes...');
+        const { data: todosViajes } = await databaseService.query('viajes', [], { limitCount: 10000 });
+        
+        if (todosViajes && todosViajes.length > 0) {
+            debug(`Encontrados ${todosViajes.length} viajes para eliminar`);
+            
+            // Procesar en batches
+            for (let i = 0; i < todosViajes.length; i += BATCH_SIZE) {
+                const batch = writeBatch(firestoreDb);
+                const chunk = todosViajes.slice(i, i + BATCH_SIZE);
+                
+                chunk.forEach((viaje) => {
+                    if (viaje.id) {
+                        batch.delete(doc(firestoreDb, 'viajes', viaje.id));
+                        viajesEliminados++;
+                    }
+                });
+                
+                await batch.commit();
+                debug(`Eliminados ${Math.min(i + BATCH_SIZE, todosViajes.length)} de ${todosViajes.length} viajes...`);
+            }
+        }
+        
+        // Limpiar cachés locales
+        state.viajesCache = [];
+        state.gastosCache = [];
+        
+        debug(`Limpieza completada: ${viajesEliminados} viajes, ${gastosEliminados} gastos`);
+        showToast(`✅ Limpieza completada:\n• ${viajesEliminados} viajes eliminados\n• ${gastosEliminados} gastos eliminados`, 'success');
+        
+        // Recargar las listas si están visibles
+        if (document.getElementById('viajes-section')?.classList.contains('active')) {
+            loadViajes();
+        }
+        
+    } catch (error) {
+        debug('Error al limpiar datos:', error);
+        console.error('Error detallado:', error);
+        showToast('Error al eliminar datos: ' + (error.message || 'Error desconocido'), 'error');
+    }
+}
+
+// Editar vendedor - Busca por username y abre el modal de edición
+async function editVendor(username) {
+    try {
+        // Buscar vendedor por username usando databaseService.query
+        const { data: vendors } = await databaseService.query(
+            'vendedores',
+            [where('username', '==', username)],
+            { limitCount: 1 }
+        );
+        
+        if (!vendors || vendors.length === 0) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
         
-        document.getElementById('edit-vendor-id').value = uid;  // Usar el UID (doc ID)
-        document.getElementById('edit-vendor-name').value = vendor.name;
-        document.getElementById('edit-vendor-username').value = vendor.username;
+        const vendor = vendors[0];
+        const vendorId = vendor.id; // El ID del documento (UID)
+        
+        document.getElementById('edit-vendor-id').value = vendorId;
+        document.getElementById('edit-vendor-name').value = vendor.name || '';
+        document.getElementById('edit-vendor-username').value = vendor.username || '';
         document.getElementById('edit-vendor-password').value = '';
         document.getElementById('edit-vendor-email').value = vendor.email || '';
         document.getElementById('edit-vendor-zone').value = vendor.zone || 'Bajío';
@@ -662,17 +786,7 @@ async function editVendorByUid(uid) {
         openModal('editar-vendedor');
     } catch (error) {
         debug('Error al cargar datos del vendedor:', error);
-        showToast('Error al cargar datos', 'error');
-    }
-}
-
-// Función legacy para compatibilidad (busca por username en cache)
-async function editVendor(username) {
-    const vendor = vendorsCache.find(v => v.username === username);
-    if (vendor) {
-        editVendorByUid(vendor._docId);
-    } else {
-        showToast('Vendedor no encontrado', 'error');
+        showToast('Error al cargar datos: ' + (error.message || 'Error desconocido'), 'error');
     }
 }
 
@@ -744,29 +858,41 @@ async function saveVendorChanges() {
 }
 
 async function deleteVendor(username, btnElement) {
-    // Primero necesitamos obtener el UID del vendedor
     let btn = null;
     try {
-        const vendor = await db.get('vendedores', username);
-        if (!vendor) {
+        // Buscar vendedor por username usando databaseService.query
+        const { data: vendors } = await databaseService.query(
+            'vendedores',
+            [where('username', '==', username)],
+            { limitCount: 1 }
+        );
+        
+        if (!vendors || vendors.length === 0) {
             showToast('Vendedor no encontrado', 'error');
             return;
         }
         
-        if (!confirm(`¿Eliminar al vendedor ${vendor.name} (${username})?\n\nEsta acción eliminará tanto el usuario como todos sus datos.`)) return;
+        const vendor = vendors[0];
+        const vendorUid = vendor.id;
+        
+        if (!confirm(`¿Eliminar al vendedor ${vendor.name} (@${username})?\n\nEsta acción eliminará tanto el usuario de autenticación como todos sus datos de Firestore.`)) return;
         
         btn = btnElement || document.activeElement;
         if (btn) setLoading(btn, true);
         
-        // Llamar a la Cloud Function
-        debug('Llamando Cloud Function deleteVendor para UID:', vendor.uid || username);
+        // Llamar a la Cloud Function con UID y username
+        debug('Llamando Cloud Function deleteVendor:', { uid: vendorUid, username });
         
-        await callWithAuth('deleteVendor', {
-            uid: vendor.uid || username
+        const result = await callWithAuth('deleteVendor', {
+            uid: vendorUid,
+            username: username
         });
         
-        showToast('✅ Vendedor eliminado', 'success');
+        debug('Respuesta deleteVendor:', result.data);
+        
+        showToast(`✅ ${result.data?.message || 'Vendedor eliminado'}`, 'success');
         loadVendorsList();
+        
     } catch (error) {
         debug('Error al eliminar vendedor:', error);
         
@@ -775,8 +901,16 @@ async function deleteVendor(username, btnElement) {
             errorMsg = 'No tienes permisos para eliminar vendedores';
         } else if (error.code === 'functions/unauthenticated') {
             errorMsg = 'Debes iniciar sesión como administrador';
+        } else if (error.code === 'functions/not-found') {
+            errorMsg = error.message || 'Vendedor no encontrado';
+        } else if (error.code === 'functions/internal') {
+            errorMsg = error.message || 'Error interno del servidor';
+        } else if (error.code === 'functions/invalid-argument') {
+            errorMsg = error.message || 'Datos inválidos';
         } else if (error.details?.message) {
             errorMsg = error.details.message;
+        } else if (error.message) {
+            errorMsg = error.message;
         }
         
         showToast(errorMsg, 'error');
@@ -814,7 +948,7 @@ async function loadDashboard() {
     try {
         showLoading('dashboard-stats', true);
         
-        const stats = await db.getDashboardStats(state.currentVendor.username, 30);
+        const stats = await db.getDashboardStats(state.currentVendor.uid, 30);
         
         const container = document.getElementById('dashboard-stats');
         if (!container) return;
@@ -890,41 +1024,114 @@ async function abrirPerfil() {
     document.getElementById('perfil-email').value = vendor.email || '';
     document.getElementById('perfil-zona').value = vendor.zone || 'Bajío';
     document.getElementById('perfil-usuario').value = vendor.username || '';
-    document.getElementById('perfil-password').value = '';
+    document.getElementById('perfil-current-password').value = '';
+    document.getElementById('perfil-new-password').value = '';
     
     openModal('perfil');
 }
 
 async function guardarPerfil() {
-    if (!state.currentVendor) return;
+    if (!state.currentVendor) {
+        showToast('No hay sesión activa', 'error');
+        return;
+    }
     
     const nombre = document.getElementById('perfil-nombre').value.trim();
     const email = document.getElementById('perfil-email').value.trim();
     const zona = document.getElementById('perfil-zona').value;
-    const nuevaPassword = document.getElementById('perfil-password').value;
+    const currentPassword = document.getElementById('perfil-current-password').value;
+    const newPassword = document.getElementById('perfil-new-password').value;
     
+    // Validaciones
     if (!nombre) {
         showToast('El nombre no puede estar vacío', 'warning');
         return;
     }
     
+    // Validar email si se proporciona
+    if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showToast('El formato del correo electrónico no es válido', 'warning');
+            return;
+        }
+    }
+    
+    // Validar nueva contraseña si se quiere cambiar
+    if (newPassword && newPassword.length < 6) {
+        showToast('La nueva contraseña debe tener al menos 6 caracteres', 'warning');
+        return;
+    }
+    
+    // Si se quiere cambiar contraseña, se requiere la contraseña actual
+    if (newPassword && !currentPassword) {
+        showToast('Debes ingresar tu contraseña actual para cambiarla', 'warning');
+        return;
+    }
+    
+    const btn = document.querySelector('#modal-perfil .btn-primary');
+    if (btn) setLoading(btn, true);
+    
     try {
-        const updates = {
+        // 1. Actualizar datos del perfil en Firestore usando el UID como ID del documento
+        const vendorUid = state.currentVendor.uid;
+        if (!vendorUid) {
+            throw new Error('No se pudo obtener el UID del vendedor');
+        }
+        
+        debug('Actualizando perfil con UID:', vendorUid);
+        
+        // Usar databaseService directamente para evitar problemas con db.update
+        await databaseService.update('vendedores', vendorUid, {
+            name: nombre,
+            email: email,
+            zone: zona
+        });
+        
+        // 2. Cambiar contraseña si se proporcionó
+        if (newPassword) {
+            debug('Cambiando contraseña...');
+            try {
+                await authService.changePassword(currentPassword, newPassword);
+                showToast('✅ Contraseña actualizada correctamente', 'success');
+            } catch (passwordError) {
+                debug('Error cambiando contraseña:', passwordError);
+                // Traducir errores comunes de cambio de contraseña
+                let passwordErrorMsg = 'Error al cambiar la contraseña';
+                if (passwordError.message?.includes('contraseña') || passwordError.code === 'auth/wrong-password') {
+                    passwordErrorMsg = 'La contraseña actual es incorrecta';
+                } else if (passwordError.message?.includes('6 caracteres') || passwordError.code === 'auth/weak-password') {
+                    passwordErrorMsg = 'La nueva contraseña es muy débil. Usa al menos 6 caracteres';
+                } else if (passwordError.message?.includes('reciente') || passwordError.code === 'auth/requires-recent-login') {
+                    passwordErrorMsg = 'Por seguridad, cierra sesión y vuelve a entrar para cambiar la contraseña';
+                } else if (passwordError.message) {
+                    passwordErrorMsg = passwordError.message;
+                }
+                throw new Error(passwordErrorMsg);
+            }
+        }
+        
+        // 3. Actualizar estado local
+        state.currentVendor = { 
+            ...state.currentVendor, 
             name: nombre,
             email: email,
             zone: zona
         };
         
-        await db.update('vendedores', state.currentVendor.id || state.currentVendor.username, updates);
-        
-        // Actualizar local
-        state.currentVendor = { ...state.currentVendor, ...updates };
+        // 4. Limpiar campos de contraseña
+        document.getElementById('perfil-current-password').value = '';
+        document.getElementById('perfil-new-password').value = '';
         
         actualizarEncabezado();
         closeModal('perfil');
-        showToast('✅ Perfil actualizado', 'success');
+        showToast('✅ Perfil actualizado correctamente', 'success');
+        
     } catch (error) {
-        showToast('Error al guardar: ' + error.message, 'error');
+        debug('Error guardando perfil:', error);
+        showToast('Error al guardar: ' + (error.message || 'Error desconocido'), 'error');
+    } finally {
+        if (btn) setLoading(btn, false);
     }
 }
 
@@ -940,7 +1147,7 @@ async function loadViajes() {
             options.estado = filter;
         }
         
-        const viajes = await db.getViajesByVendedor(state.currentVendor.username, options);
+        const viajes = await db.getViajesByVendedor(state.currentVendor.uid, options);
         
         const container = document.getElementById('viajes-list');
         if (!container) return;
@@ -1008,7 +1215,7 @@ async function crearViaje() {
     
     const viaje = {
         id: 'VIAJE_' + Date.now(),
-        vendedorId: state.currentVendor.username,
+        vendedorId: state.currentVendor.uid,
         cliente: cliente.toUpperCase(),
         destino: destino.toUpperCase(),
         lugarVisita: lugarVisita ? lugarVisita.toUpperCase() : destino.toUpperCase(),
@@ -1134,7 +1341,7 @@ async function loadViajesSelect() {
     if (!state.currentVendor) return;
     
     try {
-        const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+        const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
         const activos = viajes.filter(v => v.estado === 'activo');
         
         const selects = [
@@ -1325,7 +1532,7 @@ async function guardarGasto() {
         
         const gastoData = {
             viajeId,
-            vendedorId: state.currentVendor.username,
+            vendedorId: state.currentVendor.uid,
             tipo: tipoCard.dataset.tipo,
             monto: monto,
             lugar: lugar || 'Sin lugar',
@@ -1403,7 +1610,7 @@ async function searchGastos(query) {
     if (!state.currentVendor) return;
     
     try {
-        const gastos = await db.searchGastos(state.currentVendor.username, query);
+        const gastos = await db.searchGastos(state.currentVendor.uid, query);
         renderGastosList(gastos);
     } catch (error) {
         debug('Error en búsqueda:', error);
@@ -1425,7 +1632,7 @@ async function loadGastosList() {
             gastos = gastos.map(g => ({...g, viaje}));
         } else {
             // Obtener gastos de todos los viajes del vendedor
-            const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+            const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
             for (const viaje of viajes) {
                 const g = await db.getGastosByViaje(viaje.id);
                 gastos = gastos.concat(g.map(item => ({...item, viaje})));
@@ -1670,7 +1877,7 @@ async function generarReporte() {
     }
     
     try {
-        const viajes = await db.getViajesByVendedor(state.currentVendor.username);
+        const viajes = await db.getViajesByVendedor(state.currentVendor.uid);
         let allGastos = [];
         
         for (const viaje of viajes) {
@@ -2227,6 +2434,7 @@ window.logout = logout;
 window.registerVendor = registerVendor;
 window.loadVendorsList = loadVendorsList;
 window.filterVendors = filterVendors;
+window.limpiarTodosLosDatos = limpiarTodosLosDatos;
 window.editVendor = editVendor;
 window.saveVendorChanges = saveVendorChanges;
 window.deleteVendor = deleteVendor;
