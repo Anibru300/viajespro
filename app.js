@@ -955,18 +955,22 @@ async function loadDashboard() {
         
         container.innerHTML = `
             <div class="stat-card">
+                <div class="stat-icon">💰</div>
                 <div class="stat-value">${formatMoney(stats.total)}</div>
                 <div class="stat-label">Total 30 días</div>
             </div>
             <div class="stat-card success">
+                <div class="stat-icon">📄</div>
                 <div class="stat-value">${formatMoney(stats.facturable)}</div>
                 <div class="stat-label">Facturable</div>
             </div>
             <div class="stat-card secondary">
+                <div class="stat-icon">🧾</div>
                 <div class="stat-value">${stats.count}</div>
                 <div class="stat-label">Gastos</div>
             </div>
             <div class="stat-card warning">
+                <div class="stat-icon">📊</div>
                 <div class="stat-value">${Object.keys(stats.porTipo).length}</div>
                 <div class="stat-label">Categorías</div>
             </div>
