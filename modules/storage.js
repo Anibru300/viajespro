@@ -3,7 +3,7 @@
  * Manejo de imágenes en Firebase Storage
  */
 
-import { storage } from '../firebase-config.js';
+import { storage, auth } from '../firebase-config.js';
 import { 
     ref, 
     uploadString, 
@@ -77,6 +77,23 @@ class StorageService {
      */
     async uploadImage(base64Image, path, onProgress = null) {
         try {
+            // VERIFICAR AUTENTICACIÓN PRIMERO
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                console.error('[Storage] Error: No hay usuario autenticado');
+                throw new Error('No hay sesión activa. Inicia sesión nuevamente.');
+            }
+            
+            console.log('[Storage] Usuario autenticado:', currentUser.uid);
+            
+            // Forzar refresh del token para asegurar permisos
+            try {
+                await currentUser.getIdToken(true);
+                console.log('[Storage] Token refrescado');
+            } catch (tokenError) {
+                console.warn('[Storage] Error refrescando token:', tokenError);
+            }
+            
             // Convertir a string si es un objeto String
             const imageString = String(base64Image);
             
@@ -94,24 +111,18 @@ class StorageService {
             
             console.log('[Storage] Subiendo a:', storageRef.fullPath);
             
-            // Subir con monitoreo de progreso
-            if (onProgress) {
-                const metadata = {
-                    contentType: 'image/jpeg',
-                    customMetadata: {
-                        uploadedBy: 'viajespro-app',
-                        timestamp: new Date().toISOString()
-                    }
-                };
-                
-                const uploadTask = uploadString(storageRef, compressed, 'data_url', metadata);
-                
-                // Nota: uploadString no tiene progreso, usar uploadBytesResumable para eso
-                // Pero requiere convertir base64 a blob primero
-            }
+            // Metadata siempre incluida
+            const metadata = {
+                contentType: 'image/jpeg',
+                customMetadata: {
+                    uploadedBy: 'viajespro-app',
+                    uploadedByUid: currentUser.uid,
+                    timestamp: new Date().toISOString()
+                }
+            };
             
             // Subir imagen
-            await uploadString(storageRef, compressed, 'data_url');
+            await uploadString(storageRef, compressed, 'data_url', metadata);
             
             // Obtener URL
             const downloadURL = await getDownloadURL(storageRef);
@@ -126,6 +137,12 @@ class StorageService {
         } catch (error) {
             console.error('[Storage] Error subiendo imagen:', error);
             console.error('[Storage] Path intentado:', path);
+            
+            // Mejorar mensaje de error para permisos
+            if (error.code === 'storage/unauthorized') {
+                throw new Error('No tienes permisos para subir imágenes. Cierra sesión y vuelve a entrar.');
+            }
+            
             throw error;
         }
     }
