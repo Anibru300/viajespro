@@ -2898,6 +2898,7 @@ async function handlePhotoCapture(event) {
         
         // Marcar como foto nueva (necesita ser subida)
         // Crear objeto con el base64 y metadata
+        console.log('[FOTO] Creando objeto foto con _data, tipo:', typeof compressed);
         const fotoObj = {
             _data: compressed,  // El base64 real
             _fileKey: fileKey,
