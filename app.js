@@ -1587,6 +1587,13 @@ function resetCapturaForm() {
         `;
     }
     
+    // Ocultar sección de fotos existentes y restaurar label
+    const containerExistentes = document.getElementById('fotos-existentes-container');
+    if (containerExistentes) containerExistentes.classList.add('hidden');
+    
+    const labelNuevas = document.getElementById('fotos-label-nuevas');
+    if (labelNuevas) labelNuevas.innerHTML = '📷 Agregar fotos de soporte';
+    
     // Limpiar borrador guardado
     utils.clearDraft('gasto_captura');
     
@@ -2035,16 +2042,26 @@ async function editarGasto(gastoId) {
         if (tipoCard) tipoCard.classList.add('selected');
         
         // Cargar fotos existentes (marcarlas como no nuevas)
-        state.tempFotos = (gasto.fotos || []).map(url => {
-            // Las URLs existentes no necesitan ser subidas de nuevo
+        const fotosExistentes = gasto.fotos || [];
+        state.tempFotos = fotosExistentes.map(url => {
             return {
                 _data: url,
-                _fileKey: null,  // Las existentes no tienen fileKey
-                _isNew: false,   // Marcar como existente
+                _fileKey: null,
+                _isNew: false,
                 toString: function() { return this._data; },
                 valueOf: function() { return this._data; }
             };
         });
+        
+        // Mostrar sección de fotos existentes
+        mostrarFotosExistentes(fotosExistentes);
+        
+        // Actualizar label de fotos nuevas
+        const labelNuevas = document.getElementById('fotos-label-nuevas');
+        if (labelNuevas) {
+            labelNuevas.innerHTML = `📷 Agregar más fotos <span style="font-size: 0.75rem; color: var(--gray-500);">(${fotosExistentes.length} guardadas)</span>`;
+        }
+        
         if (state.tempFotos.length > 0) {
             actualizarPreviewFotos();
         }
@@ -2304,7 +2321,7 @@ async function generarExcelProfesional() {
     });
 
     // Headers
-    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Comentarios'];
+    const headers = ['Fecha', 'Cliente', 'Lugar de Visita', 'Tipo Gasto', 'Folio Factura', 'Razón Social', 'Total', 'Facturable', 'Fotos', 'Comentarios'];
     const headerRow = worksheet.getRow(7);
     headers.forEach((h, i) => {
         const cell = headerRow.getCell(i+1);
@@ -2333,9 +2350,15 @@ async function generarExcelProfesional() {
         } else {
             row.getCell(8).font = { color: { argb: 'FFDC2626' }, bold: true };
         }
-        row.getCell(9).value = g.comentarios || '';
+        // Conteo de fotos
+        const numFotos = (g.fotos || []).length;
+        row.getCell(9).value = numFotos > 0 ? `${numFotos} foto(s)` : 'Sin fotos';
+        if (numFotos > 0) {
+            row.getCell(9).font = { color: { argb: 'FF2563EB' }, bold: true };
+        }
+        row.getCell(10).value = g.comentarios || '';
 
-        for (let i = 1; i <= 9; i++) {
+        for (let i = 1; i <= 10; i++) {
             row.getCell(i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         }
         rowIndex++;
@@ -2950,6 +2973,44 @@ function actualizarPreviewFotos() {
             ${state.tempFotos.filter(f => f._isNew).length} nuevas, ${state.tempFotos.filter(f => !f._isNew).length} existentes
         </p>
     `;
+}
+
+// Función para mostrar fotos existentes en edición
+function mostrarFotosExistentes(fotos) {
+    const container = document.getElementById('fotos-existentes-container');
+    const preview = document.getElementById('fotos-existentes-preview');
+    
+    if (!container || !preview) return;
+    
+    if (fotos.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+    
+    container.classList.remove('hidden');
+    preview.innerHTML = fotos.map((url, idx) => `
+        <div style="position: relative; flex-shrink: 0;">
+            <img src="${url}" style="height: 60px; width: 60px; border-radius: var(--radius); object-fit: cover; border: 2px solid #ccc; cursor: pointer;" 
+                 onclick="verFotoGrande('${url.replace(/'/g, "\\'")}')" title="Click para ver">
+            <span style="position: absolute; top: -5px; right: -5px; background: #6b7280; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; display: flex; align-items: center; justify-content: center;">${idx + 1}</span>
+        </div>
+    `).join('');
+}
+
+// Función para ver foto en tamaño grande
+function verFotoGrande(url) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+        background: rgba(0,0,0,0.9); z-index: 9999; display: flex; 
+        align-items: center; justify-content: center; padding: 2rem;
+    `;
+    modal.innerHTML = `
+        <img src="${url}" style="max-width: 100%; max-height: 90vh; object-fit: contain; border-radius: var(--radius);">
+        <button onclick="this.parentElement.remove()" style="position: absolute; top: 1rem; right: 1rem; background: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px;">✕</button>
+    `;
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
 }
 
 function clearPhoto() {
