@@ -3537,4 +3537,39 @@ window.utils = utils;
 // Exponer funciones del mapa globalmente
 window.cargarMapaGastos = cargarMapaGastos;
 
+// Función de sincronización de datos (para el botón de sincronizar)
+window.forceSync = async function() {
+    showToast('🔄 Sincronizando datos...', 'info');
+    
+    try {
+        // Limpiar caché de viajes y gastos
+        if (typeof databaseService !== 'undefined') {
+            databaseService.clearCache();
+        }
+        
+        // Recargar datos según la pantalla actual
+        if (state.currentUser?.type === 'admin') {
+            await loadVendorsList();
+            showToast('✅ Datos de vendedores actualizados', 'success');
+        } else {
+            // Recargar viajes y gastos del vendedor
+            await Promise.all([
+                loadViajes(),
+                loadGastosList()
+            ]);
+            showToast('✅ Datos sincronizados correctamente', 'success');
+        }
+        
+        // Forzar actualización desde el servidor
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            registration.update();
+        }
+        
+    } catch (error) {
+        console.error('Error en sincronización:', error);
+        showToast('❌ Error al sincronizar: ' + error.message, 'error');
+    }
+};
+
 debug('App.js v6.1.0 cargado completamente - Sistema de actualización activo');
