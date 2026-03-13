@@ -3773,11 +3773,9 @@ async function exportarHTML(gastos, nombreArchivo, viajeInfo) {
 
 // Abrir en geojson.io (visor online)
 window.abrirEnGeojsonIO = async function() {
-    if (!currentMapaData || !currentMapaData.gastos) {
-        // Si no hay datos cargados, cargarlos primero
-        await exportarMapaRuta('geojson');
-        if (!currentMapaData) return;
-    }
+    // SIEMPRE recargar datos del viaje seleccionado actual
+    await exportarMapaRuta('geojson');
+    if (!currentMapaData) return;
     
     const gastos = currentMapaData.gastos;
     const geoJSON = {
