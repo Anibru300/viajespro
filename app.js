@@ -2890,10 +2890,12 @@ async function handlePhotoCapture(event) {
         }
         
         // Marcar como foto nueva (necesita ser subida)
-        compressed._fileKey = fileKey;
-        compressed._isNew = true;
+        // Crear objeto String para poder agregar propiedades personalizadas
+        const fotoObj = new String(compressed);
+        fotoObj._fileKey = fileKey;
+        fotoObj._isNew = true;
         
-        state.tempFotos.push(compressed);
+        state.tempFotos.push(fotoObj);
         
         // Actualizar preview
         actualizarPreviewFotos();
