@@ -58,9 +58,13 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   
   // No interceptar requests de Firebase (Firestore, Auth, Storage)
-  if (event.request.url.includes('firebase') || 
-      event.request.url.includes('googleapis') ||
-      event.request.url.includes('gstatic')) {
+  const url = event.request.url;
+  if (url.includes('firebase') || 
+      url.includes('googleapis') ||
+      url.includes('gstatic') ||
+      url.includes('firebasestorage') ||
+      url.includes('cloudfunctions')) {
+    console.log('[SW] Ignorando request de Firebase:', url.substring(0, 50));
     return;
   }
   

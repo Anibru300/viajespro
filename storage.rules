@@ -1,49 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Función para verificar si el usuario está autenticado
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Función para verificar si es el dueño (por UID)
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-    
-    // Función para verificar si es admin
-    function isAdmin() {
-      return isAuthenticated() && 
-        firestore.exists(/databases/(default)/documents/administradores/$(request.auth.uid));
-    }
-
-    // === REGLAS PARA VIAJESPRO ===
-    
-    // Permitir lectura de cualquier imagen si estás autenticado
-    // Los vendedores pueden ver sus propias fotos, admins pueden ver todas
-    match /viajespro/{allPaths=**} {
-      allow read: if isAuthenticated();
-    }
-
-    // Permitir escritura en gastos/{userId}/... solo si:
-    // 1. Estás autenticado
-    // 2. El userId coincide con tu UID de Firebase Auth
-    // 3. O eres administrador
-    match /viajespro/gastos/{userId}/{allPaths=**} {
-      allow write: if isAuthenticated() && (isOwner(userId) || isAdmin());
-    }
-    
-    // Permitir escritura en otras rutas de viajespro solo para admins
-    match /viajespro/{path=**} {
-      allow write: if isAuthenticated() && isAdmin();
-    }
-    
-    // === REGLAS GENERALES (fallback) ===
-    // Estas reglas permiten lectura/escritura general a usuarios autenticados
-    // Útil para migraciones o casos especiales
+    // Permitir TODO temporalmente para diagnosticar el problema
+    // TODO: Restringir después de solucionar
     match /{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if request.auth != null;
+    }
+    
+    // Reglas específicas para viajespro
+    match /viajespro/{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
