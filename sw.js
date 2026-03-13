@@ -3,8 +3,8 @@
  * Con actualización automática y caché mejorado
  */
 
-const CACHE_NAME = 'viajespro-v6.1.0';
-const APP_VERSION = '6.1.0';
+const CACHE_NAME = 'viajespro-v6.1.1';
+const APP_VERSION = '6.1.1';
 const STATIC_ASSETS = [
   './',
   './index.html',
