@@ -3579,16 +3579,24 @@ ${gastos.map((g, i) => `    <Placemark>
 </kml>`;
     
     const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+    const nombreCompleto = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.kml`;
+    
+    // Guardar referencia para compartir/abrir después
+    lastDownloadedFile = {
+        blob: blob,
+        nombreArchivo: nombreCompleto,
+        tipo: 'application/vnd.google-earth.kml+xml'
+    };
+    
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.kml`;
+    link.download = nombreCompleto;
     link.click();
-    URL.revokeObjectURL(url);
     
-    // Mostrar instrucciones en móvil
+    // En móvil, mostrar modal con opción de abrir directo
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        mostrarModalArchivoDescargado(nombreArchivo + '.kml', 'kml');
+        mostrarModalArchivoDescargado(nombreCompleto, 'kml', blob);
     } else {
         showToast('🌍 Archivo KML descargado. Ábrelo con Google Earth.', 'success');
     }
@@ -3628,16 +3636,24 @@ async function exportarGeoJSON(gastos, nombreArchivo) {
     };
     
     const blob = new Blob([JSON.stringify(geoJSON, null, 2)], { type: 'application/json' });
+    const nombreCompleto = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.geojson`;
+    
+    // Guardar referencia para compartir/abrir después
+    lastDownloadedFile = {
+        blob: blob,
+        nombreArchivo: nombreCompleto,
+        tipo: 'application/json'
+    };
+    
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.geojson`;
+    link.download = nombreCompleto;
     link.click();
-    URL.revokeObjectURL(url);
     
-    // Mostrar instrucciones en móvil
+    // En móvil, mostrar modal con opciones
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        mostrarModalArchivoDescargado(nombreArchivo + '.geojson', 'geojson');
+        mostrarModalArchivoDescargado(nombreCompleto, 'geojson', blob);
     } else {
         showToast('📍 Archivo GeoJSON descargado', 'success');
     }
@@ -3771,23 +3787,35 @@ async function exportarHTML(gastos, nombreArchivo, viajeInfo) {
 </html>`;
     
     const blob = new Blob([html], { type: 'text/html' });
+    const nombreCompleto = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.html`;
+    
+    // Guardar referencia para compartir/abrir después
+    lastDownloadedFile = {
+        blob: blob,
+        nombreArchivo: nombreCompleto,
+        tipo: 'text/html'
+    };
+    
+    // Descargar
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.html`;
+    link.download = nombreCompleto;
     link.click();
-    URL.revokeObjectURL(url);
     
-    // Mostrar instrucciones en móvil
+    // En móvil, mostrar modal con opción de abrir directo
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-        mostrarModalArchivoDescargado(nombreArchivo + '.html', 'html');
+        mostrarModalArchivoDescargado(nombreCompleto, 'html', blob);
     } else {
         showToast('🌐 Mapa HTML descargado. Ábrelo en cualquier navegador.', 'success');
     }
 }
 
-// Modal con instrucciones para abrir archivo en móvil
-function mostrarModalArchivoDescargado(nombreArchivo, tipo) {
+// Variable global para guardar el blob del último archivo descargado
+let lastDownloadedFile = null;
+
+// Modal con opciones para abrir archivo en móvil
+function mostrarModalArchivoDescargado(nombreArchivo, tipo, blob = null) {
     const modal = document.createElement('div');
     modal.id = 'modal-archivo-descargado';
     modal.className = 'modal';
@@ -3800,6 +3828,39 @@ function mostrarModalArchivoDescargado(nombreArchivo, tipo) {
         'Ábrelo con Google Earth para ver la ruta en 3D.' : 
         'Es el formato estándar para mapas.';
     
+    // Botones específicos según el tipo
+    let botonesExtras = '';
+    
+    if (tipo === 'html' && blob) {
+        // Para HTML, intentar abrir directamente
+        const url = URL.createObjectURL(blob);
+        botonesExtras = `
+            <a href="${url}" target="_blank" rel="noopener noreferrer" 
+               class="btn btn-primary btn-large" 
+               style="width: 100%; display: block; margin-bottom: 0.75rem; text-decoration: none;"
+               onclick="setTimeout(() => URL.revokeObjectURL('${url}'), 1000);">
+                🚀 Abrir Ahora (Ver Mapa)
+            </a>
+            <button class="btn btn-secondary" onclick="compartirArchivoDescargado()" style="width: 100%; margin-bottom: 0.75rem;">
+                📤 Compartir Archivo
+            </button>
+        `;
+    } else if (tipo === 'kml' && blob) {
+        // Para KML, intentar abrir con Google Earth
+        const url = URL.createObjectURL(blob);
+        botonesExtras = `
+            <a href="${url}" target="_blank" rel="noopener noreferrer"
+               class="btn btn-primary btn-large" 
+               style="width: 100%; display: block; margin-bottom: 0.75rem; text-decoration: none;"
+               onclick="setTimeout(() => URL.revokeObjectURL('${url}'), 1000);">
+                🌍 Intentar Abrir con Google Earth
+            </a>
+            <button class="btn btn-secondary" onclick="compartirArchivoDescargado()" style="width: 100%; margin-bottom: 0.75rem;">
+                📤 Compartir Archivo
+            </button>
+        `;
+    }
+    
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 400px; text-align: center;">
             <div class="modal-header">
@@ -3807,7 +3868,7 @@ function mostrarModalArchivoDescargado(nombreArchivo, tipo) {
                 <button class="btn btn-icon" onclick="document.getElementById('modal-archivo-descargado').remove()">✕</button>
             </div>
             <div style="padding: 1.5rem;">
-                <p style="font-size: 1.25rem; margin-bottom: 1rem;">${icono}</p>
+                <p style="font-size: 2rem; margin-bottom: 1rem;">${icono}</p>
                 <p style="margin-bottom: 1rem; color: #374151;">
                     <strong>${nombreArchivo}</strong>
                 </p>
@@ -3815,27 +3876,17 @@ function mostrarModalArchivoDescargado(nombreArchivo, tipo) {
                     ${descripcion}
                 </p>
                 
+                ${botonesExtras}
+                
                 <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; text-align: left; margin-bottom: 1.5rem; border-radius: 4px;">
                     <p style="margin: 0; font-size: 0.875rem; color: #92400e;">
-                        <strong>📱 ¿Dónde está?</strong><br>
-                        Revisa tu carpeta <strong>"Descargas"</strong> o <strong>"Downloads"</strong>
+                        <strong>💡 ¿No se abre?</strong><br>
+                        Busca en tu carpeta <strong>"Descargas"</strong> o <strong>"Downloads"</strong> y ábrelo desde ahí.
                     </p>
                 </div>
                 
-                ${tipo === 'html' ? `
-                <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1rem; text-align: left; margin-bottom: 1.5rem; border-radius: 4px;">
-                    <p style="margin: 0; font-size: 0.875rem; color: #1e40af;">
-                        <strong>💡 Para abrirlo:</strong><br>
-                        1. Abre tu app de <strong>Archivos/Files</strong><br>
-                        2. Ve a la carpeta <strong>Descargas</strong><br>
-                        3. Busca <strong>${nombreArchivo}</strong><br>
-                        4. Toca dos veces para abrir
-                    </p>
-                </div>
-                ` : ''}
-                
-                <button class="btn btn-primary btn-large" onclick="document.getElementById('modal-archivo-descargado').remove()" style="width: 100%;">
-                    Entendido
+                <button class="btn btn-secondary" onclick="document.getElementById('modal-archivo-descargado').remove()" style="width: 100%;">
+                    Cerrar
                 </button>
             </div>
         </div>
@@ -3865,6 +3916,23 @@ async function compartirArchivo(blob, nombreArchivo, tipo) {
         }
     }
     return false;
+}
+
+// Compartir el último archivo descargado
+async function compartirArchivoDescargado() {
+    if (!lastDownloadedFile) {
+        showToast('No hay archivo para compartir', 'warning');
+        return;
+    }
+    
+    const { blob, nombreArchivo, tipo } = lastDownloadedFile;
+    const compartido = await compartirArchivo(blob, nombreArchivo, tipo);
+    
+    if (compartido) {
+        showToast('📤 Archivo compartido', 'success');
+    } else {
+        showToast('Tu dispositivo no soporta compartir archivos', 'warning');
+    }
 }
 
 // Abrir en geojson.io (visor online)
