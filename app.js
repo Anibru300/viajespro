@@ -453,7 +453,39 @@ async function login() {
         
     } catch (error) {
         debug('Error en login:', error);
-        showToast(error.message, 'error');
+        
+        // Mostrar información de debug en consola para ayudar al admin
+        console.error('=== ERROR DE LOGIN ===');
+        console.error('Mensaje:', error.message);
+        console.error('Código:', error.code);
+        console.error('Usuario intentado:', username);
+        if (error.attemptedEmails) {
+            console.error('Emails intentados:', error.attemptedEmails);
+        }
+        
+        // Construir mensaje de error más descriptivo
+        let errorMsg = error.message;
+        
+        // Si es error de credenciales inválidas, agregar ayuda
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+            errorMsg += '\n\n💡 SOLUCIÓN:\n';
+            errorMsg += '1. Ve a Firebase Console > Authentication\n';
+            errorMsg += '2. Verifica que el usuario exista con alguno de los emails mostrados arriba\n';
+            errorMsg += '3. Si no existe, créalo manualmente o usa el panel de admin\n';
+            errorMsg += '\n🔍 Tip: Intenta iniciar sesión con el email completo (ej: usuario@email.com)';
+        }
+        
+        // Mostrar error con duración más larga para que puedan leerlo
+        showToast(errorMsg, 'error', 10000);
+        
+        // Si es admin, mostrar en el error del admin también
+        if (username === 'admin') {
+            const adminError = document.getElementById('admin-login-error');
+            if (adminError) {
+                adminError.innerHTML = error.message.replace(/\n/g, '<br>');
+                adminError.style.whiteSpace = 'pre-wrap';
+            }
+        }
     } finally {
         setLoading(btn, false);
     }
