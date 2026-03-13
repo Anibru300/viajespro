@@ -131,16 +131,24 @@ function getMexicoDateTime() {
 
 function formatDateTimeMexico(dateString) {
     if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleString('es-MX', {
-        timeZone: 'America/Mexico_City',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    });
+    
+    try {
+        // Parsear la fecha ISO
+        const date = new Date(dateString);
+        
+        // Formatear en zona horaria de México
+        return date.toLocaleString('es-MX', {
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    } catch (e) {
+        return dateString || '-';
+    }
 }
 
 function formatDateMexico(dateString) {
@@ -155,18 +163,35 @@ function formatDateMexico(dateString) {
 }
 
 function getMexicoDateTimeLocal() {
-    const mexicoTime = new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" });
-    const date = new Date(mexicoTime);
-    return date.toISOString().slice(0, 16);
+    // Obtener fecha/hora actual en Ciudad de México
+    const mexicoTime = new Date().toLocaleString("en-US", { 
+        timeZone: "America/Mexico_City",
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    
+    // Formato: MM/DD/YYYY, HH:mm → convertir a YYYY-MM-DDTHH:mm
+    const [datePart, timePart] = mexicoTime.split(', ');
+    const [month, day, year] = datePart.split('/');
+    
+    return `${year}-${month}-${day}T${timePart}`;
 }
 
 // Obtener fecha actual en México como YYYY-MM-DD (para inputs tipo date)
 function getMexicoDateString() {
-    const mexicoTime = new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" });
-    const date = new Date(mexicoTime);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const mexicoTime = new Date().toLocaleString("en-US", { 
+        timeZone: "America/Mexico_City",
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    
+    // Formato: MM/DD/YYYY → convertir a YYYY-MM-DD
+    const [month, day, year] = mexicoTime.split('/');
     return `${year}-${month}-${day}`;
 }
 
@@ -176,26 +201,66 @@ function toMexicoISOString(dateInput, timeInput = '12:00') {
     const [year, month, day] = dateInput.split('-');
     const [hours, minutes] = timeInput.split(':');
     
-    // Crear fecha en UTC pero representando la hora de México
-    // Restamos 6 horas (CST) para almacenar en UTC equivalente
-    const date = new Date(Date.UTC(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hours) + 6, // Ajuste para CST (UTC-6)
-        parseInt(minutes)
-    ));
+    // Crear fecha como si fuera en Ciudad de México
+    // Usar Intl.DateTimeFormat para manejar correctamente el horario de verano
+    const mexicoDateStr = `${year}-${month}-${day}T${hours}:${minutes}:00`;
     
-    return date.toISOString();
+    // Crear fecha interpretando los componentes en zona de México
+    const dateInMexico = new Date(mexicoDateStr);
+    
+    // Usar formatToParts para obtener los componentes en zona de México
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
+    // Crear una fecha a partir de los componentes en México
+    const parts = formatter.formatToParts(dateInMexico);
+    const getPart = (type) => parts.find(p => p.type === type).value;
+    
+    const y = getPart('year');
+    const m = getPart('month');
+    const d = getPart('day');
+    const h = getPart('hour');
+    const min = getPart('minute');
+    const s = getPart('second');
+    
+    // Retornar en formato ISO
+    return `${y}-${m}-${d}T${h}:${min}:${s}.000Z`;
 }
 
 // Obtener timestamp actual en formato ISO con hora de México
 function getMexicoISOString() {
-    const mexicoTime = new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" });
-    const date = new Date(mexicoTime);
-    // Ajustar a UTC sumando el offset
-    const utcDate = new Date(date.getTime() + (6 * 60 * 60 * 1000));
-    return utcDate.toISOString();
+    // Obtener componentes de fecha/hora en Ciudad de México
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
+    const parts = formatter.formatToParts(new Date());
+    const getPart = (type) => parts.find(p => p.type === type).value;
+    
+    // Construir fecha en formato ISO 8601
+    const year = getPart('year');
+    const month = getPart('month');
+    const day = getPart('day');
+    const hour = getPart('hour');
+    const minute = getPart('minute');
+    const second = getPart('second');
+    
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`;
 }
 
 function debug(msg, data) {
