@@ -3586,7 +3586,12 @@ ${gastos.map((g, i) => `    <Placemark>
     link.click();
     URL.revokeObjectURL(url);
     
-    showToast('🌍 Archivo KML descargado. Ábrelo con Google Earth.', 'success');
+    // Mostrar instrucciones en móvil
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        mostrarModalArchivoDescargado(nombreArchivo + '.kml', 'kml');
+    } else {
+        showToast('🌍 Archivo KML descargado. Ábrelo con Google Earth.', 'success');
+    }
 }
 
 // Exportar a GeoJSON
@@ -3630,7 +3635,12 @@ async function exportarGeoJSON(gastos, nombreArchivo) {
     link.click();
     URL.revokeObjectURL(url);
     
-    showToast('📍 Archivo GeoJSON descargado', 'success');
+    // Mostrar instrucciones en móvil
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        mostrarModalArchivoDescargado(nombreArchivo + '.geojson', 'geojson');
+    } else {
+        showToast('📍 Archivo GeoJSON descargado', 'success');
+    }
 }
 
 // Exportar a HTML interactivo
@@ -3768,7 +3778,93 @@ async function exportarHTML(gastos, nombreArchivo, viajeInfo) {
     link.click();
     URL.revokeObjectURL(url);
     
-    showToast('🌐 Mapa HTML descargado. Ábrelo en cualquier navegador.', 'success');
+    // Mostrar instrucciones en móvil
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        mostrarModalArchivoDescargado(nombreArchivo + '.html', 'html');
+    } else {
+        showToast('🌐 Mapa HTML descargado. Ábrelo en cualquier navegador.', 'success');
+    }
+}
+
+// Modal con instrucciones para abrir archivo en móvil
+function mostrarModalArchivoDescargado(nombreArchivo, tipo) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-archivo-descargado';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    
+    let icono = tipo === 'html' ? '🌐' : tipo === 'kml' ? '🌍' : '📍';
+    let descripcion = tipo === 'html' ? 
+        'Es un mapa interactivo que funciona sin internet.' : 
+        tipo === 'kml' ? 
+        'Ábrelo con Google Earth para ver la ruta en 3D.' : 
+        'Es el formato estándar para mapas.';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div class="modal-header">
+                <h3>${icono} Archivo Descargado</h3>
+                <button class="btn btn-icon" onclick="document.getElementById('modal-archivo-descargado').remove()">✕</button>
+            </div>
+            <div style="padding: 1.5rem;">
+                <p style="font-size: 1.25rem; margin-bottom: 1rem;">${icono}</p>
+                <p style="margin-bottom: 1rem; color: #374151;">
+                    <strong>${nombreArchivo}</strong>
+                </p>
+                <p style="font-size: 0.875rem; color: #6b7280; margin-bottom: 1.5rem;">
+                    ${descripcion}
+                </p>
+                
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; text-align: left; margin-bottom: 1.5rem; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.875rem; color: #92400e;">
+                        <strong>📱 ¿Dónde está?</strong><br>
+                        Revisa tu carpeta <strong>"Descargas"</strong> o <strong>"Downloads"</strong>
+                    </p>
+                </div>
+                
+                ${tipo === 'html' ? `
+                <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1rem; text-align: left; margin-bottom: 1.5rem; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 0.875rem; color: #1e40af;">
+                        <strong>💡 Para abrirlo:</strong><br>
+                        1. Abre tu app de <strong>Archivos/Files</strong><br>
+                        2. Ve a la carpeta <strong>Descargas</strong><br>
+                        3. Busca <strong>${nombreArchivo}</strong><br>
+                        4. Toca dos veces para abrir
+                    </p>
+                </div>
+                ` : ''}
+                
+                <button class="btn btn-primary btn-large" onclick="document.getElementById('modal-archivo-descargado').remove()" style="width: 100%;">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Cerrar al hacer click fuera
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
+// Función para compartir archivo (Web Share API)
+async function compartirArchivo(blob, nombreArchivo, tipo) {
+    if (navigator.share && navigator.canShare) {
+        const file = new File([blob], nombreArchivo, { type: tipo });
+        if (navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    title: 'Ruta de Gastos',
+                    text: 'Aquí está el mapa de mi ruta de gastos',
+                    files: [file]
+                });
+                return true;
+            } catch (err) {
+                console.log('Compartir cancelado:', err);
+            }
+        }
+    }
+    return false;
 }
 
 // Abrir en geojson.io (visor online)
@@ -3799,9 +3895,56 @@ window.abrirEnGeojsonIO = async function() {
     // Codificar y abrir en geojson.io
     const encoded = encodeURIComponent(JSON.stringify(geoJSON));
     const url = `https://geojson.io/#data=data:application/json,${encoded}`;
-    window.open(url, '_blank');
     
-    showToast('🗺️ Abriendo mapa en geojson.io...', 'info');
+    // En móvil, intentar abrir de diferentes formas
+    const esMovil = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (esMovil) {
+        // Mostrar modal con opciones
+        const modal = document.createElement('div');
+        modal.id = 'modal-ver-online';
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <div class="modal-header">
+                    <h3>🗺️ Abrir Mapa Online</h3>
+                    <button class="btn btn-icon" onclick="document.getElementById('modal-ver-online').remove()">✕</button>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <p style="font-size: 3rem; margin-bottom: 1rem;">🌐</p>
+                    <p style="margin-bottom: 1rem; color: #374151;">
+                        El mapa se abrirá en <strong>geojson.io</strong>
+                    </p>
+                    <p style="font-size: 0.875rem; color: #6b7280; margin-bottom: 1.5rem;">
+                        Es una página web gratuita donde podrás ver tu ruta en un mapa interactivo.
+                    </p>
+                    
+                    <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1rem; text-align: left; margin-bottom: 1.5rem; border-radius: 4px;">
+                        <p style="margin: 0; font-size: 0.875rem; color: #1e40af;">
+                            <strong>💡 Tip:</strong> Si se abre dentro de la app, busca el icono <strong>⋮</strong> o <strong>↗️</strong> arriba y selecciona <strong>"Abrir en navegador"</strong> para verlo mejor.
+                        </p>
+                    </div>
+                    
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-large" style="width: 100%; display: block; margin-bottom: 0.5rem; text-decoration: none;" onclick="document.getElementById('modal-ver-online').remove();">
+                        🚀 Abrir Mapa Ahora
+                    </a>
+                    <button class="btn btn-secondary" onclick="document.getElementById('modal-ver-online').remove()" style="width: 100%;">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        
+    } else {
+        // En desktop, abrir directamente
+        window.open(url, '_blank');
+        showToast('🗺️ Abriendo mapa en geojson.io...', 'info');
+    }
 };
 
 // ===== SISTEMA DE ACTUALIZACIÓN AUTOMÁTICA =====
