@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Función para verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función para verificar si es el dueño del archivo
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Permitir lectura de imágenes si estás autenticado
+    match /viajespro/{allPaths=**} {
+      allow read: if isAuthenticated();
+    }
+
+    // Permitir escritura solo si el usuario está autenticado
+    // y está subiendo a su propia carpeta
+    match /viajespro/gastos/{userId}/{allPaths=**} {
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Regla general para otras rutas (requiere autenticación)
+    match /{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}

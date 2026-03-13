@@ -1,0 +1,22 @@
+{
+  "name": "3P ViajesPro v6.0",
+  "short_name": "ViajesPro",
+  "description": "Sistema de Control de Gastos de Viaje - Versión 6.0 con actualización automática y mejoras de UX",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#dc2626",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
