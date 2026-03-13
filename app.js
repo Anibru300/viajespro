@@ -87,11 +87,12 @@ async function callWithAuth(functionName, data) {
 const CONFIG = {
     ADMIN_USER: 'admin',
     ADMIN_PASS: 'admin123',
-    VERSION: '6.0.0',
+    VERSION: '6.1.0',
     APP_NAME: '3P Control de Gastos',
     ENABLE_STORAGE: true,  // Usar Firebase Storage para imágenes
     ENABLE_GEOLOCATION: true,
-    AUTOSAVE_INTERVAL: 10000 // 10 segundos
+    AUTOSAVE_INTERVAL: 10000, // 10 segundos
+    CHECK_UPDATE_INTERVAL: 300000 // 5 minutos
 };
 
 // ===== ESTADO GLOBAL =====
@@ -2371,50 +2372,323 @@ async function generarCorteCompleto() {
         return;
     }
 
-    showToast('🔄 Preparando corte completo...', 'info');
+    showToast('🔄 Preparando corte completo con fotos organizadas...', 'info');
 
     const { gastos, fechaInicio, fechaFin, responsable } = state.lastReport;
 
     const zip = new JSZip();
+    
+    // Crear carpetas por categoría
+    const categorias = {
+        gasolina: zip.folder('01_GASOLINA'),
+        comida: zip.folder('02_COMIDA'),
+        hotel: zip.folder('03_HOTEL'),
+        transporte: zip.folder('04_TRANSPORTE'),
+        casetas: zip.folder('05_CASETAS'),
+        otros: zip.folder('06_OTROS')
+    };
+    
+    // Carpeta para fotos sin categoría
+    const sinCategoriaFolder = zip.folder('00_SIN_CATEGORIA');
 
-    // Generar Excel
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Reporte');
-    // ... (misma lógica de Excel que arriba)
-    await generarExcelProfesional();
+    // Contadores para estadísticas
+    const stats = {
+        totalFotos: 0,
+        fotosDescargadas: 0,
+        fotosError: 0,
+        porCategoria: {}
+    };
 
-    // Crear carpeta de facturas
-    const facturasFolder = zip.folder('facturas_y_fotos');
+    // Función para descargar imagen con manejo de CORS
+    async function descargarImagen(url) {
+        try {
+            // Intentar con fetch primero (para URLs públicas)
+            const response = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache',
+                headers: {
+                    'Accept': 'image/*,*/*'
+                }
+            });
+            
+            if (response.ok) {
+                return await response.blob();
+            }
+            throw new Error(`HTTP ${response.status}`);
+        } catch (fetchError) {
+            // Si falla fetch, intentar con XMLHttpRequest (mejor para Firebase Storage)
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.responseType = 'blob';
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        resolve(xhr.response);
+                    } else {
+                        reject(new Error(`XHR Error: ${xhr.status}`));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('XHR Network Error'));
+                xhr.open('GET', url, true);
+                xhr.send();
+            });
+        }
+    }
 
-    // Descargar imágenes de Storage y agregar al ZIP
+    // Procesar gastos y descargar fotos
+    let procesados = 0;
+    const totalGastos = gastos.filter(g => g.fotos && g.fotos.length > 0).length;
+    
     for (const gasto of gastos) {
         if (gasto.fotos && gasto.fotos.length > 0) {
-            const folio = gasto.folioFactura ? gasto.folioFactura : 'sin_folio';
-            const viajeNombre = (gasto.viaje?.cliente || 'viaje') + '_' + (gasto.viaje?.destino || 'desconocido');
-            const nombreBase = `${folio}_${viajeNombre}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
-
+            procesados++;
+            
+            // Actualizar progreso cada 5 gastos
+            if (procesados % 5 === 0) {
+                showToast(`📸 Descargando fotos... (${procesados}/${totalGastos})`, 'info');
+            }
+            
+            // Determinar categoría
+            const tipo = gasto.tipo || 'otros';
+            const categoriaFolder = categorias[tipo] || sinCategoriaFolder;
+            
+            // Inicializar contador de categoría
+            if (!stats.porCategoria[tipo]) {
+                stats.porCategoria[tipo] = 0;
+            }
+            
+            // Crear nombre base del archivo
+            const fecha = gasto.fecha ? gasto.fecha.split('T')[0] : 'sin_fecha';
+            const folio = gasto.folioFactura ? gasto.folioFactura.replace(/[^a-zA-Z0-9]/g, '_') : 'sin_folio';
+            const cliente = (gasto.viaje?.cliente || 'sin_cliente').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
+            const destino = (gasto.viaje?.destino || 'sin_destino').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
+            const monto = gasto.monto ? `$${gasto.monto}` : '';
+            
             for (let i = 0; i < gasto.fotos.length; i++) {
+                stats.totalFotos++;
+                
                 try {
-                    const response = await fetch(gasto.fotos[i]);
-                    const blob = await response.blob();
-                    const extension = blob.type.includes('png') ? 'png' : 'jpg';
-                    facturasFolder.file(`${nombreBase}_${i + 1}.${extension}`, blob);
+                    const blob = await descargarImagen(gasto.fotos[i]);
+                    
+                    // Determinar extensión
+                    let extension = 'jpg';
+                    if (blob.type.includes('png')) extension = 'png';
+                    else if (blob.type.includes('gif')) extension = 'gif';
+                    else if (blob.type.includes('webp')) extension = 'webp';
+                    else if (blob.type.includes('pdf')) extension = 'pdf';
+                    
+                    // Nombre descriptivo: FECHA_FOLIO_CLIENTE_DESTINO_MONTO_NUM.ext
+                    const nombreArchivo = `${fecha}_${folio}_${cliente}_${destino}_${monto}_${i + 1}.${extension}`
+                        .replace(/__+/g, '_') // Evitar múltiples guiones bajos
+                        .replace(/^_+|_+$/g, ''); // Quitar guiones al inicio/final
+                    
+                    categoriaFolder.file(nombreArchivo, blob);
+                    stats.fotosDescargadas++;
+                    stats.porCategoria[tipo]++;
+                    
                 } catch (err) {
-                    console.warn('Error descargando imagen:', err);
+                    stats.fotosError++;
+                    console.warn(`Error descargando foto ${i + 1} de gasto ${gasto.id}:`, err);
+                    
+                    // Agregar un archivo de error para referencia
+                    const errorInfo = `Fecha: ${fecha}\nFolio: ${folio}\nCliente: ${cliente}\nDestino: ${destino}\nMonto: ${monto}\nError: ${err.message}\nURL: ${gasto.fotos[i]}\n`;
+                    categoriaFolder.file(`ERROR_${fecha}_${folio}_${i + 1}.txt`, errorInfo);
                 }
             }
         }
     }
 
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    // Generar Excel dentro del ZIP
+    showToast('📊 Generando archivo Excel...', 'info');
+    const excelBuffer = await generarExcelParaZIP();
+    zip.file(`REPORTE_${fechaInicio}_a_${fechaFin}.xlsx`, excelBuffer);
+
+    // Crear archivo README con información
+    const readmeContent = `═══════════════════════════════════════════════════════════════
+   REPORTE DE GASTOS - 3P VIAJESPRO v${CONFIG.VERSION}
+═══════════════════════════════════════════════════════════════
+
+📅 Período: ${formatDateMexico(fechaInicio)} - ${formatDateMexico(fechaFin)}
+👤 Responsable: ${responsable || 'No especificado'}
+📊 Total de Gastos: ${gastos.length}
+💰 Monto Total: $${gastos.reduce((sum, g) => sum + (g.monto || 0), 0).toFixed(2)}
+
+───────────────────────────────────────────────────────────────
+   ESTADÍSTICAS DE FOTOS
+───────────────────────────────────────────────────────────────
+
+📸 Total de fotos en el reporte: ${stats.totalFotos}
+✅ Fotos descargadas exitosamente: ${stats.fotosDescargadas}
+❌ Fotos con error: ${stats.fotosError}
+
+Fotos por categoría:
+${Object.entries(stats.porCategoria)
+    .map(([cat, count]) => `  • ${TIPOS_GASTO[cat]?.label || cat}: ${count} fotos`)
+    .join('\n')}
+
+───────────────────────────────────────────────────────────────
+   ESTRUCTURA DE CARPETAS
+───────────────────────────────────────────────────────────────
+
+📁 01_GASOLINA/      - Fotos de tickets de gasolina
+📁 02_COMIDA/        - Fotos de comidas y restaurantes
+📁 03_HOTEL/         - Fotos de hospedaje y hoteles
+📁 04_TRANSPORTE/    - Fotos de transporte (taxis, Uber, etc.)
+📁 05_CASETAS/       - Fotos de casetas de peaje
+📁 06_OTROS/         - Otras categorías de gastos
+📁 00_SIN_CATEGORIA/ - Fotos sin categoría específica
+
+📄 REPORTE_*.xlsx    - Archivo Excel con todos los datos
+
+───────────────────────────────────────────────────────────────
+   NOTAS
+───────────────────────────────────────────────────────────────
+
+• Los archivos de fotos siguen el formato:
+  FECHA_FOLIO_CLIENTE_DESTINO_MONTO_NUMERO.ext
+
+• Si hay archivos "ERROR_*.txt", significa que esa foto
+  no pudo descargarse. Contacta al administrador.
+
+• Este ZIP fue generado automáticamente por ViajesPro
+  el ${new Date().toLocaleString('es-MX')}
+
+───────────────────────────────────────────────────────────────
+   3P S.A. DE C.V. - Sistema de Control de Gastos
+───────────────────────────────────────────────────────────────
+`;
+    zip.file('README.txt', readmeContent);
+
+    // Generar ZIP final
+    showToast('📦 Comprimiendo archivo ZIP...', 'info');
+    const zipBlob = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+    });
+    
     const zipUrl = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
     link.href = zipUrl;
-    link.download = `corte_completo_${fechaInicio}_a_${fechaFin}.zip`;
+    link.download = `CORTE_COMPLETO_${fechaInicio}_a_${fechaFin}_${stats.fotosDescargadas}fotos.zip`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 
-    setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
-    showToast('📦 Corte completo descargado', 'success');
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 60000);
+    
+    showToast(`✅ Corte completo descargado: ${stats.fotosDescargadas}/${stats.totalFotos} fotos`, 'success');
+}
+
+// Función auxiliar para generar Excel como buffer (para incluir en ZIP)
+async function generarExcelParaZIP() {
+    const { gastos, fechaInicio, fechaFin, responsable } = state.lastReport;
+    
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Reporte de Gastos');
+
+    // Configurar propiedades del documento
+    workbook.creator = '3P ViajesPro';
+    workbook.lastModifiedBy = responsable || 'Sistema';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    // Título principal
+    worksheet.mergeCells('A1:I1');
+    worksheet.getCell('A1').value = '3P S.A. DE C.V. - REPORTE DE GASTOS';
+    worksheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FFDC2626' } };
+    worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(1).height = 30;
+
+    // Período
+    worksheet.mergeCells('A2:I2');
+    worksheet.getCell('A2').value = `Período: ${formatDateMexico(fechaInicio)} - ${formatDateMexico(fechaFin)}`;
+    worksheet.getCell('A2').font = { size: 12, bold: true };
+    worksheet.getCell('A2').alignment = { horizontal: 'center' };
+    worksheet.getRow(2).height = 20;
+
+    // Responsable
+    worksheet.mergeCells('A3:I3');
+    worksheet.getCell('A3').value = `Responsable: ${responsable || 'No especificado'}`;
+    worksheet.getCell('A3').font = { size: 11 };
+    worksheet.getCell('A3').alignment = { horizontal: 'center' };
+
+    worksheet.addRow([]);
+
+    // Encabezados
+    const headers = ['Fecha', 'Tipo', 'Folio', 'Descripción', 'Cliente', 'Destino', 'Monto', 'Forma de Pago', 'Observaciones'];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    // Configurar anchos de columna
+    worksheet.columns = [
+        { width: 15 },  // Fecha
+        { width: 12 },  // Tipo
+        { width: 15 },  // Folio
+        { width: 30 },  // Descripción
+        { width: 25 },  // Cliente
+        { width: 20 },  // Destino
+        { width: 12 },  // Monto
+        { width: 15 },  // Forma de Pago
+        { width: 30 }   // Observaciones
+    ];
+
+    // Datos
+    let totalMonto = 0;
+    gastos.forEach(gasto => {
+        const row = worksheet.addRow([
+            formatDateMexico(gasto.fecha),
+            TIPOS_GASTO[gasto.tipo]?.label || gasto.tipo || 'Otro',
+            gasto.folioFactura || 'N/A',
+            gasto.descripcion || '',
+            gasto.viaje?.cliente || 'N/A',
+            gasto.viaje?.destino || 'N/A',
+            gasto.monto || 0,
+            gasto.formaPago || 'Efectivo',
+            gasto.observaciones || ''
+        ]);
+
+        // Formato condicional según tipo
+        const tipoColor = TIPOS_GASTO[gasto.tipo]?.color || '#6b7280';
+        row.getCell(2).font = { color: { argb: tipoColor.replace('#', 'FF') } };
+        
+        // Formato de moneda
+        row.getCell(7).numFmt = '$#,##0.00';
+        row.getCell(7).alignment = { horizontal: 'right' };
+        
+        totalMonto += (gasto.monto || 0);
+    });
+
+    // Fila de total
+    worksheet.addRow([]);
+    const totalRow = worksheet.addRow(['', '', '', '', '', 'TOTAL:', totalMonto, '', '']);
+    totalRow.font = { bold: true, size: 12 };
+    totalRow.getCell(7).numFmt = '$#,##0.00';
+    totalRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+
+    // Resumen por categoría
+    worksheet.addRow([]);
+    worksheet.addRow(['RESUMEN POR CATEGORÍA', '', '', '', '', '', '', '', '']);
+    const resumenRow = worksheet.lastRow;
+    resumenRow.font = { bold: true, color: { argb: 'FFDC2626' } };
+    resumenRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+
+    const totalesPorTipo = {};
+    gastos.forEach(g => {
+        totalesPorTipo[g.tipo] = (totalesPorTipo[g.tipo] || 0) + (g.monto || 0);
+    });
+
+    Object.entries(totalesPorTipo).forEach(([tipo, monto]) => {
+        const label = TIPOS_GASTO[tipo]?.label || tipo;
+        const row = worksheet.addRow(['', label, '', '', '', '', monto, '', '']);
+        row.getCell(7).numFmt = '$#,##0.00';
+        row.getCell(7).alignment = { horizontal: 'right' };
+    });
+
+    // Generar buffer
+    return await workbook.xlsx.writeBuffer();
 }
 
 // ===== MANEJO DE BOTÓN ATRÁS =====
@@ -2998,10 +3272,212 @@ window.exportarMapaRuta = async function() {
     }
 };
 
+// ===== SISTEMA DE ACTUALIZACIÓN AUTOMÁTICA =====
+class UpdateManager {
+    constructor() {
+        this.currentVersion = CONFIG.VERSION;
+        this.updateAvailable = false;
+        this.updateChecked = false;
+        this.checkInterval = null;
+    }
+
+    // Inicializar el sistema de actualización
+    init() {
+        // Verificar al inicio
+        this.checkForUpdate();
+        
+        // Configurar verificación periódica
+        this.checkInterval = setInterval(() => {
+            this.checkForUpdate();
+        }, CONFIG.CHECK_UPDATE_INTERVAL);
+        
+        // Escuchar mensajes del Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
+                    this.handleUpdateAvailable(event.data.version);
+                }
+            });
+            
+            // Verificar si hay un SW esperando
+            this.checkWaitingWorker();
+        }
+        
+        debug('UpdateManager inicializado - Versión:', this.currentVersion);
+    }
+
+    // Verificar si hay nueva versión disponible
+    async checkForUpdate() {
+        try {
+            // Obtener versión del servidor (sin caché)
+            const response = await fetch('./app.js?v=' + Date.now(), {
+                method: 'HEAD',
+                cache: 'no-cache'
+            });
+            
+            // También verificar el Service Worker
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.ready;
+                
+                // Forzar update check
+                await registration.update();
+                
+                // Verificar si hay un SW esperando
+                if (registration.waiting) {
+                    this.handleUpdateAvailable();
+                }
+            }
+            
+        } catch (error) {
+            debug('Error verificando actualizaciones:', error);
+        }
+    }
+
+    // Verificar si hay un worker esperando
+    async checkWaitingWorker() {
+        if (!('serviceWorker' in navigator)) return;
+        
+        const registration = await navigator.serviceWorker.ready;
+        
+        if (registration.waiting) {
+            this.handleUpdateAvailable();
+        }
+        
+        // Escuchar nuevos workers instalados
+        registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Nueva versión lista
+                    this.handleUpdateAvailable();
+                }
+            });
+        });
+    }
+
+    // Manejar cuando hay una actualización disponible
+    handleUpdateAvailable(serverVersion) {
+        if (this.updateAvailable) return; // Ya notificamos
+        
+        this.updateAvailable = true;
+        debug('¡Nueva versión disponible!', serverVersion || 'detectada');
+        
+        // Mostrar notificación de actualización
+        this.showUpdateNotification();
+    }
+
+    // Mostrar notificación de actualización
+    showUpdateNotification() {
+        // Crear modal de actualización
+        const modal = document.createElement('div');
+        modal.id = 'update-modal';
+        modal.className = 'modal active';
+        modal.style.zIndex = '10000';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 1rem;">🚀</div>
+                <h2>¡Nueva Versión Disponible!</h2>
+                <p style="margin: 1rem 0; color: var(--gray-600);">
+                    Hay una actualización de <strong>ViajesPro</strong> lista para instalar.
+                </p>
+                <div style="background: var(--gray-100); padding: 1rem; border-radius: var(--radius); margin: 1rem 0;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span>Versión actual:</span>
+                        <strong>${this.currentVersion}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: var(--success);">
+                        <span>Nueva versión:</span>
+                        <strong>${this.currentVersion.includes('6.0') ? '6.1.0' : 'Nueva'}</strong>
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--gray-500); margin-bottom: 1rem;">
+                    📦 Incluye: Fotos organizadas por categoría, mejoras en reportes ZIP y correcciones.
+                </p>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" style="flex: 1;" onclick="updateManager.postponeUpdate()">
+                        ⏰ Más tarde
+                    </button>
+                    <button class="btn btn-primary" style="flex: 1;" onclick="updateManager.applyUpdate()">
+                        🔄 Actualizar Ahora
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // También mostrar toast
+        showToast('🚀 Nueva versión disponible. Toca "Actualizar" en el menú.', 'info', 10000);
+    }
+
+    // Aplicar actualización
+    async applyUpdate() {
+        showToast('🔄 Actualizando aplicación...', 'info');
+        
+        // Cerrar modal
+        const modal = document.getElementById('update-modal');
+        if (modal) modal.remove();
+        
+        // Limpiar caché y recargar
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            
+            if (registration.waiting) {
+                // Pedir al SW que se active
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+            
+            // Recargar la página cuando el nuevo SW controle
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+            });
+        }
+        
+        // Forzar recarga después de 2 segundos si no se activa el SW
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 2000);
+    }
+
+    // Posponer actualización
+    postponeUpdate() {
+        const modal = document.getElementById('update-modal');
+        if (modal) modal.remove();
+        
+        showToast('⏰ Actualización pospuesta. Se te recordará más tarde.', 'info');
+        
+        // Recordar en 30 minutos
+        setTimeout(() => {
+            this.updateAvailable = false;
+            this.checkForUpdate();
+        }, 30 * 60 * 1000);
+    }
+
+    // Forzar verificación de actualización (para botón manual)
+    async forceCheck() {
+        showToast('🔍 Buscando actualizaciones...', 'info');
+        await this.checkForUpdate();
+        
+        if (!this.updateAvailable) {
+            showToast('✅ Tienes la última versión', 'success');
+        }
+    }
+}
+
+// Crear instancia global del gestor de actualizaciones
+const updateManager = new UpdateManager();
+window.updateManager = updateManager;
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    updateManager.init();
+});
+
 window.storageService = storageService;
 window.utils = utils;
 
 // Exponer funciones del mapa globalmente
 window.cargarMapaGastos = cargarMapaGastos;
 
-debug('App.js v6.0 cargado completamente');
+debug('App.js v6.1.0 cargado completamente - Sistema de actualización activo');

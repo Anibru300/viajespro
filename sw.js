@@ -3,7 +3,8 @@
  * Con actualización automática y caché mejorado
  */
 
-const CACHE_NAME = 'viajespro-v6.0.0';
+const CACHE_NAME = 'viajespro-v6.1.0';
+const APP_VERSION = '6.1.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -110,12 +111,13 @@ self.addEventListener('fetch', (event) => {
 
 // Escuchar mensajes del cliente
 self.addEventListener('message', (event) => {
-  if (event.data === 'skipWaiting') {
+  if (event.data === 'skipWaiting' || event.data?.type === 'SKIP_WAITING') {
+    console.log('[SW] Saltando espera y activando nueva versión...');
     self.skipWaiting();
   }
   
   if (event.data === 'getVersion') {
-    event.ports[0].postMessage({ version: CACHE_NAME });
+    event.ports[0].postMessage({ version: CACHE_NAME, appVersion: APP_VERSION });
   }
 });
 

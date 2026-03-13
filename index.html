@@ -40,7 +40,7 @@
         <div class="splash-content">
             <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="splash-logo">
             <div class="splash-loader"></div>
-            <p class="splash-text">Cargando v6.0...</p>
+            <p class="splash-text">Cargando v6.1...</p>
         </div>
     </div>
 
@@ -51,7 +51,7 @@
                 <img src="./assets/images/logo-3p-login.png" alt="3P S.A. DE C.V." class="login-logo">
                 <h1>Control de Gastos</h1>
                 <p class="login-subtitle">Sistema de Gestión de Gastos de Viaje</p>
-                <span class="version-badge">v6.0 Pro</span>
+                <span class="version-badge">v6.1 Pro</span>
             </div>
             
             <form id="login-form" onsubmit="event.preventDefault(); login();">
@@ -87,7 +87,7 @@
                 </button>
             </div>
             
-            <div class="version-info">v6.0.0 - Sistema Offline Profesional</div>
+            <div class="version-info">v6.1.0 - Sistema Offline Profesional</div>
         </div>
     </div>
 
@@ -301,6 +301,12 @@
                         </button>
                         <button class="btn btn-secondary btn-large" onclick="openModal('nuevo-viaje')">
                             🚗 Nuevo Viaje
+                        </button>
+                        <button class="btn btn-secondary btn-large" onclick="if(window.updateManager) updateManager.forceCheck()">
+                            🔄 Verificar Actualización
+                        </button>
+                        <button class="btn btn-secondary btn-large" onclick="if(window.forceSync) forceSync()">
+                            ☁️ Sincronizar Datos
                         </button>
                         <button class="btn btn-secondary btn-large" onclick="showSection('gastos')">
                             💰 Ver Gastos
