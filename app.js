@@ -1717,7 +1717,7 @@ async function guardarGasto() {
         console.log('[Guardar Gasto] Fotos nuevas:', fotosNuevas.length, 'Fotos existentes:', fotosExistentes.length);
         
         // Subir imágenes a Storage solo las NUEVAS
-        let imageUrls = fotosExistentes.map(f => String(f)); // URLs existentes
+        let imageUrls = fotosExistentes.map(f => f._data || String(f)); // URLs existentes
         let imagePaths = state.currentGasto?.imagePaths || [];
         
         if (fotosNuevas.length > 0 && CONFIG.ENABLE_STORAGE) {
@@ -1727,8 +1727,10 @@ async function guardarGasto() {
             const storagePath = `gastos/${vendedorUid}/${viajeId}`;
             console.log('[Guardar Gasto] Subiendo fotos a:', storagePath);
             
+            // Extraer los datos base64 de los objetos foto
+            const fotosNuevasData = fotosNuevas.map(f => f._data || String(f));
             const uploadResults = await storageService.uploadMultipleImages(
-                fotosNuevas,
+                fotosNuevasData,
                 storagePath
             );
             
@@ -1737,7 +1739,8 @@ async function guardarGasto() {
             imagePaths = [...imagePaths, ...uploadResults.map(r => r.path)];
         } else if (fotosNuevas.length > 0) {
             // Fallback: guardar en base64 (modo legacy) si Storage está deshabilitado
-            imageUrls = [...imageUrls, ...fotosNuevas];
+            const fotosNuevasData = fotosNuevas.map(f => f._data || String(f));
+            imageUrls = [...imageUrls, ...fotosNuevasData];
         }
         
         const esEdicion = state.currentGasto !== null;
@@ -2034,9 +2037,13 @@ async function editarGasto(gastoId) {
         // Cargar fotos existentes (marcarlas como no nuevas)
         state.tempFotos = (gasto.fotos || []).map(url => {
             // Las URLs existentes no necesitan ser subidas de nuevo
-            const urlObj = new String(url);
-            urlObj._isNew = false; // Marcar como existente
-            return urlObj;
+            return {
+                _data: url,
+                _fileKey: null,  // Las existentes no tienen fileKey
+                _isNew: false,   // Marcar como existente
+                toString: function() { return this._data; },
+                valueOf: function() { return this._data; }
+            };
         });
         if (state.tempFotos.length > 0) {
             actualizarPreviewFotos();
@@ -2890,10 +2897,15 @@ async function handlePhotoCapture(event) {
         }
         
         // Marcar como foto nueva (necesita ser subida)
-        // Crear objeto String para poder agregar propiedades personalizadas
-        const fotoObj = new String(compressed);
-        fotoObj._fileKey = fileKey;
-        fotoObj._isNew = true;
+        // Crear objeto con el base64 y metadata
+        const fotoObj = {
+            _data: compressed,  // El base64 real
+            _fileKey: fileKey,
+            _isNew: true,
+            // Método toString para que funcione como string cuando se necesite
+            toString: function() { return this._data; },
+            valueOf: function() { return this._data; }
+        };
         
         state.tempFotos.push(fotoObj);
         
@@ -2926,7 +2938,7 @@ function actualizarPreviewFotos() {
         <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; padding: 0.5rem;">
             ${state.tempFotos.map((foto, idx) => `
                 <div style="position: relative; flex-shrink: 0;">
-                    <img src="${foto}" style="height: 80px; width: 80px; border-radius: var(--radius); object-fit: cover; border: 2px solid ${foto._isNew ? 'var(--success)' : '#ccc'};">
+                    <img src="${foto._data || foto}" style="height: 80px; width: 80px; border-radius: var(--radius); object-fit: cover; border: 2px solid ${foto._isNew ? 'var(--success)' : '#ccc'};">
                     ${foto._isNew ? '<span style="position: absolute; top: -5px; right: -5px; background: var(--success); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center;">✓</span>' : ''}
                     <button onclick="removeFoto(${idx})" style="position: absolute; bottom: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
                 </div>
