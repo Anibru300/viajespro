@@ -395,8 +395,16 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Fecha</label>
-                            <input type="datetime-local" id="fecha-gasto">
+                            <label>Fecha y hora (Ciudad de México)</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="datetime-local" id="fecha-gasto" style="flex: 1;">
+                                <button type="button" class="btn btn-secondary" onclick="syncFechaConMexico()" title="Sincronizar con hora actual de México">
+                                    🕐 Ahora
+                                </button>
+                            </div>
+                            <small style="color: var(--gray-500); font-size: 0.75rem;">
+                                La hora se guarda en horario de Ciudad de México (CDMX)
+                            </small>
                         </div>
                     </div>
                     
@@ -837,14 +845,14 @@
     <!-- Database (compatibility layer) -->
     <script type="module" src="./db.js?v=6.0"></script>
     <!-- Main App v6.0 -->
-    <script type="module" src="./app.js?v=20250313-3-FOTOS"></script>
+    <script type="module" src="./app.js?v=20250313-4-HORA"></script>
     <!-- UX Improvements -->
     <script src="./ux-improvements.js?v=6.0"></script>
     
     <!-- Service Worker v6.0 con actualización automática -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js?v=20250313-3-FOTOS')".then(reg => {
+            navigator.serviceWorker.register('./sw.js?v=20250313-4-HORA')".then(reg => {
                 console.log('[SW v6.0] Registrado correctamente');
                 
                 // Detectar cuando hay una nueva versión disponible

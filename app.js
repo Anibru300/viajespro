@@ -125,6 +125,15 @@ const TIPOS_GASTO = {
 };
 
 // ===== FUNCIONES DE FECHA/HORA MÉXICO =====
+
+// Función para sincronizar el input de fecha con la hora actual de México
+function syncFechaConMexico() {
+    const input = document.getElementById('fecha-gasto');
+    if (input) {
+        input.value = getMexicoDateTimeLocal();
+        showToast('🕐 Fecha sincronizada con hora de México', 'success');
+    }
+}
 function getMexicoDateTime() {
     return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
 }
@@ -3133,6 +3142,7 @@ window.togglePassword = togglePassword;
 window.handlePhotoCapture = handlePhotoCapture;
 window.clearPhoto = clearPhoto;
 window.removeFoto = removeFoto;
+window.syncFechaConMexico = syncFechaConMexico;
 window.loadDashboard = loadDashboard;
 window.toggleDarkMode = toggleDarkMode;
 window.searchGastos = searchGastos;
