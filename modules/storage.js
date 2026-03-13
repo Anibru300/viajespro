@@ -70,24 +70,29 @@ class StorageService {
 
     /**
      * Sube una imagen a Firebase Storage
-     * @param {string} base64Image - Imagen en base64
+     * @param {string} base64Image - Imagen en base64 (puede ser String o objeto con _isNew)
      * @param {string} path - Ruta (ej: 'gastos/user123/gasto456')
      * @param {function} onProgress - Callback de progreso (0-100)
      * @returns {Promise<string>} - URL de descarga
      */
     async uploadImage(base64Image, path, onProgress = null) {
         try {
+            // Convertir a string si es un objeto String
+            const imageString = String(base64Image);
+            
             // Validar tamaño
-            const sizeInBytes = (base64Image.length * 3) / 4;
+            const sizeInBytes = (imageString.length * 3) / 4;
             if (sizeInBytes > this.maxFileSize) {
                 throw new Error(`Imagen muy grande. Máximo ${this.maxFileSize / 1024 / 1024}MB`);
             }
 
-            // Comprimir antes de subir
-            const compressed = await this.compressImage(base64Image, 800);
+            // Comprimir antes de subir (usar el string original)
+            const compressed = await this.compressImage(imageString, 800);
             
             // Crear referencia
             const storageRef = ref(storage, `viajespro/${path}_${Date.now()}.jpg`);
+            
+            console.log('[Storage] Subiendo a:', storageRef.fullPath);
             
             // Subir con monitoreo de progreso
             if (onProgress) {
@@ -111,13 +116,16 @@ class StorageService {
             // Obtener URL
             const downloadURL = await getDownloadURL(storageRef);
             
+            console.log('[Storage] Subida exitosa:', downloadURL);
+            
             return {
                 url: downloadURL,
                 path: storageRef.fullPath,
                 size: Math.round((compressed.length * 3) / 4 / 1024) // KB
             };
         } catch (error) {
-            console.error('Error subiendo imagen:', error);
+            console.error('[Storage] Error subiendo imagen:', error);
+            console.error('[Storage] Path intentado:', path);
             throw error;
         }
     }
@@ -131,12 +139,17 @@ class StorageService {
      */
     async uploadMultipleImages(imagesArray, basePath, onProgress = null) {
         const results = [];
+        const errors = [];
+        
+        console.log('[Storage] Iniciando subida de', imagesArray.length, 'imágenes a:', basePath);
         
         for (let i = 0; i < imagesArray.length; i++) {
             try {
+                console.log(`[Storage] Subiendo imagen ${i + 1}/${imagesArray.length}...`);
+                
                 const result = await this.uploadImage(
                     imagesArray[i], 
-                    `${basePath}/img${i + 1}`
+                    `${basePath}/img${i + 1}_${Date.now()}`
                 );
                 results.push(result);
                 
@@ -144,9 +157,16 @@ class StorageService {
                     onProgress(i + 1, imagesArray.length);
                 }
             } catch (error) {
-                console.error(`Error subiendo imagen ${i + 1}:`, error);
+                console.error(`[Storage] Error subiendo imagen ${i + 1}:`, error);
+                errors.push({ index: i, error: error.message });
                 // Continuar con las demás imágenes
             }
+        }
+        
+        console.log(`[Storage] Subida completada: ${results.length}/${imagesArray.length} exitosas`);
+        
+        if (errors.length > 0) {
+            console.warn('[Storage] Errores:', errors);
         }
         
         return results;

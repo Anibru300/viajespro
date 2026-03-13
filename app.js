@@ -1710,23 +1710,34 @@ async function guardarGasto() {
     if (btnGuardar) setLoading(btnGuardar, true);
     
     try {
-        // Subir imágenes a Storage si hay nuevas fotos
-        let imageUrls = [];
-        let imagePaths = [];
+        // Separar fotos nuevas (base64) de fotos existentes (URLs)
+        const fotosNuevas = state.tempFotos.filter(f => f._isNew === true);
+        const fotosExistentes = state.tempFotos.filter(f => f._isNew === false);
         
-        if (state.tempFotos.length > 0 && CONFIG.ENABLE_STORAGE) {
-            showToast('📤 Subiendo imágenes...', 'info');
+        console.log('[Guardar Gasto] Fotos nuevas:', fotosNuevas.length, 'Fotos existentes:', fotosExistentes.length);
+        
+        // Subir imágenes a Storage solo las NUEVAS
+        let imageUrls = fotosExistentes.map(f => String(f)); // URLs existentes
+        let imagePaths = state.currentGasto?.imagePaths || [];
+        
+        if (fotosNuevas.length > 0 && CONFIG.ENABLE_STORAGE) {
+            showToast(`📤 Subiendo ${fotosNuevas.length} imagen(es) nueva(s)...`, 'info');
+            
+            // FIX: Usar el UID del vendedor en lugar del username para cumplir con las reglas de Storage
+            const storagePath = `gastos/${vendedorUid}/${viajeId}`;
+            console.log('[Guardar Gasto] Subiendo fotos a:', storagePath);
             
             const uploadResults = await storageService.uploadMultipleImages(
-                state.tempFotos,
-                `gastos/${state.currentVendor?.username || vendedorUid}/${viajeId}`
+                fotosNuevas,
+                storagePath
             );
             
-            imageUrls = uploadResults.map(r => r.url);
-            imagePaths = uploadResults.map(r => r.path);
-        } else {
-            // Fallback: guardar en base64 (modo legacy)
-            imageUrls = state.tempFotos;
+            // Combinar URLs nuevas con las existentes
+            imageUrls = [...imageUrls, ...uploadResults.map(r => r.url)];
+            imagePaths = [...imagePaths, ...uploadResults.map(r => r.path)];
+        } else if (fotosNuevas.length > 0) {
+            // Fallback: guardar en base64 (modo legacy) si Storage está deshabilitado
+            imageUrls = [...imageUrls, ...fotosNuevas];
         }
         
         const esEdicion = state.currentGasto !== null;
@@ -2020,21 +2031,15 @@ async function editarGasto(gastoId) {
         const tipoCard = document.querySelector(`.tipo-card[data-tipo="${gasto.tipo}"]`);
         if (tipoCard) tipoCard.classList.add('selected');
         
-        // Cargar fotos existentes (si son URLs de Storage o base64 legacy)
-        state.tempFotos = gasto.fotos || [];
+        // Cargar fotos existentes (marcarlas como no nuevas)
+        state.tempFotos = (gasto.fotos || []).map(url => {
+            // Las URLs existentes no necesitan ser subidas de nuevo
+            const urlObj = new String(url);
+            urlObj._isNew = false; // Marcar como existente
+            return urlObj;
+        });
         if (state.tempFotos.length > 0) {
-            const preview = document.getElementById('photo-preview');
-            preview.innerHTML = `
-                <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
-                    ${state.tempFotos.map((foto, idx) => `
-                        <div style="position: relative;">
-                            <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
-                            <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
-            `;
+            actualizarPreviewFotos();
         }
         
         const btnGuardar = document.querySelector('#captura-section .btn-primary.btn-large');
@@ -2049,25 +2054,7 @@ async function editarGasto(gastoId) {
 
 function removeFoto(index) {
     state.tempFotos.splice(index, 1);
-    const preview = document.getElementById('photo-preview');
-    if (state.tempFotos.length === 0) {
-        preview.innerHTML = `
-            <span class="upload-icon">📷</span>
-            <span class="upload-text">Toca para capturar foto</span>
-        `;
-    } else {
-        preview.innerHTML = `
-            <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
-                ${state.tempFotos.map((foto, idx) => `
-                    <div style="position: relative;">
-                        <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
-                        <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
-                    </div>
-                `).join('')}
-            </div>
-            <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
-        `;
-    }
+    actualizarPreviewFotos();
 }
 
 async function eliminarGasto(gastoId) {
@@ -2869,49 +2856,85 @@ function formatDateTime(dateString) {
     });
 }
 
+// ===== CAPTURA DE FOTOS MEJORADA v6.1 =====
+// Separa fotos nuevas (base64) de fotos existentes (URLs de Storage)
+
 async function handlePhotoCapture(event) {
     const file = event.target.files[0];
     if (!file) return;
     
     try {
-        // Usar el nuevo sistema de storage
-        if (typeof storageService !== 'undefined') {
-            const base64 = await storageService.fileToBase64(file);
-            const compressed = await storageService.compressImage(base64, 300);
-            state.tempFotos.push(compressed);
-        } else {
-            // Fallback legacy
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                state.tempFotos.push(e.target.result);
-            };
-            reader.readAsDataURL(file);
+        // Verificar que no sea duplicado (comparar por nombre y tamaño aproximado)
+        const fileKey = `${file.name}_${file.size}`;
+        if (state.tempFotos.some(f => f._fileKey === fileKey)) {
+            showToast('Esta foto ya fue agregada', 'warning');
+            event.target.value = '';
+            return;
         }
         
-        // Actualizar preview
-        const preview = document.getElementById('photo-preview');
-        if (preview) {
-            if (state.tempFotos.length === 1) {
-                preview.innerHTML = '';
-            }
-            
-            preview.innerHTML = `
-                <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem;">
-                    ${state.tempFotos.map((foto, idx) => `
-                        <div style="position: relative;">
-                            <img src="${foto}" style="height: 80px; border-radius: var(--radius); object-fit: cover;">
-                            <button onclick="removeFoto(${idx})" style="position: absolute; top: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
-            `;
+        showToast('📷 Procesando imagen...', 'info');
+        
+        // Usar el nuevo sistema de storage
+        let compressed;
+        if (typeof storageService !== 'undefined') {
+            const base64 = await storageService.fileToBase64(file);
+            compressed = await storageService.compressImage(base64, 800);
+        } else {
+            // Fallback legacy
+            compressed = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
+        
+        // Marcar como foto nueva (necesita ser subida)
+        compressed._fileKey = fileKey;
+        compressed._isNew = true;
+        
+        state.tempFotos.push(compressed);
+        
+        // Actualizar preview
+        actualizarPreviewFotos();
+        
+        showToast(`✅ Foto agregada (${state.tempFotos.length} total)`, 'success');
+        
     } catch (error) {
         showToast('Error procesando imagen: ' + error.message, 'error');
     }
     
     event.target.value = '';
+}
+
+// Función auxiliar para actualizar el preview de fotos
+function actualizarPreviewFotos() {
+    const preview = document.getElementById('photo-preview');
+    if (!preview) return;
+    
+    if (state.tempFotos.length === 0) {
+        preview.innerHTML = `
+            <span class="upload-icon">📷</span>
+            <span class="upload-text">Toca para capturar foto</span>
+        `;
+        return;
+    }
+    
+    preview.innerHTML = `
+        <div style="display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 0.5rem; padding: 0.5rem;">
+            ${state.tempFotos.map((foto, idx) => `
+                <div style="position: relative; flex-shrink: 0;">
+                    <img src="${foto}" style="height: 80px; width: 80px; border-radius: var(--radius); object-fit: cover; border: 2px solid ${foto._isNew ? 'var(--success)' : '#ccc'};">
+                    ${foto._isNew ? '<span style="position: absolute; top: -5px; right: -5px; background: var(--success); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center;">✓</span>' : ''}
+                    <button onclick="removeFoto(${idx})" style="position: absolute; bottom: -5px; right: -5px; background: #dc2626; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px;">×</button>
+                </div>
+            `).join('')}
+        </div>
+        <button type="button" class="btn btn-small btn-secondary" onclick="document.getElementById('camera-input').click()">+ Agregar más fotos</button>
+        <p style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.5rem;">
+            ${state.tempFotos.filter(f => f._isNew).length} nuevas, ${state.tempFotos.filter(f => !f._isNew).length} existentes
+        </p>
+    `;
 }
 
 function clearPhoto() {
