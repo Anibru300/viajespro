@@ -89,7 +89,7 @@ const CONFIG = {
     ADMIN_PASS: 'admin123',
     VERSION: '6.1.0',
     APP_NAME: '3P Control de Gastos',
-    ENABLE_STORAGE: true,  // Usar Firebase Storage para imágenes
+    ENABLE_STORAGE: false,  // Desactivado temporalmente - usar modo legacy (base64 en Firestore)
     ENABLE_GEOLOCATION: true,
     AUTOSAVE_INTERVAL: 10000, // 10 segundos
     CHECK_UPDATE_INTERVAL: 300000 // 5 minutos
