@@ -3,7 +3,7 @@
  * Con actualización automática y caché mejorado
  */
 
-const CACHE_NAME = 'viajespro-v6.1.4-HORA';
+const CACHE_NAME = 'viajespro-v6.1.5-MAPA';
 const APP_VERSION = '6.1.1';
 const STATIC_ASSETS = [
   './',

@@ -3406,7 +3406,10 @@ function inicializarMapa(gastos) {
     }
 }
 
-window.exportarMapaRuta = async function() {
+// Variable global para almacenar los datos del mapa actual
+let currentMapaData = null;
+
+window.exportarMapaRuta = async function(formato = 'geojson') {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
     
@@ -3416,10 +3419,12 @@ window.exportarMapaRuta = async function() {
     try {
         let gastosConUbicacion = [];
         let nombreArchivo = 'ruta-gastos';
+        let viajeInfo = null;
         
         if (viajeId) {
             const viaje = await db.get('viajes', viajeId);
-            nombreArchivo = `ruta-${viaje?.cliente || 'viaje'}-${formatDate(viaje?.fechaInicio)}`;
+            viajeInfo = viaje;
+            nombreArchivo = `ruta-${viaje?.cliente || 'viaje'}-${formatDateMexico(viaje?.fechaInicio).replace(/\//g, '-')}`;
             
             const result = await db.getGastosByViaje(viajeId, { vendedorId: vendedorUid });
             const gastos = result.data || [];
@@ -3427,13 +3432,13 @@ window.exportarMapaRuta = async function() {
         } else {
             // Todos los gastos recientes
             const viajes = await db.getViajesByVendedor(vendedorUid);
-            for (const viaje of viajes.slice(-5)) { // Últimos 5 viajes
+            for (const viaje of viajes.slice(-5)) {
                 const result = await db.getGastosByViaje(viaje.id, { vendedorId: vendedorUid });
                 const gastos = result.data || [];
                 const conUbicacion = gastos.filter(g => g.ubicacion && g.ubicacion.lat && g.ubicacion.lng);
                 gastosConUbicacion = gastosConUbicacion.concat(conUbicacion.map(g => ({...g, viaje})));
             }
-            nombreArchivo = `ruta-completa-${new Date().toISOString().split('T')[0]}`;
+            nombreArchivo = `ruta-completa-${getMexicoDateString()}`;
         }
         
         if (gastosConUbicacion.length === 0) {
@@ -3441,10 +3446,165 @@ window.exportarMapaRuta = async function() {
             return;
         }
         
-        // Crear contenido KML (para Google Earth) o GeoJSON
-        const geoJSON = {
-            type: 'FeatureCollection',
-            features: gastosConUbicacion.map(g => ({
+        // Guardar datos para uso en otras funciones
+        currentMapaData = {
+            gastos: gastosConUbicacion,
+            nombreArchivo: nombreArchivo,
+            viaje: viajeInfo
+        };
+        
+        // Ordenar por fecha para calcular ruta
+        gastosConUbicacion.sort((a, b) => new Date(a.fecha || a.createdAt) - new Date(b.fecha || b.createdAt));
+        
+        // Calcular estadísticas
+        calcularYMostrarEstadisticas(gastosConUbicacion);
+        
+        // Exportar según formato
+        switch(formato) {
+            case 'kml':
+                await exportarKML(gastosConUbicacion, nombreArchivo, viajeInfo);
+                break;
+            case 'html':
+                await exportarHTML(gastosConUbicacion, nombreArchivo, viajeInfo);
+                break;
+            case 'geojson':
+            default:
+                await exportarGeoJSON(gastosConUbicacion, nombreArchivo);
+                break;
+        }
+        
+    } catch (error) {
+        debug('Error exportando ruta:', error);
+        showToast('Error al exportar ruta', 'error');
+    }
+};
+
+// Calcular distancia entre dos puntos (fórmula de Haversine)
+function calcularDistancia(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Calcular y mostrar estadísticas de ruta
+function calcularYMostrarEstadisticas(gastos) {
+    const container = document.getElementById('estadisticas-ruta');
+    if (!container) return;
+    
+    // Calcular distancia total
+    let distanciaTotal = 0;
+    for (let i = 0; i < gastos.length - 1; i++) {
+        const actual = gastos[i];
+        const siguiente = gastos[i + 1];
+        distanciaTotal += calcularDistancia(
+            actual.ubicacion.lat, actual.ubicacion.lng,
+            siguiente.ubicacion.lat, siguiente.ubicacion.lng
+        );
+    }
+    
+    // Calcular tiempo total
+    const fechas = gastos.map(g => new Date(g.fecha || g.createdAt));
+    const tiempoInicio = new Date(Math.min(...fechas));
+    const tiempoFin = new Date(Math.max(...fechas));
+    const tiempoTotal = (tiempoFin - tiempoInicio) / (1000 * 60 * 60); // Horas
+    
+    // Calcular gasto total
+    const totalGastos = gastos.reduce((sum, g) => sum + g.monto, 0);
+    
+    // Mostrar estadísticas
+    document.getElementById('stat-puntos').textContent = gastos.length;
+    document.getElementById('stat-distancia').textContent = distanciaTotal.toFixed(1) + ' km';
+    document.getElementById('stat-tiempo').textContent = tiempoTotal.toFixed(1) + ' h';
+    document.getElementById('stat-total').textContent = formatMoney(totalGastos);
+    
+    container.style.display = 'block';
+}
+
+// Exportar a KML (Google Earth)
+async function exportarKML(gastos, nombreArchivo, viajeInfo) {
+    let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+    <name>${nombreArchivo}</name>
+    <description>Ruta de gastos - ${viajeInfo?.cliente || 'Viaje'}</description>
+    <Style id="ruta">
+        <LineStyle>
+            <color>ff0000ff</color>
+            <width>4</width>
+        </LineStyle>
+    </Style>
+    <Style id="punto">
+        <IconStyle>
+            <Icon>
+                <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+            </Icon>
+        </IconStyle>
+    </Style>
+    
+    <!-- Línea de ruta -->
+    <Placemark>
+        <name>Ruta</name>
+        <styleUrl>#ruta</styleUrl>
+        <LineString>
+            <tessellate>1</tessellate>
+            <coordinates>
+${gastos.map(g => `                ${g.ubicacion.lng},${g.ubicacion.lat},0`).join('\n')}
+            </coordinates>
+        </LineString>
+    </Placemark>
+    
+    <!-- Puntos de gastos -->
+${gastos.map((g, i) => `    <Placemark>
+        <name>${i + 1}. ${TIPOS_GASTO[g.tipo]?.label || g.tipo} - ${formatMoney(g.monto)}</name>
+        <description>
+            <![CDATA[
+                <b>Lugar:</b> ${g.lugar || 'N/A'}<br>
+                <b>Monto:</b> ${formatMoney(g.monto)}<br>
+                <b>Fecha:</b> ${formatDateTimeMexico(g.fecha || g.createdAt)}<br>
+                <b>Folio:</b> ${g.folioFactura || 'N/A'}<br>
+                <b>Tipo:</b> ${TIPOS_GASTO[g.tipo]?.label || g.tipo}
+            ]]>
+        </description>
+        <styleUrl>#punto</styleUrl>
+        <Point>
+            <coordinates>${g.ubicacion.lng},${g.ubicacion.lat},0</coordinates>
+        </Point>
+    </Placemark>`).join('\n')}
+</Document>
+</kml>`;
+    
+    const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.kml`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('🌍 Archivo KML descargado. Ábrelo con Google Earth.', 'success');
+}
+
+// Exportar a GeoJSON
+async function exportarGeoJSON(gastos, nombreArchivo) {
+    const geoJSON = {
+        type: 'FeatureCollection',
+        features: [
+            // Línea de ruta
+            {
+                type: 'Feature',
+                properties: { name: 'Ruta', type: 'route' },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: gastos.map(g => [g.ubicacion.lng, g.ubicacion.lat])
+                }
+            },
+            // Puntos de gastos
+            ...gastos.map(g => ({
                 type: 'Feature',
                 properties: {
                     tipo: g.tipo,
@@ -3459,23 +3619,191 @@ window.exportarMapaRuta = async function() {
                     coordinates: [g.ubicacion.lng, g.ubicacion.lat]
                 }
             }))
+        ]
+    };
+    
+    const blob = new Blob([JSON.stringify(geoJSON, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.geojson`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('📍 Archivo GeoJSON descargado', 'success');
+}
+
+// Exportar a HTML interactivo
+async function exportarHTML(gastos, nombreArchivo, viajeInfo) {
+    // Calcular centro del mapa
+    const lats = gastos.map(g => g.ubicacion.lat);
+    const lngs = gastos.map(g => g.ubicacion.lng);
+    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+    
+    // Calcular distancia total
+    let distanciaTotal = 0;
+    for (let i = 0; i < gastos.length - 1; i++) {
+        distanciaTotal += calcularDistancia(
+            gastos[i].ubicacion.lat, gastos[i].ubicacion.lng,
+            gastos[i + 1].ubicacion.lat, gastos[i + 1].ubicacion.lng
+        );
+    }
+    
+    const totalGastos = gastos.reduce((sum, g) => sum + g.monto, 0);
+    
+    let html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${nombreArchivo}</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; text-align: center; }
+        .header h1 { margin-bottom: 0.5rem; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; max-width: 800px; margin: 1rem auto; padding: 0 1rem; }
+        .stat-card { background: white; padding: 1rem; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 0.875rem; color: #666; margin-top: 0.25rem; }
+        #map { height: 60vh; margin: 1rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .gastos-list { max-width: 800px; margin: 1rem auto; padding: 0 1rem; }
+        .gasto-item { background: white; padding: 1rem; margin-bottom: 0.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .gasto-info h4 { color: #333; margin-bottom: 0.25rem; }
+        .gasto-info p { color: #666; font-size: 0.875rem; }
+        .gasto-monto { font-size: 1.25rem; font-weight: bold; color: #dc2626; }
+        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
+        .footer { text-align: center; padding: 2rem; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ ${viajeInfo?.cliente || 'Ruta de Gastos'}</h1>
+        <p>${formatDateMexico(viajeInfo?.fechaInicio)} | Responsable: ${state.currentVendor?.name || 'Vendedor'}</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-value">${gastos.length}</div>
+            <div class="stat-label">📍 Paradas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${distanciaTotal.toFixed(1)} km</div>
+            <div class="stat-label">📏 Distancia</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${formatMoney(totalGastos)}</div>
+            <div class="stat-label">💰 Total</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${((totalGastos / distanciaTotal) || 0).toFixed(2)}</div>
+            <div class="stat-label">💵 $/km</div>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="gastos-list">
+        <h2 style="margin-bottom: 1rem; color: #333;">📋 Detalle de Gastos</h2>
+        ${gastos.map((g, i) => {
+            const color = TIPOS_GASTO[g.tipo]?.color || '#6b7280';
+            return `<div class="gasto-item">
+                <div class="gasto-info">
+                    <h4>${i + 1}. ${TIPOS_GASTO[g.tipo]?.label || g.tipo} - ${formatMoney(g.monto)}</h4>
+                    <p>📍 ${g.lugar || 'Sin lugar'} | 🕐 ${formatDateTimeMexico(g.fecha || g.createdAt)}</p>
+                </div>
+                <span class="badge" style="background: ${color}20; color: ${color};">${g.tipo}</span>
+            </div>`;
+        }).join('')}
+    </div>
+    
+    <div class="footer">
+        <p>Generado por 3P Control de Gastos v6.0</p>
+        <p>${new Date().toLocaleString('es-MX')}</p>
+    </div>
+    
+    <script>
+        // Inicializar mapa
+        const map = L.map('map').setView([${centerLat}, ${centerLng}], 10);
+        
+        // Capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        
+        // Iconos personalizados
+        const icons = {
+            gasolina: { color: '#dc2626', icon: '⛽' },
+            comida: { color: '#f59e0b', icon: '🍔' },
+            hotel: { color: '#3b82f6', icon: '🏨' },
+            transporte: { color: '#10b981', icon: '🚌' },
+            casetas: { color: '#6366f1', icon: '🛣️' },
+            otros: { color: '#6b7280', icon: '📦' }
         };
         
-        // Descargar archivo
-        const blob = new Blob([JSON.stringify(geoJSON, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.geojson`;
-        link.click();
-        URL.revokeObjectURL(url);
+        // Dibujar ruta
+        const routeCoords = ${JSON.stringify(gastos.map(g => [g.ubicacion.lat, g.ubicacion.lng]))};
+        const polyline = L.polyline(routeCoords, { color: '#667eea', weight: 4, opacity: 0.8 }).addTo(map);
+        map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
         
-        showToast('📍 Ruta exportada correctamente', 'success');
-        
-    } catch (error) {
-        debug('Error exportando ruta:', error);
-        showToast('Error al exportar ruta', 'error');
+        // Marcadores
+        ${gastos.map((g, i) => {
+            const tipo = g.tipo || 'otros';
+            return `L.marker([${g.ubicacion.lat}, ${g.ubicacion.lng}])
+                .addTo(map)
+                .bindPopup('<b>${i + 1}. ${TIPOS_GASTO[tipo]?.label || tipo}</b><br>${formatMoney(g.monto)}<br>${g.lager || 'Sin lugar'}<br><small>${formatDateTimeMexico(g.fecha || g.createdAt)}</small>');`;
+        }).join('\n        ')}
+    </script>
+</body>
+</html>`;
+    
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${nombreArchivo.replace(/[^a-zA-Z0-9-]/g, '_')}.html`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('🌐 Mapa HTML descargado. Ábrelo en cualquier navegador.', 'success');
+}
+
+// Abrir en geojson.io (visor online)
+window.abrirEnGeojsonIO = async function() {
+    if (!currentMapaData || !currentMapaData.gastos) {
+        // Si no hay datos cargados, cargarlos primero
+        await exportarMapaRuta('geojson');
+        if (!currentMapaData) return;
     }
+    
+    const gastos = currentMapaData.gastos;
+    const geoJSON = {
+        type: 'FeatureCollection',
+        features: gastos.map(g => ({
+            type: 'Feature',
+            properties: {
+                tipo: g.tipo,
+                monto: g.monto,
+                lugar: g.lugar,
+                fecha: g.fecha || g.createdAt,
+                markerColor: TIPOS_GASTO[g.tipo]?.color || '#6b7280'
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [g.ubicacion.lng, g.ubicacion.lat]
+            }
+        }))
+    };
+    
+    // Codificar y abrir en geojson.io
+    const encoded = encodeURIComponent(JSON.stringify(geoJSON));
+    const url = `https://geojson.io/#data=data:application/json,${encoded}`;
+    window.open(url, '_blank');
+    
+    showToast('🗺️ Abriendo mapa en geojson.io...', 'info');
 };
 
 // ===== SISTEMA DE ACTUALIZACIÓN AUTOMÁTICA =====

@@ -796,6 +796,29 @@
                 <button class="btn btn-icon" onclick="closeModal('mapa-gastos')">✕</button>
             </div>
             <div style="padding: 1rem;">
+                <!-- Estadísticas de Ruta -->
+                <div id="estadisticas-ruta" style="margin-bottom: 1rem; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white; display: none;">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem;">📊 Estadísticas de Ruta</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; font-size: 0.875rem;">
+                        <div>
+                            <strong>📍 Puntos:</strong>
+                            <div id="stat-puntos" style="font-size: 1.25rem; font-weight: bold;">-</div>
+                        </div>
+                        <div>
+                            <strong>📏 Distancia:</strong>
+                            <div id="stat-distancia" style="font-size: 1.25rem; font-weight: bold;">-</div>
+                        </div>
+                        <div>
+                            <strong>⏱️ Tiempo:</strong>
+                            <div id="stat-tiempo" style="font-size: 1.25rem; font-weight: bold;">-</div>
+                        </div>
+                        <div>
+                            <strong>💰 Total:</strong>
+                            <div id="stat-total" style="font-size: 1.25rem; font-weight: bold;">-</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <select id="mapa-viaje-select" style="flex: 1; min-width: 200px;">
                         <option value="">Todos los viajes</option>
@@ -803,9 +826,27 @@
                     <button class="btn btn-primary btn-small" onclick="cargarMapaGastos()">
                         🔄 Actualizar
                     </button>
-                    <button class="btn btn-secondary btn-small" onclick="exportarMapaRuta()">
-                        📥 Exportar Ruta
-                    </button>
+                </div>
+                
+                <!-- Opciones de Exportación -->
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f3f4f6; border-radius: 8px;">
+                    <p style="margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: bold; color: #374151;">
+                        📤 Exportar mapa:
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn btn-secondary btn-small" onclick="exportarMapaRuta('kml')" title="Abrir en Google Earth">
+                            🌍 Google Earth (KML)
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportarMapaRuta('html')" title="Mapa interactivo en HTML">
+                            🌐 Mapa Web (HTML)
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportarMapaRuta('geojson')" title="Formato GeoJSON estándar">
+                            📍 GeoJSON
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="abrirEnGeojsonIO()" title="Ver en mapa online">
+                            🔗 Ver Online
+                        </button>
+                    </div>
                 </div>
                 <div id="mapa-gastos-container" style="height: 500px; border-radius: 12px; overflow: hidden; background: #f3f4f6;">
                     <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #6b7280;">
@@ -845,14 +886,14 @@
     <!-- Database (compatibility layer) -->
     <script type="module" src="./db.js?v=6.0"></script>
     <!-- Main App v6.0 -->
-    <script type="module" src="./app.js?v=20250313-4-HORA"></script>
+    <script type="module" src="./app.js?v=20250313-5-MAPA"></script>
     <!-- UX Improvements -->
     <script src="./ux-improvements.js?v=6.0"></script>
     
     <!-- Service Worker v6.0 con actualización automática -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js?v=20250313-4-HORA')".then(reg => {
+            navigator.serviceWorker.register('./sw.js?v=20250313-5-MAPA')".then(reg => {
                 console.log('[SW v6.0] Registrado correctamente');
                 
                 // Detectar cuando hay una nueva versión disponible
