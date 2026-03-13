@@ -23,6 +23,35 @@ class AuthService {
         this.listeners = [];
     }
 
+    // Verificar si hay credenciales guardadas
+    checkSavedCredentials() {
+        const rememberEnabled = localStorage.getItem('viajespro_remember_enabled');
+        if (rememberEnabled === 'true') {
+            const savedEmail = localStorage.getItem('viajespro_remember_email');
+            const savedPassword = localStorage.getItem('viajespro_remember_password');
+            if (savedEmail && savedPassword) {
+                try {
+                    return {
+                        email: savedEmail,
+                        password: atob(savedPassword), // Decodificar base64
+                        remember: true
+                    };
+                } catch (e) {
+                    console.error('Error decodificando credenciales:', e);
+                    this.clearSavedCredentials();
+                }
+            }
+        }
+        return null;
+    }
+    
+    // Limpiar credenciales guardadas
+    clearSavedCredentials() {
+        localStorage.removeItem('viajespro_remember_email');
+        localStorage.removeItem('viajespro_remember_password');
+        localStorage.removeItem('viajespro_remember_enabled');
+    }
+
     // Inicializar y escuchar cambios de auth
     init() {
         return new Promise((resolve) => {
@@ -69,6 +98,18 @@ class AuthService {
         try {
             // DEBUG: Mostrar qué email se recibió
             console.log('[Auth] Intentando login con input:', email);
+            
+            // Guardar credenciales si remember es true
+            if (remember) {
+                localStorage.setItem('viajespro_remember_email', email);
+                localStorage.setItem('viajespro_remember_password', btoa(password)); // Codificar base64
+                localStorage.setItem('viajespro_remember_enabled', 'true');
+            } else {
+                // Limpiar si no quiere recordar
+                localStorage.removeItem('viajespro_remember_email');
+                localStorage.removeItem('viajespro_remember_password');
+                localStorage.removeItem('viajespro_remember_enabled');
+            }
             
             // Determinar el email real para Firebase Auth
             if (email.toLowerCase() === 'admin') {

@@ -335,6 +335,7 @@ async function initApp() {
     checkSession();
     
     setupEventListeners();
+    setupBackButtonHandler();
     updateConnectionStatus();
     
     // Configurar fechas por defecto (hora de Ciudad de México)
@@ -416,6 +417,10 @@ function setupEventListeners() {
 }
 
 // ===== NAVEGACIÓN =====
+// Historial de navegación para manejar botón atrás
+let navigationHistory = [];
+let currentSection = 'dashboard';
+
 function showScreen(screenId) {
     debug('Cambiando a pantalla:', screenId);
     document.querySelectorAll('.screen').forEach(screen => {
@@ -427,8 +432,21 @@ function showScreen(screenId) {
     }
 }
 
-function showSection(sectionName) {
+function showSection(sectionName, addToHistory = true) {
     debug('Mostrando sección:', sectionName);
+    
+    // Si estamos cambiando a una nueva sección, guardar la anterior en historial
+    if (addToHistory && currentSection !== sectionName) {
+        // Si ya hay historial, verificar que no sea la misma sección
+        if (navigationHistory.length === 0 || navigationHistory[navigationHistory.length - 1] !== currentSection) {
+            navigationHistory.push(currentSection);
+            // Limitar historial a 10 elementos
+            if (navigationHistory.length > 10) {
+                navigationHistory.shift();
+            }
+        }
+        currentSection = sectionName;
+    }
     
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.remove('active');
@@ -464,6 +482,46 @@ function showSection(sectionName) {
         if (sectionName === 'dashboard') {
             loadDashboard();
         }
+    }
+}
+
+// Función para manejar el botón atrás
+function handleBackButton() {
+    // Si hay historial, ir a la sección anterior
+    if (navigationHistory.length > 0) {
+        const previousSection = navigationHistory.pop();
+        currentSection = previousSection;
+        showSection(previousSection, false);
+        return true; // Se manejó el retroceso
+    }
+    return false; // No hay historial, permitir salir
+}
+
+// Configurar manejo del botón atrás en móvil
+function setupBackButtonHandler() {
+    // Manejar evento de tecla atrás en Android
+    window.addEventListener('popstate', function(event) {
+        // Verificar si estamos en la app principal (no en login)
+        if (state.currentUser) {
+            const handled = handleBackButton();
+            if (handled) {
+                // Prevenir salir de la app
+                history.pushState(null, '', window.location.href);
+            } else {
+                // No hay más historial, preguntar si quiere salir
+                if (confirm('¿Deseas salir de la aplicación?')) {
+                    // Permitir salir
+                } else {
+                    // Mantener en la app
+                    history.pushState(null, '', window.location.href);
+                }
+            }
+        }
+    });
+    
+    // Agregar estado inicial para poder usar popstate
+    if (state.currentUser) {
+        history.pushState(null, '', window.location.href);
     }
 }
 
@@ -608,6 +666,20 @@ function checkSession() {
 
 function showLoginScreen() {
     showScreen('login-screen');
+    
+    // Cargar credenciales guardadas si existen
+    const savedCreds = authService.checkSavedCredentials();
+    if (savedCreds) {
+        const usernameInput = document.getElementById('login-username');
+        const passwordInput = document.getElementById('login-password');
+        const rememberCheckbox = document.getElementById('remember-me');
+        
+        if (usernameInput) usernameInput.value = savedCreds.email;
+        if (passwordInput) passwordInput.value = savedCreds.password;
+        if (rememberCheckbox) rememberCheckbox.checked = true;
+        
+        console.log('[Login] Credenciales cargadas del almacenamiento local');
+    }
 }
 
 function showAdminLogin() {
@@ -1070,13 +1142,22 @@ function showMainApp() {
     showScreen('app');
     actualizarEncabezado();
     
+    // Reiniciar historial de navegación
+    navigationHistory = [];
+    currentSection = 'dashboard';
+    
     // Mostrar dashboard primero (nuevo en v6.0)
-    showSection('dashboard');
+    showSection('dashboard', false);
     
     // Actualizar navegación
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
     const dashboardNav = document.querySelector('[data-section="dashboard"]');
     if (dashboardNav) dashboardNav.classList.add('active');
+    
+    // Configurar estado inicial para botón atrás
+    if (window.history && window.history.pushState) {
+        history.pushState({ page: 'dashboard' }, '', window.location.href);
+    }
 }
 
 function actualizarEncabezado() {
